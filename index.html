@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Library Scheduler</title>
+    <title>Library Reservations</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -178,10 +178,10 @@
 
 <div id="loginOverlay">
     <div class="login-box">
-        <h2>Library Staff Login</h2>
+        <h2>Library Reservations Login</h2>
         <p>Please enter the shared access code.</p>
         <input type="password" id="loginPass" placeholder="Password" onkeydown="if(event.key==='Enter') doLogin()">
-        <button onclick="doLogin()">Unlock Scheduler</button>
+        <button onclick="doLogin()">Unlock Reservations</button>
         <p id="loginError" style="color:red; display:none; margin-top:10px;">Incorrect Password</p>
     </div>
 </div>
@@ -192,7 +192,7 @@
 
 <header>
     <div class="header-title">
-        <h2 id="headerResourceName">Scheduler</h2>
+        <h2 id="headerResourceName">Library Reservations</h2>
         <span id="rangeDisplay"></span>
     </div>
 
@@ -830,6 +830,7 @@ const firebaseConfig = {
 </body>
 
 </html>
+
 
 
 
