@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Library Scheduler</title>
+    <title>Library Reservations</title>
     
-    <!-- Firebase Libraries (Now includes Auth) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -74,6 +73,7 @@
             cursor: pointer; 
             position: relative; 
             transition: background 0.1s; 
+            box-sizing: border-box; /* Ensures padding doesn't affect width/height calculations */
         }
         
         .slot:not(.booked-head):not(.booked-body):not(.closed):hover { background-color: #e3f2fd; }
@@ -89,24 +89,58 @@
 
         .slot.closed { background-color: #eeeeee !important; cursor: not-allowed; opacity: 1; pointer-events: none; }
         
-        /* Bookings */
-        .slot.booked-head { color: white; border-radius: 4px 4px 0 0; padding: 4px 6px; font-weight: 600; z-index: 2; overflow: hidden; border-bottom: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .slot.booked-body { border-top: none; border-bottom: none; opacity: 0.85; cursor: pointer; }
-        .slot.booked-head.with-staff, .slot.booked-body.with-staff { border-left: 5px solid #f1c40f; } 
+        /* === UPDATED BOOKING STYLES === 
+           These are the specific fixes for the merging issue
+        */
+        .slot.booked-head { 
+            color: white; 
+            border-radius: 4px; 
+            padding: 6px 8px; 
+            font-weight: 600; 
+            z-index: 2; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            
+            /* Flexbox to manage vertical content */
+            display: flex;
+            flex-direction: column; 
+            align-items: flex-start; /* Align text to left */
+            justify-content: flex-start; /* Start text at top */
+            height: 100%; /* Force it to fill the spanned grid rows */
+            overflow: hidden; /* Clean edges */
+        }
         
-        /* REVERTED TO V24 STYLE (Clean & Flat) */
+        .slot.booked-body { display: none; } /* Ensure we never see these if JS fails to hide them */
+        
+        .slot.booked-head.with-staff { border-left: 5px solid #f1c40f; } 
+        
         .booking-hover-effect {
             opacity: 1 !important;
             filter: brightness(1.1) saturate(1.1); 
-            border-bottom-color: transparent !important; 
             z-index: 15;
         }
 
         .bg-color-0 { background-color: var(--app-color-1); }
         .bg-color-1 { background-color: var(--app-color-2); }
         
-        .slot-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1em; }
-        .slot-staff { font-size: 1em; color: rgba(255,255,255,0.95); font-style: italic; display: block; }
+        /* === UPDATED TEXT STYLES === 
+           Allows text to wrap and fill the space
+        */
+        .slot-name { 
+            display: block; 
+            width: 100%;
+            white-space: normal; /* CRITICAL: Allows text to wrap */
+            word-break: break-word; /* Prevents long words from breaking layout */
+            overflow: visible; /* Let text show */
+            font-size: 0.95em; 
+            line-height: 1.3;
+        }
+        .slot-staff { 
+            font-size: 0.9em; 
+            color: rgba(255,255,255,0.9); 
+            font-style: italic; 
+            display: block; 
+            margin-top: 2px; /* Just a tiny gap */
+        }
 
         /* Modals */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(2px); }
@@ -142,27 +176,23 @@
 </head>
 <body>
 
-<!-- Login Overlay -->
 <div id="loginOverlay">
     <div class="login-box">
-        <h2>Library Staff Login</h2>
+        <h2>Library Reservations Login</h2>
         <p>Please enter the shared access code.</p>
         <input type="password" id="loginPass" placeholder="Password" onkeydown="if(event.key==='Enter') doLogin()">
-        <button onclick="doLogin()">Unlock Scheduler</button>
+        <button onclick="doLogin()">Unlock Reservations</button>
         <p id="loginError" style="color:red; display:none; margin-top:10px;">Incorrect Password</p>
     </div>
 </div>
 
-<!-- Loading Overlay -->
 <div id="loading" class="loading-overlay hidden">Saving...</div>
 
-<!-- Connectivity Status -->
 <div id="status-bar">Waiting for Login...</div>
 
-<!-- Main Header -->
 <header>
     <div class="header-title">
-        <h2 id="headerResourceName">Scheduler</h2>
+        <h2 id="headerResourceName">Library Reservations</h2>
         <span id="rangeDisplay"></span>
     </div>
 
@@ -181,10 +211,8 @@
     </div>
 </header>
 
-<!-- Scheduler Grid -->
 <div id="gridContainer" class="grid-container"></div>
 
-<!-- Booking Modal -->
 <div id="bookingModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">Booking Details</div>
@@ -215,6 +243,10 @@
         <div class="form-group">
             <label>Notes (Internal)</label>
             <textarea id="bookNotes" rows="3"></textarea>
+            <div style="margin-top: 5px; display:flex; align-items:center; gap:5px;">
+                <input type="checkbox" id="bookShowNotes" style="width:auto;">
+                <label for="bookShowNotes" style="margin:0; font-size:0.9em; font-weight:normal; cursor:pointer;">Show on Grid?</label>
+            </div>
         </div>
         
         <div style="display: flex; justify-content: space-between; margin-top: 20px;">
@@ -225,7 +257,6 @@
     </div>
 </div>
 
-<!-- Admin Settings Modal -->
 <div id="settingsOverlay" class="modal">
     <div class="settings-box">
         <div class="settings-header">
@@ -273,6 +304,10 @@
                     <div class="flex gap">
                         <input type="checkbox" id="editResOrientation" style="width:auto;">
                         <label for="editResOrientation" style="margin:0; cursor:pointer;">Enable "Staff Assistance" Fields?</label>
+                    </div>
+                    <div class="flex gap" style="margin-top:8px; padding-top:8px; border-top:1px solid #d0e1f5;">
+                        <input type="checkbox" id="editDefaultShowNotes" style="width:auto;">
+                        <label for="editDefaultShowNotes" style="margin:0; cursor:pointer;">Default "Show Notes" to Checked?</label>
                     </div>
                 </div>
 
@@ -548,6 +583,7 @@ const firebaseConfig = {
                 
                 if (timeVal < dayStart || timeVal >= dayEnd || dayStart === dayEnd) {
                     slot.classList.add('closed');
+                    container.appendChild(slot);
                 } else {
                     const booking = gridBookings.find(b => b.dayIndex === col.dayIndex && (b.subIndex === col.subIndex) && timeVal >= b.start && timeVal < b.end);
                     if (booking) {
@@ -558,24 +594,37 @@ const firebaseConfig = {
                         slot.onmouseleave = () => unhighlightBooking(booking.id);
 
                         if (timeVal === booking.start) {
+                            // MERGED CELL LOGIC
+                            // 1. Calculate how many 30min slots this booking takes
+                            const spanCount = booking.data.duration * 2; 
+                            slot.style.gridRow = `span ${spanCount}`;
+                            slot.style.height = "100%"; // Force height to fill the span
+                            
+                            // 2. Style it as a single block (reusing booked-head class but updated styles)
                             slot.className = `slot ${rowClass} booked-head ${colorClass}`;
                             if(booking.data.hasStaff) slot.classList.add('with-staff');
+                            
                             slot.innerHTML = `<span class="slot-name">${booking.data.name} <span style="font-weight:normal; font-size:0.9em; opacity:0.9">(${formatTime(booking.start)} - ${formatTime(booking.end)})</span></span>`;
                             if(booking.data.hasStaff) slot.innerHTML += `<span class="slot-staff">w/ ${booking.data.staffName}</span>`;
+                            if(booking.data.showNotes && booking.data.notes) {
+                                slot.innerHTML += `<span style="display:block; font-size:0.85em; margin-top:4px; opacity:0.9; border-top:1px solid rgba(255,255,255,0.2); padding-top:2px;">${booking.data.notes}</span>`;
+                            }
                             slot.onclick = () => openBookingModal(booking.id, booking.data, col.subIndex);
+                            container.appendChild(slot);
                         } else {
-                            slot.className = `slot ${rowClass} booked-body ${colorClass}`;
-                            if(booking.data.hasStaff) slot.classList.add('with-staff');
-                            slot.onclick = () => openBookingModal(booking.id, booking.data, col.subIndex);
+                            // 3. Skip rendering slots for the rest of the booking duration
+                            // The 'span' from the head will fill this space in the grid.
+                            return; 
                         }
                     } else {
                         let emptyId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${timeVal}`;
                         if (col.subIndex !== null) emptyId += `_${col.subIndex}`;
                         slot.onclick = () => openBookingModal(emptyId, null, col.subIndex);
                         slot.setAttribute('data-time', displayTime);
+                        container.appendChild(slot);
                     }
                 }
-                container.appendChild(slot);
+                
             });
         }
     }
@@ -629,6 +678,7 @@ const firebaseConfig = {
         document.getElementById('slotId').value = slotId;
         document.getElementById('bookName').value = data ? data.name : '';
         document.getElementById('bookNotes').value = data ? data.notes : '';
+        document.getElementById('bookShowNotes').checked = data ? (data.showNotes || false) : (res.defaultShowNotes || false);
         
         const showStaff = res.hasStaffField;
         document.getElementById('staffSection').style.display = showStaff ? 'block' : 'none';
@@ -670,6 +720,7 @@ const firebaseConfig = {
             return alert("Staff Name is required.");
         }
 
+        const showNotes = document.getElementById('bookShowNotes').checked;
         const res = resources.find(r => r.id === currentResId);
         const prefix = res.id + "_";
         const suffix = slotId.substring(prefix.length); 
@@ -679,7 +730,7 @@ const firebaseConfig = {
         const dayEnd = res.hours[(dayIdx * 2) + 1];
         if (start + duration > dayEnd) return alert("Exceeds closing time.");
 
-        const data = { name: name, notes: document.getElementById('bookNotes').value, duration: duration, hasStaff: hasStaff, staffName: staffName };
+        const data = { name: name, notes: document.getElementById('bookNotes').value, duration: duration, hasStaff: hasStaff, staffName: staffName, showNotes: showNotes };
         showLoading(true);
         try { await db.collection('appointments').doc(slotId).set(data); closeModal('bookingModal'); } catch(e) { alert("Error: " + e.message); }
         showLoading(false);
@@ -701,6 +752,7 @@ const firebaseConfig = {
         document.getElementById('editMaxDuration').value = r.maxDuration;
         document.getElementById('editResOrientation').checked = r.hasStaffField || false;
         document.getElementById('editViewMode').value = r.viewMode || 'week';
+        document.getElementById('editDefaultShowNotes').checked = r.defaultShowNotes || false;
         document.getElementById('editSubRooms').value = r.subRooms || '';
         toggleSubRoomInput();
         const container = document.getElementById('daysConfigContainer');
@@ -716,7 +768,7 @@ const firebaseConfig = {
         const name = prompt("Name for new resource?");
         if(!name) return;
         showLoading(true);
-        const newRes = { id: 'res-' + Date.now(), name: name, viewMode: 'week', hasStaffField: false, maxDuration: 2, hours: [...DEFAULT_HOURS] };
+        const newRes = { id: 'res-' + Date.now(), name: name, viewMode: 'week', hasStaffField: false, defaultShowNotes: false, maxDuration: 2, hours: [...DEFAULT_HOURS] };
         try { await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); pendingSelectionId = newRes.id; } catch (e) { alert("Error: " + e.message); }
         showLoading(false);
     }
@@ -736,6 +788,7 @@ const firebaseConfig = {
         target.name = document.getElementById('editResName').value;
         target.maxDuration = parseFloat(document.getElementById('editMaxDuration').value) || 2;
         target.hasStaffField = document.getElementById('editResOrientation').checked;
+        target.defaultShowNotes = document.getElementById('editDefaultShowNotes').checked;
         target.viewMode = document.getElementById('editViewMode').value;
         target.subRooms = document.getElementById('editSubRooms').value;
         for(let i=0; i<7; i++) { target.hours[i*2] = parseInt(document.getElementById(`s_${i}`).value) || 0; target.hours[(i*2)+1] = parseInt(document.getElementById(`e_${i}`).value) || 0; }
@@ -777,3 +830,10 @@ const firebaseConfig = {
 </body>
 
 </html>
+
+
+
+
+
+
+
