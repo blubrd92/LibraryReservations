@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Library Scheduler</title>
     
-    <!-- Firebase Libraries (Now includes Auth) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -78,6 +77,7 @@
         
         .slot:not(.booked-head):not(.booked-body):not(.closed):hover { background-color: #e3f2fd; }
         
+        /* Tooltip behavior for empty slots */
         .slot:not(.booked-head):not(.booked-body):not(.closed):hover::after {
             content: attr(data-time);
             position: absolute;
@@ -89,24 +89,41 @@
 
         .slot.closed { background-color: #eeeeee !important; cursor: not-allowed; opacity: 1; pointer-events: none; }
         
-        /* Bookings */
-        .slot.booked-head { color: white; border-radius: 4px 4px 0 0; padding: 4px 6px; font-weight: 600; z-index: 2; overflow: hidden; border-bottom: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        /* Bookings - Updated for Merged Cells */
+        .slot.booked-head { 
+            color: white; 
+            border-radius: 4px; /* Full rounded corners */
+            padding: 4px 6px; 
+            font-weight: 600; 
+            z-index: 2; 
+            overflow: hidden; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Legacy class, kept just in case, though we mostly skip rendering these now */
         .slot.booked-body { border-top: none; border-bottom: none; opacity: 0.85; cursor: pointer; }
+        
         .slot.booked-head.with-staff, .slot.booked-body.with-staff { border-left: 5px solid #f1c40f; } 
         
         /* REVERTED TO V24 STYLE (Clean & Flat) */
         .booking-hover-effect {
             opacity: 1 !important;
             filter: brightness(1.1) saturate(1.1); 
-            border-bottom-color: transparent !important; 
             z-index: 15;
         }
 
         .bg-color-0 { background-color: var(--app-color-1); }
         .bg-color-1 { background-color: var(--app-color-2); }
         
-        .slot-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1em; }
-        .slot-staff { font-size: 1em; color: rgba(255,255,255,0.95); font-style: italic; display: block; }
+        /* Updated text handling for merged cells */
+        .slot-name { 
+            display: block; 
+            overflow: hidden; 
+            white-space: normal; /* Allow text wrapping */
+            font-size: 1em; 
+            line-height: 1.2;
+        }
+        .slot-staff { font-size: 1em; color: rgba(255,255,255,0.95); font-style: italic; display: block; margin-top:2px;}
 
         /* Modals */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(2px); }
@@ -142,7 +159,6 @@
 </head>
 <body>
 
-<!-- Login Overlay -->
 <div id="loginOverlay">
     <div class="login-box">
         <h2>Library Staff Login</h2>
@@ -153,13 +169,10 @@
     </div>
 </div>
 
-<!-- Loading Overlay -->
 <div id="loading" class="loading-overlay hidden">Saving...</div>
 
-<!-- Connectivity Status -->
 <div id="status-bar">Waiting for Login...</div>
 
-<!-- Main Header -->
 <header>
     <div class="header-title">
         <h2 id="headerResourceName">Scheduler</h2>
@@ -181,10 +194,8 @@
     </div>
 </header>
 
-<!-- Scheduler Grid -->
 <div id="gridContainer" class="grid-container"></div>
 
-<!-- Booking Modal -->
 <div id="bookingModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">Booking Details</div>
@@ -225,7 +236,6 @@
     </div>
 </div>
 
-<!-- Admin Settings Modal -->
 <div id="settingsOverlay" class="modal">
     <div class="settings-box">
         <div class="settings-header">
@@ -548,6 +558,7 @@ const firebaseConfig = {
                 
                 if (timeVal < dayStart || timeVal >= dayEnd || dayStart === dayEnd) {
                     slot.classList.add('closed');
+                    container.appendChild(slot);
                 } else {
                     const booking = gridBookings.find(b => b.dayIndex === col.dayIndex && (b.subIndex === col.subIndex) && timeVal >= b.start && timeVal < b.end);
                     if (booking) {
@@ -558,24 +569,33 @@ const firebaseConfig = {
                         slot.onmouseleave = () => unhighlightBooking(booking.id);
 
                         if (timeVal === booking.start) {
+                            // MERGED CELL LOGIC
+                            // 1. Calculate how many 30min slots this booking takes
+                            const spanCount = booking.data.duration * 2; 
+                            slot.style.gridRow = `span ${spanCount}`;
+                            
+                            // 2. Style it as a single block (reusing booked-head class but updated styles)
                             slot.className = `slot ${rowClass} booked-head ${colorClass}`;
                             if(booking.data.hasStaff) slot.classList.add('with-staff');
-                            slot.innerHTML = `<span class="slot-name">${booking.data.name} <span style="font-weight:normal; font-size:0.9em; opacity:0.9">(${formatTime(booking.start)} - ${formatTime(booking.end)})</span></span>`;
+                            
+                            slot.innerHTML = `<span class="slot-name">${booking.data.name} <br><span style="font-weight:normal; font-size:0.9em; opacity:0.9">(${formatTime(booking.start)} - ${formatTime(booking.end)})</span></span>`;
                             if(booking.data.hasStaff) slot.innerHTML += `<span class="slot-staff">w/ ${booking.data.staffName}</span>`;
                             slot.onclick = () => openBookingModal(booking.id, booking.data, col.subIndex);
+                            container.appendChild(slot);
                         } else {
-                            slot.className = `slot ${rowClass} booked-body ${colorClass}`;
-                            if(booking.data.hasStaff) slot.classList.add('with-staff');
-                            slot.onclick = () => openBookingModal(booking.id, booking.data, col.subIndex);
+                            // 3. Skip rendering slots for the rest of the booking duration
+                            // The 'span' from the head will fill this space in the grid.
+                            return; 
                         }
                     } else {
                         let emptyId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${timeVal}`;
                         if (col.subIndex !== null) emptyId += `_${col.subIndex}`;
                         slot.onclick = () => openBookingModal(emptyId, null, col.subIndex);
                         slot.setAttribute('data-time', displayTime);
+                        container.appendChild(slot);
                     }
                 }
-                container.appendChild(slot);
+                
             });
         }
     }
