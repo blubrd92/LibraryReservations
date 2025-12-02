@@ -73,11 +73,11 @@
             cursor: pointer; 
             position: relative; 
             transition: background 0.1s; 
+            box-sizing: border-box; /* Ensures padding doesn't affect width/height calculations */
         }
         
         .slot:not(.booked-head):not(.booked-body):not(.closed):hover { background-color: #e3f2fd; }
         
-        /* Tooltip behavior for empty slots */
         .slot:not(.booked-head):not(.booked-body):not(.closed):hover::after {
             content: attr(data-time);
             position: absolute;
@@ -89,23 +89,30 @@
 
         .slot.closed { background-color: #eeeeee !important; cursor: not-allowed; opacity: 1; pointer-events: none; }
         
-        /* Bookings - Updated for Merged Cells */
+        /* === UPDATED BOOKING STYLES === 
+           These are the specific fixes for the merging issue
+        */
         .slot.booked-head { 
             color: white; 
-            border-radius: 4px; /* Full rounded corners */
-            padding: 4px 6px; 
+            border-radius: 4px; 
+            padding: 6px 8px; 
             font-weight: 600; 
             z-index: 2; 
-            overflow: hidden; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            
+            /* Flexbox to manage vertical content */
+            display: flex;
+            flex-direction: column; 
+            align-items: flex-start; /* Align text to left */
+            justify-content: flex-start; /* Start text at top */
+            height: 100%; /* Force it to fill the spanned grid rows */
+            overflow: hidden; /* Clean edges */
         }
         
-        /* Legacy class, kept just in case, though we mostly skip rendering these now */
-        .slot.booked-body { border-top: none; border-bottom: none; opacity: 0.85; cursor: pointer; }
+        .slot.booked-body { display: none; } /* Ensure we never see these if JS fails to hide them */
         
-        .slot.booked-head.with-staff, .slot.booked-body.with-staff { border-left: 5px solid #f1c40f; } 
+        .slot.booked-head.with-staff { border-left: 5px solid #f1c40f; } 
         
-        /* REVERTED TO V24 STYLE (Clean & Flat) */
         .booking-hover-effect {
             opacity: 1 !important;
             filter: brightness(1.1) saturate(1.1); 
@@ -115,15 +122,29 @@
         .bg-color-0 { background-color: var(--app-color-1); }
         .bg-color-1 { background-color: var(--app-color-2); }
         
-        /* Updated text handling for merged cells */
+        /* === UPDATED TEXT STYLES === 
+           Allows text to wrap and fill the space
+        */
         .slot-name { 
             display: block; 
-            overflow: hidden; 
-            white-space: normal; /* Allow text wrapping */
-            font-size: 1em; 
-            line-height: 1.2;
+            width: 100%;
+            white-space: normal; /* CRITICAL: Allows text to wrap */
+            word-break: break-word; /* Prevents long words from breaking layout */
+            overflow: visible; /* Let text show */
+            font-size: 0.95em; 
+            line-height: 1.3;
+            flex: 1; /* Allows this text block to take up available space */
         }
-        .slot-staff { font-size: 1em; color: rgba(255,255,255,0.95); font-style: italic; display: block; margin-top:2px;}
+        .slot-staff { 
+            font-size: 0.9em; 
+            color: rgba(255,255,255,0.9); 
+            font-style: italic; 
+            display: block; 
+            margin-top: 5px; 
+            padding-top: 5px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            width: 100%;
+        }
 
         /* Modals */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(2px); }
@@ -573,6 +594,7 @@ const firebaseConfig = {
                             // 1. Calculate how many 30min slots this booking takes
                             const spanCount = booking.data.duration * 2; 
                             slot.style.gridRow = `span ${spanCount}`;
+                            slot.style.height = "100%"; // Force height to fill the span
                             
                             // 2. Style it as a single block (reusing booked-head class but updated styles)
                             slot.className = `slot ${rowClass} booked-head ${colorClass}`;
