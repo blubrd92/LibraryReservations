@@ -305,6 +305,10 @@
                         <input type="checkbox" id="editResOrientation" style="width:auto;">
                         <label for="editResOrientation" style="margin:0; cursor:pointer;">Enable "Staff Assistance" Fields?</label>
                     </div>
+                    <div class="flex gap" style="margin-top:8px; padding-top:8px; border-top:1px solid #d0e1f5;">
+                        <input type="checkbox" id="editDefaultShowNotes" style="width:auto;">
+                        <label for="editDefaultShowNotes" style="margin:0; cursor:pointer;">Default "Show Notes" to Checked?</label>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -674,7 +678,7 @@ const firebaseConfig = {
         document.getElementById('slotId').value = slotId;
         document.getElementById('bookName').value = data ? data.name : '';
         document.getElementById('bookNotes').value = data ? data.notes : '';
-        document.getElementById('bookShowNotes').checked = data ? (data.showNotes || false) : false;
+        document.getElementById('bookShowNotes').checked = data ? (data.showNotes || false) : (res.defaultShowNotes || false);
         
         const showStaff = res.hasStaffField;
         document.getElementById('staffSection').style.display = showStaff ? 'block' : 'none';
@@ -748,6 +752,7 @@ const firebaseConfig = {
         document.getElementById('editMaxDuration').value = r.maxDuration;
         document.getElementById('editResOrientation').checked = r.hasStaffField || false;
         document.getElementById('editViewMode').value = r.viewMode || 'week';
+        document.getElementById('editDefaultShowNotes').checked = r.defaultShowNotes || false;
         document.getElementById('editSubRooms').value = r.subRooms || '';
         toggleSubRoomInput();
         const container = document.getElementById('daysConfigContainer');
@@ -763,7 +768,7 @@ const firebaseConfig = {
         const name = prompt("Name for new resource?");
         if(!name) return;
         showLoading(true);
-        const newRes = { id: 'res-' + Date.now(), name: name, viewMode: 'week', hasStaffField: false, maxDuration: 2, hours: [...DEFAULT_HOURS] };
+        const newRes = { id: 'res-' + Date.now(), name: name, viewMode: 'week', hasStaffField: false, defaultShowNotes: false, maxDuration: 2, hours: [...DEFAULT_HOURS] };
         try { await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); pendingSelectionId = newRes.id; } catch (e) { alert("Error: " + e.message); }
         showLoading(false);
     }
@@ -783,6 +788,7 @@ const firebaseConfig = {
         target.name = document.getElementById('editResName').value;
         target.maxDuration = parseFloat(document.getElementById('editMaxDuration').value) || 2;
         target.hasStaffField = document.getElementById('editResOrientation').checked;
+        target.defaultShowNotes = document.getElementById('editDefaultShowNotes').checked;
         target.viewMode = document.getElementById('editViewMode').value;
         target.subRooms = document.getElementById('editSubRooms').value;
         for(let i=0; i<7; i++) { target.hours[i*2] = parseInt(document.getElementById(`s_${i}`).value) || 0; target.hours[(i*2)+1] = parseInt(document.getElementById(`e_${i}`).value) || 0; }
@@ -824,6 +830,7 @@ const firebaseConfig = {
 </body>
 
 </html>
+
 
 
 
