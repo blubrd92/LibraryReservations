@@ -383,6 +383,7 @@ const firebaseConfig = {
     let allBookings = {}; 
     let dailyMap = []; 
     let bookingColorMap = {};
+    let activeListenerUnsub = null;
 
     function init() {
         // Date Setup
@@ -439,16 +440,43 @@ const firebaseConfig = {
                 db.collection('system').doc('resources').set({ list: resources });
             }
             handleResourceUpdate();
-        }, (err) => showToast("Permissions Error: " + err.message, "error")); // CHANGED: Toast
-
-        db.collection('appointments').onSnapshot((snapshot) => {
-            allBookings = {};
-            snapshot.forEach((doc) => { allBookings[doc.id] = doc.data(); });
-            renderGrid();
-        });
+        }, (err) => showToast("Permissions Error: " + err.message, "error"));
+        
+        // DELETED: The global 'appointments' snapshot listener.
+        // We now load appointments inside 'handleResourceUpdate' or navigation functions.
     }
 
     // --- CORE LOGIC ---
+    function loadBookingsForCurrentView() {
+        // 1. Unsubscribe from the old listener if it exists
+        if (activeListenerUnsub) {
+            activeListenerUnsub();
+            activeListenerUnsub = null;
+        }
+
+        const res = resources.find(r => r.id === currentResId);
+        if (!res) return;
+
+        // 2. Calculate the ID prefix for this week (e.g. "res-123_2025-01-01")
+        const activeWeekKey = getWeekKey(currentWeekStart); 
+        const queryPrefix = `${res.id}_${activeWeekKey}`;
+
+        // 3. Start a new listener for ONLY documents starting with that prefix
+        activeListenerUnsub = db.collection('appointments')
+            .where(firebase.firestore.FieldPath.documentId(), '>=', queryPrefix)
+            .where(firebase.firestore.FieldPath.documentId(), '<', queryPrefix + '\uf8ff') 
+            .onSnapshot((snapshot) => {
+                allBookings = {}; 
+                snapshot.forEach((doc) => { 
+                    allBookings[doc.id] = doc.data(); 
+                });
+                renderGrid();
+            }, (error) => {
+                console.error("Data fetch error:", error);
+                showToast("Sync Error: " + error.message, "error");
+            });
+    }
+    
     function handleResourceUpdate() {
         const mainSel = document.getElementById('resourceSelect');
         const adminSel = document.getElementById('settingResSelect');
@@ -473,7 +501,7 @@ const firebaseConfig = {
         populate(adminSel, adminVal);
 
         updateUIControls();
-        renderGrid();
+        loadBookingsForCurrentView();
         if(document.getElementById('settingsOverlay').style.display !== 'none') loadSettingsForEditor();
     }
 
@@ -491,7 +519,7 @@ const firebaseConfig = {
             currentDayDate = new Date(currentWeekStart);
         }
         updateUIControls();
-        renderGrid();
+        loadBookingsForCurrentView();
     }
 
     function handleDatePick() {
@@ -503,7 +531,7 @@ const firebaseConfig = {
         const diff = rawDate.getDate() - day;
         currentWeekStart = new Date(rawDate.setDate(diff));
         updateUIControls();
-        renderGrid();
+        loadBookingsForCurrentView();
     }
 
     function updateUIControls() {
@@ -894,3 +922,4 @@ const firebaseConfig = {
 </body>
 
 </html>
+
