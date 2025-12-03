@@ -480,6 +480,17 @@ const firebaseConfig = {
     function handleResourceUpdate() {
         const mainSel = document.getElementById('resourceSelect');
         const adminSel = document.getElementById('settingResSelect');
+
+        // --- ENSURE THIS BLOCK IS PRESENT ---
+        if (!currentResId) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramId = urlParams.get('resource');
+            // If the URL has a valid ID, use it immediately
+            if (paramId && resources.some(r => r.id === paramId)) {
+                currentResId = paramId;
+            }
+        }
+        // ------------------------------------
         
         const populate = (sel, selectedId) => {
             sel.innerHTML = '';
@@ -933,6 +944,14 @@ const firebaseConfig = {
     
     function handleResourceChange() { 
         currentResId = document.getElementById('resourceSelect').value; 
+
+        // --- NEW: Update URL without reloading (Silent Update) ---
+        // This puts "?resource=..." in the address bar so it can be bookmarked.
+        const url = new URL(window.location);
+        url.searchParams.set('resource', currentResId);
+        window.history.pushState({}, '', url);
+        // --------------------------------------------------------
+        
         updateUIControls(); 
         
         // CHANGED: We now call the data fetcher instead of just renderGrid().
@@ -974,6 +993,7 @@ const firebaseConfig = {
 </body>
 
 </html>
+
 
 
 
