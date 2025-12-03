@@ -886,7 +886,14 @@ const firebaseConfig = {
         showLoading(false);
     }
     
-    function handleResourceChange() { currentResId = document.getElementById('resourceSelect').value; updateUIControls(); renderGrid(); }
+    function handleResourceChange() { 
+        currentResId = document.getElementById('resourceSelect').value; 
+        updateUIControls(); 
+        
+        // CHANGED: We now call the data fetcher instead of just renderGrid().
+        // This updates the database listener to look at the NEW resource's ID.
+        loadBookingsForCurrentView(); 
+    }
     function highlightBooking(id) { document.querySelectorAll(`.slot[data-bid="${id}"]`).forEach(s => s.classList.add('booking-hover-effect')); }
     function unhighlightBooking(id) { document.querySelectorAll(`.slot[data-bid="${id}"]`).forEach(s => s.classList.remove('booking-hover-effect')); }
     
@@ -922,4 +929,5 @@ const firebaseConfig = {
 </body>
 
 </html>
+
 
