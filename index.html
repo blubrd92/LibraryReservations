@@ -788,11 +788,56 @@ const firebaseConfig = {
         const parts = suffix.split('_');
         const start = parseFloat(parts[2]);
         const dayIdx = parseInt(parts[1]);
+
+        // Identify the specific sub-room (if any)
+        const subIdx = parts[3] ? parseInt(parts[3]) : null;
+        
         const dayEnd = res.hours[(dayIdx * 2) + 1];
         
         // CHANGED: Validation to Toast
         if (start + duration > dayEnd) return showToast("Exceeds closing time.", "error");
 
+        // --- NEW: THE OVERLAP CHECK ---
+        const end = start + duration;
+        let conflictFound = false;
+
+        // Iterate through all currently loaded bookings to check for collisions
+        Object.keys(allBookings).forEach(key => {
+            // 1. Ignore the booking itself (in case we are just editing the name)
+            if (key === slotId) return;
+
+            // 2. Parse the other booking's ID to see if it's on the same day/room
+            // ID Format: resID_Date_DayIndex_StartTime_SubIndex
+            const kSuffix = key.substring(prefix.length);
+            const kParts = kSuffix.split('_');
+            
+            // Check if it belongs to the same week/resource context
+            if (!key.startsWith(prefix)) return; 
+
+            const kDay = parseInt(kParts[1]);
+            const kSub = kParts[3] ? parseInt(kParts[3]) : null;
+
+            // If it's a different day or different sub-column, it's not a conflict
+            if (kDay !== dayIdx) return;
+            // "!==" works for null vs null, but let's be safe with loose equality for null/undefined mixups
+            if (kSub != subIdx) return; 
+
+            // 3. Check Time Intersection
+            const bStart = parseFloat(kParts[2]);
+            const bDuration = allBookings[key].duration;
+            const bEnd = bStart + bDuration;
+
+            // The Logic: (StartA < EndB) and (EndA > StartB)
+            if (start < bEnd && end > bStart) {
+                conflictFound = true;
+            }
+        });
+
+        if (conflictFound) {
+            return showToast("Conflict: Time overlaps with another booking.", "error");
+        }
+        // ------------------------------------------
+        
         // ADDED: Capture Show Notes Toggle
         const showNotes = document.getElementById('bookShowNotes').checked;
 
@@ -929,5 +974,6 @@ const firebaseConfig = {
 </body>
 
 </html>
+
 
 
