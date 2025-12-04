@@ -77,7 +77,24 @@
         /* Grid */
         /* Updated height to 100% to fill the layout-wrapper */
         .grid-container { display: grid; grid-template-columns: 85px repeat(7, 1fr); border: 1px solid var(--border); height: 100%; overflow-y: auto; position: relative; background: #fff; flex-grow: 1; }
-        .header-cell { background: var(--primary); color: white; padding: 10px 5px; text-align: center; font-weight: bold; position: sticky; top: 0; z-index: 10; border-right: 1px solid rgba(255,255,255,0.2); }
+        .header-cell { 
+            background: var(--primary); 
+            color: white; 
+            padding: 10px 5px; 
+            font-weight: bold; 
+            position: sticky; 
+            top: 0; 
+            z-index: 10; 
+            border-right: 1px solid rgba(255,255,255,0.2);
+            
+            /* NEW: Match Time Column Size & Flex Centering */
+            font-size: 0.95em;
+            display: flex;
+            flex-direction: column; /* Keeps the date below the day name */
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
         
         /* Row Banding */
         .row-alt { background-color: #f0f0f0; }
@@ -89,7 +106,7 @@
             border-bottom: 1px solid #ccc; border-right: 2px solid #bbb; 
             background: #fff; position: sticky; left: 0; z-index: 5; 
         }
-        .time-cell.row-alt { background-color: #fafafa; }
+        .time-cell.row-alt { background-color: #f0f0f0; }
         
         /* Slots */
         .slot { 
@@ -1022,6 +1039,7 @@ const firebaseConfig = {
 </script>
 </body>
 </html>
+
 
 
 
