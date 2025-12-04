@@ -73,7 +73,7 @@
             cursor: pointer; 
             position: relative; 
             transition: background 0.1s; 
-            box-sizing: border-box; /* Ensures padding doesn't affect width/height calculations */
+            box-sizing: border-box; 
         }
         
         .slot:not(.booked-head):not(.booked-body):not(.closed):hover { background-color: #e3f2fd; }
@@ -89,27 +89,26 @@
 
         .slot.closed { background-color: #eeeeee !important; cursor: not-allowed; opacity: 1; pointer-events: none; }
         
-        /* === UPDATED BOOKING STYLES === 
-           These are the specific fixes for the merging issue
-        */
+        /* === UPDATED: MERGED CELL STYLES === */
         .slot.booked-head { 
             color: white; 
-            border-radius: 4px; 
+            border-radius: 4px; /* Rounded corners for the whole block */
             padding: 6px 8px; 
             font-weight: 600; 
             z-index: 2; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             
-            /* Flexbox to manage vertical content */
+            /* Flex layout for vertical content */
             display: flex;
             flex-direction: column; 
-            align-items: flex-start; /* Align text to left */
-            justify-content: flex-start; /* Start text at top */
-            height: 100%; /* Force it to fill the spanned grid rows */
-            overflow: hidden; /* Clean edges */
+            align-items: flex-start;
+            justify-content: flex-start; 
+            height: 100%; /* Fill merged space */
+            overflow: hidden; 
         }
         
-        .slot.booked-body { display: none; } /* Ensure we never see these if JS fails to hide them */
+        /* We hide the 'body' cells now because the head spans over them */
+        .slot.booked-body { display: none; } 
         
         .slot.booked-head.with-staff { border-left: 5px solid #f1c40f; } 
         
@@ -122,24 +121,23 @@
         .bg-color-0 { background-color: var(--app-color-1); }
         .bg-color-1 { background-color: var(--app-color-2); }
         
-        /* === UPDATED TEXT STYLES === 
-           Allows text to wrap and fill the space
-        */
+        /* === UPDATED: TEXT STYLES === */
         .slot-name { 
             display: block; 
             width: 100%;
-            white-space: normal; /* CRITICAL: Allows text to wrap */
-            word-break: break-word; /* Prevents long words from breaking layout */
-            overflow: visible; /* Let text show */
+            white-space: normal; /* Allow wrapping */
+            word-break: break-word; 
+            overflow: visible; 
             font-size: 0.95em; 
             line-height: 1.3;
+            /* removed flex: 1 so it doesn't push staff down */
         }
         .slot-staff { 
             font-size: 0.9em; 
             color: rgba(255,255,255,0.9); 
             font-style: italic; 
             display: block; 
-            margin-top: 2px; /* Just a tiny gap */
+            margin-top: 2px; /* Small gap */
         }
 
         /* Modals */
@@ -172,6 +170,19 @@
         .settings-row-grid input, .settings-row-grid select { width: 100%; box-sizing: border-box; }
 
         .loading-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.8); z-index: 2000; display:flex; justify-content:center; align-items:center; font-size: 2rem; color: var(--primary); font-weight:bold; }
+
+        /* === ADDED: TOAST NOTIFICATIONS === */
+        #toast-container { 
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 6000; 
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none; 
+        }
+        .toast { 
+            padding: 12px 24px; border-radius: 6px; color: white; font-weight: 600; font-size: 1rem;
+            opacity: 0; transform: translateY(20px); transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.success { background-color: var(--success); }
+        .toast.error { background-color: var(--danger); }
     </style>
 </head>
 <body>
@@ -324,6 +335,8 @@
     </div>
 </div>
 
+<div id="toast-container"></div>
+
 <script>
     // --- FIREBASE CONFIG ---
 const firebaseConfig = {
@@ -342,10 +355,24 @@ const firebaseConfig = {
 
     // SYSTEM EMAIL - HARDCODED (Staff only needs to know the password)
     const STAFF_EMAIL = "staff@library.internal"; 
-    const ADMIN_PASS = "library"; // Re-added for Admin Panel protection
+    const ADMIN_PASS = "library"; 
 
     const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const DEFAULT_HOURS = [0,0, 10,18, 10,20, 10,18, 10,18, 10,17, 10,17]; 
+
+    // ADDED: Toast Helper Function
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`; 
+        toast.innerText = message;
+        container.appendChild(toast);
+        requestAnimationFrame(() => { toast.classList.add('show'); });
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300); 
+        }, 3000);
+    }
 
     // STATE
     let resources = [];
@@ -356,6 +383,7 @@ const firebaseConfig = {
     let allBookings = {}; 
     let dailyMap = []; 
     let bookingColorMap = {};
+    let activeListenerUnsub = null;
 
     function init() {
         // Date Setup
@@ -412,19 +440,57 @@ const firebaseConfig = {
                 db.collection('system').doc('resources').set({ list: resources });
             }
             handleResourceUpdate();
-        }, (err) => alert("Permissions Error: " + err.message));
-
-        db.collection('appointments').onSnapshot((snapshot) => {
-            allBookings = {};
-            snapshot.forEach((doc) => { allBookings[doc.id] = doc.data(); });
-            renderGrid();
-        });
+        }, (err) => showToast("Permissions Error: " + err.message, "error"));
+        
+        // DELETED: The global 'appointments' snapshot listener.
+        // We now load appointments inside 'handleResourceUpdate' or navigation functions.
     }
 
-    // --- CORE LOGIC (UNCHANGED) ---
+    // --- CORE LOGIC ---
+    function loadBookingsForCurrentView() {
+        // 1. Unsubscribe from the old listener if it exists
+        if (activeListenerUnsub) {
+            activeListenerUnsub();
+            activeListenerUnsub = null;
+        }
+
+        const res = resources.find(r => r.id === currentResId);
+        if (!res) return;
+
+        // 2. Calculate the ID prefix for this week (e.g. "res-123_2025-01-01")
+        const activeWeekKey = getWeekKey(currentWeekStart); 
+        const queryPrefix = `${res.id}_${activeWeekKey}`;
+
+        // 3. Start a new listener for ONLY documents starting with that prefix
+        activeListenerUnsub = db.collection('appointments')
+            .where(firebase.firestore.FieldPath.documentId(), '>=', queryPrefix)
+            .where(firebase.firestore.FieldPath.documentId(), '<', queryPrefix + '\uf8ff') 
+            .onSnapshot((snapshot) => {
+                allBookings = {}; 
+                snapshot.forEach((doc) => { 
+                    allBookings[doc.id] = doc.data(); 
+                });
+                renderGrid();
+            }, (error) => {
+                console.error("Data fetch error:", error);
+                showToast("Sync Error: " + error.message, "error");
+            });
+    }
+    
     function handleResourceUpdate() {
         const mainSel = document.getElementById('resourceSelect');
         const adminSel = document.getElementById('settingResSelect');
+
+        // --- ENSURE THIS BLOCK IS PRESENT ---
+        if (!currentResId) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramId = urlParams.get('resource');
+            // If the URL has a valid ID, use it immediately
+            if (paramId && resources.some(r => r.id === paramId)) {
+                currentResId = paramId;
+            }
+        }
+        // ------------------------------------
         
         const populate = (sel, selectedId) => {
             sel.innerHTML = '';
@@ -446,7 +512,7 @@ const firebaseConfig = {
         populate(adminSel, adminVal);
 
         updateUIControls();
-        renderGrid();
+        loadBookingsForCurrentView();
         if(document.getElementById('settingsOverlay').style.display !== 'none') loadSettingsForEditor();
     }
 
@@ -464,7 +530,7 @@ const firebaseConfig = {
             currentDayDate = new Date(currentWeekStart);
         }
         updateUIControls();
-        renderGrid();
+        loadBookingsForCurrentView();
     }
 
     function handleDatePick() {
@@ -476,7 +542,7 @@ const firebaseConfig = {
         const diff = rawDate.getDate() - day;
         currentWeekStart = new Date(rawDate.setDate(diff));
         updateUIControls();
-        renderGrid();
+        loadBookingsForCurrentView();
     }
 
     function updateUIControls() {
@@ -595,25 +661,30 @@ const firebaseConfig = {
 
                         if (timeVal === booking.start) {
                             // MERGED CELL LOGIC
-                            // 1. Calculate how many 30min slots this booking takes
                             const spanCount = booking.data.duration * 2; 
                             slot.style.gridRow = `span ${spanCount}`;
-                            slot.style.height = "100%"; // Force height to fill the span
+                            slot.style.height = "100%"; 
                             
-                            // 2. Style it as a single block (reusing booked-head class but updated styles)
                             slot.className = `slot ${rowClass} booked-head ${colorClass}`;
                             if(booking.data.hasStaff) slot.classList.add('with-staff');
                             
+                            // UPDATED: Content (Name, Time, Staff, Note)
+                            // Removed <br> between name and time as requested
                             slot.innerHTML = `<span class="slot-name">${booking.data.name} <span style="font-weight:normal; font-size:0.9em; opacity:0.9">(${formatTime(booking.start)} - ${formatTime(booking.end)})</span></span>`;
-                            if(booking.data.hasStaff) slot.innerHTML += `<span class="slot-staff">w/ ${booking.data.staffName}</span>`;
+                            
+                            if(booking.data.hasStaff) {
+                                slot.innerHTML += `<span class="slot-staff">w/ ${booking.data.staffName}</span>`;
+                            }
+                            
+                            // ADDED: Note rendering if toggle is ON
                             if(booking.data.showNotes && booking.data.notes) {
                                 slot.innerHTML += `<span style="display:block; font-size:0.85em; margin-top:4px; opacity:0.9; border-top:1px solid rgba(255,255,255,0.2); padding-top:2px;">${booking.data.notes}</span>`;
                             }
+
                             slot.onclick = () => openBookingModal(booking.id, booking.data, col.subIndex);
                             container.appendChild(slot);
                         } else {
-                            // 3. Skip rendering slots for the rest of the booking duration
-                            // The 'span' from the head will fill this space in the grid.
+                            // Skip rendering subsequent slots
                             return; 
                         }
                     } else {
@@ -624,7 +695,6 @@ const firebaseConfig = {
                         container.appendChild(slot);
                     }
                 }
-                
             });
         }
     }
@@ -678,8 +748,10 @@ const firebaseConfig = {
         document.getElementById('slotId').value = slotId;
         document.getElementById('bookName').value = data ? data.name : '';
         document.getElementById('bookNotes').value = data ? data.notes : '';
-        document.getElementById('bookShowNotes').checked = data ? (data.showNotes || false) : (res.defaultShowNotes || false);
         
+        // ADDED: Logic for "Show Notes" checkbox (Data val OR Admin Default)
+        document.getElementById('bookShowNotes').checked = data ? (data.showNotes || false) : (res.defaultShowNotes || false);
+
         const showStaff = res.hasStaffField;
         document.getElementById('staffSection').style.display = showStaff ? 'block' : 'none';
         if(data) {
@@ -711,34 +783,94 @@ const firebaseConfig = {
         const slotId = document.getElementById('slotId').value;
         const name = document.getElementById('bookName').value;
         const duration = parseFloat(document.getElementById('bookDuration').value);
-        if(!name.trim()) return alert("Please enter a name.");
-        if(isNaN(duration)) return alert("Invalid duration.");
+        // CHANGED: Validation to Toast
+        if(!name.trim()) return showToast("Please enter a name.", "error");
+        if(isNaN(duration)) return showToast("Invalid duration.", "error");
 
         const hasStaff = document.getElementById('bookHasStaff').checked;
         const staffName = document.getElementById('bookStaffName').value;
         if (document.getElementById('staffSection').style.display !== 'none' && hasStaff && !staffName.trim()) {
-            return alert("Staff Name is required.");
+            return showToast("Staff Name is required.", "error");
         }
 
-        const showNotes = document.getElementById('bookShowNotes').checked;
         const res = resources.find(r => r.id === currentResId);
         const prefix = res.id + "_";
         const suffix = slotId.substring(prefix.length); 
         const parts = suffix.split('_');
         const start = parseFloat(parts[2]);
         const dayIdx = parseInt(parts[1]);
-        const dayEnd = res.hours[(dayIdx * 2) + 1];
-        if (start + duration > dayEnd) return alert("Exceeds closing time.");
 
-        const data = { name: name, notes: document.getElementById('bookNotes').value, duration: duration, hasStaff: hasStaff, staffName: staffName, showNotes: showNotes };
+        // Identify the specific sub-room (if any)
+        const subIdx = parts[3] ? parseInt(parts[3]) : null;
+        
+        const dayEnd = res.hours[(dayIdx * 2) + 1];
+        
+        // CHANGED: Validation to Toast
+        if (start + duration > dayEnd) return showToast("Exceeds closing time.", "error");
+
+        // --- NEW: THE OVERLAP CHECK ---
+        const end = start + duration;
+        let conflictFound = false;
+
+        // Iterate through all currently loaded bookings to check for collisions
+        Object.keys(allBookings).forEach(key => {
+            // 1. Ignore the booking itself (in case we are just editing the name)
+            if (key === slotId) return;
+
+            // 2. Parse the other booking's ID to see if it's on the same day/room
+            // ID Format: resID_Date_DayIndex_StartTime_SubIndex
+            const kSuffix = key.substring(prefix.length);
+            const kParts = kSuffix.split('_');
+            
+            // Check if it belongs to the same week/resource context
+            if (!key.startsWith(prefix)) return; 
+
+            const kDay = parseInt(kParts[1]);
+            const kSub = kParts[3] ? parseInt(kParts[3]) : null;
+
+            // If it's a different day or different sub-column, it's not a conflict
+            if (kDay !== dayIdx) return;
+            // "!==" works for null vs null, but let's be safe with loose equality for null/undefined mixups
+            if (kSub != subIdx) return; 
+
+            // 3. Check Time Intersection
+            const bStart = parseFloat(kParts[2]);
+            const bDuration = allBookings[key].duration;
+            const bEnd = bStart + bDuration;
+
+            // The Logic: (StartA < EndB) and (EndA > StartB)
+            if (start < bEnd && end > bStart) {
+                conflictFound = true;
+            }
+        });
+
+        if (conflictFound) {
+            return showToast("Conflict: Time overlaps with another booking.", "error");
+        }
+        // ------------------------------------------
+        
+        // ADDED: Capture Show Notes Toggle
+        const showNotes = document.getElementById('bookShowNotes').checked;
+
+        const data = { 
+            name: name, 
+            notes: document.getElementById('bookNotes').value, 
+            duration: duration, 
+            hasStaff: hasStaff, 
+            staffName: staffName,
+            showNotes: showNotes 
+        };
+
         showLoading(true);
-        try { await db.collection('appointments').doc(slotId).set(data); closeModal('bookingModal'); } catch(e) { alert("Error: " + e.message); }
+        try { await db.collection('appointments').doc(slotId).set(data); closeModal('bookingModal'); } 
+        catch(e) { showToast("Error: " + e.message, "error"); } // CHANGED: Toast
         showLoading(false);
     }
 
     function openAdminPanel() { 
         const pass = prompt("Enter Admin Password:");
-        if (pass !== ADMIN_PASS) return pass ? alert("Incorrect Password.") : null;
+        // CHANGED: Error to Toast
+        if (pass !== ADMIN_PASS) return pass ? showToast("Incorrect Password.", "error") : null;
         document.getElementById('settingsOverlay').style.display = 'flex'; 
         document.getElementById('settingResSelect').value = currentResId; 
         loadSettingsForEditor(); 
@@ -752,8 +884,11 @@ const firebaseConfig = {
         document.getElementById('editMaxDuration').value = r.maxDuration;
         document.getElementById('editResOrientation').checked = r.hasStaffField || false;
         document.getElementById('editViewMode').value = r.viewMode || 'week';
-        document.getElementById('editDefaultShowNotes').checked = r.defaultShowNotes || false;
         document.getElementById('editSubRooms').value = r.subRooms || '';
+        
+        // ADDED: Load Default Note Setting
+        document.getElementById('editDefaultShowNotes').checked = r.defaultShowNotes || false;
+
         toggleSubRoomInput();
         const container = document.getElementById('daysConfigContainer');
         container.innerHTML = '';
@@ -764,21 +899,27 @@ const firebaseConfig = {
         });
     }
     function toggleSubRoomInput() { const mode = document.getElementById('editViewMode').value; const container = document.getElementById('subRoomConfig'); if (mode === 'day') { container.classList.remove('hidden'); } else { container.classList.add('hidden'); } }
+    
     async function addNewResource() {
         const name = prompt("Name for new resource?");
         if(!name) return;
         showLoading(true);
+        // ADDED: defaultShowNotes property
         const newRes = { id: 'res-' + Date.now(), name: name, viewMode: 'week', hasStaffField: false, defaultShowNotes: false, maxDuration: 2, hours: [...DEFAULT_HOURS] };
-        try { await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); pendingSelectionId = newRes.id; } catch (e) { alert("Error: " + e.message); }
+        try { await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); pendingSelectionId = newRes.id; } 
+        catch (e) { showToast("Error: " + e.message, "error"); } // CHANGED: Toast
         showLoading(false);
     }
+    
     async function deleteResource() {
         const delId = document.getElementById('settingResSelect').value;
         if(!delId || !confirm("Delete this resource?")) return;
         showLoading(true);
-        try { await db.collection('system').doc('resources').set({ list: resources.filter(r => r.id !== delId) }); } catch (e) { alert("Error: " + e.message); }
+        try { await db.collection('system').doc('resources').set({ list: resources.filter(r => r.id !== delId) }); } 
+        catch (e) { showToast("Error: " + e.message, "error"); } // CHANGED: Toast
         showLoading(false);
     }
+    
     async function saveAllSettings() {
         const editId = document.getElementById('settingResSelect').value;
         const r = resources.find(x => x.id === editId);
@@ -788,23 +929,45 @@ const firebaseConfig = {
         target.name = document.getElementById('editResName').value;
         target.maxDuration = parseFloat(document.getElementById('editMaxDuration').value) || 2;
         target.hasStaffField = document.getElementById('editResOrientation').checked;
-        target.defaultShowNotes = document.getElementById('editDefaultShowNotes').checked;
         target.viewMode = document.getElementById('editViewMode').value;
         target.subRooms = document.getElementById('editSubRooms').value;
+        
+        // ADDED: Save Default Note Setting
+        target.defaultShowNotes = document.getElementById('editDefaultShowNotes').checked;
+
         for(let i=0; i<7; i++) { target.hours[i*2] = parseInt(document.getElementById(`s_${i}`).value) || 0; target.hours[(i*2)+1] = parseInt(document.getElementById(`e_${i}`).value) || 0; }
         showLoading(true);
-        try { await db.collection('system').doc('resources').set({ list: updatedList }); alert("Settings Saved!"); } catch (e) { alert("Error: " + e.message); }
+        try { await db.collection('system').doc('resources').set({ list: updatedList }); showToast("Settings Saved!", "success"); } // CHANGED: Toast
+        catch (e) { showToast("Error: " + e.message, "error"); } // CHANGED: Toast
         showLoading(false);
     }
     
-    function handleResourceChange() { currentResId = document.getElementById('resourceSelect').value; updateUIControls(); renderGrid(); }
+    function handleResourceChange() { 
+        currentResId = document.getElementById('resourceSelect').value; 
+
+        // --- NEW: Update URL without reloading (Silent Update) ---
+        // This puts "?resource=..." in the address bar so it can be bookmarked.
+        const url = new URL(window.location);
+        url.searchParams.set('resource', currentResId);
+        window.history.pushState({}, '', url);
+        // --------------------------------------------------------
+        
+        updateUIControls(); 
+        
+        // CHANGED: We now call the data fetcher instead of just renderGrid().
+        // This updates the database listener to look at the NEW resource's ID.
+        loadBookingsForCurrentView(); 
+    }
     function highlightBooking(id) { document.querySelectorAll(`.slot[data-bid="${id}"]`).forEach(s => s.classList.add('booking-hover-effect')); }
     function unhighlightBooking(id) { document.querySelectorAll(`.slot[data-bid="${id}"]`).forEach(s => s.classList.remove('booking-hover-effect')); }
+    
     function deleteBooking() { 
         const slotId = document.getElementById('slotId').value;
         if(!allBookings[slotId]) return closeModal('bookingModal');
+        // Kept confirm() for safety as discussed
         if(confirm("Delete booking?")) { showLoading(true); db.collection('appointments').doc(slotId).delete().then(()=>closeModal('bookingModal')); showLoading(false); }
     }
+    
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
     function createDiv(cls, content) { const d = document.createElement('div'); d.className = cls; d.innerHTML = content; return d; }
     function showLoading(show) { document.getElementById('loading').className = show ? 'loading-overlay' : 'loading-overlay hidden'; }
@@ -830,9 +993,6 @@ const firebaseConfig = {
 </body>
 
 </html>
-
-
-
 
 
 
