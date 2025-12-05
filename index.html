@@ -816,11 +816,14 @@ const firebaseConfig = {
             const opt = document.createElement('option');
             opt.value = val;
 
-            // --- NEW: Calculate and Format End Time ---
+            // --- UPDATED: Range Format (Option 2) ---
             const endVal = start + val;
+            const startString = formatTime(start); 
             const endString = formatTime(endVal);
-            opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (Ends at ${endString})`;
-            // ------------------------------------------
+            
+            // Result: "1.5 Hours (2:00pm - 3:30pm)"
+            opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (${startString} - ${endString})`;
+            // ----------------------------------------
             
             if(data && data.duration == val) opt.selected = true;
             durSel.appendChild(opt);
@@ -1045,6 +1048,7 @@ const firebaseConfig = {
 </script>
 </body>
 </html>
+
 
 
 
