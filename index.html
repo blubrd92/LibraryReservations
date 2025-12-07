@@ -8,6 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <style>
         :root { 
@@ -34,7 +35,7 @@
         .offline { color: var(--danger); font-weight: bold; }
 
         /* Header */
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 3px solid var(--primary); padding-bottom: 15px; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 0px; }
         .header-title h2 { margin: 0; font-size: 1.8rem; color: var(--primary); }
         .header-title small { font-size: 1rem; color: #666; font-weight: normal; margin-left: 10px; }
         
@@ -47,26 +48,70 @@
         .btn-nav { font-weight: bold; width: 40px; text-align: center; }
         select, input[type="date"], input[type="text"], input[type="number"], input[type="password"] { padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 1rem; }
 
+        /* === UPDATED: LAYOUT WRAPPER === */
+        .layout-wrapper {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            height: 75vh; /* Moved height here from grid-container */
+        }
+
+        /* === NEW: SIDEBAR STYLES === */
+        .info-sidebar {
+            width: 250px;
+            flex-shrink: 0;
+            background: #f8f9fa;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0px 15px;
+            height: 100%;
+            overflow-y: auto;
+            white-space: normal;
+            box-sizing: border-box;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #444;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
+        }
+
         /* Grid */
-        .grid-container { display: grid; grid-template-columns: 85px repeat(7, 1fr); border: 1px solid var(--border); height: 75vh; overflow-y: auto; position: relative; background: #fff; }
-        .header-cell { background: var(--primary); color: white; padding: 10px 5px; text-align: center; font-weight: bold; position: sticky; top: 0; z-index: 10; border-right: 1px solid rgba(255,255,255,0.2); }
+        /* Updated height to 100% to fill the layout-wrapper */
+        .grid-container { display: grid; grid-template-columns: 85px repeat(7, 1fr); border: 1px solid var(--border); height: 100%; overflow-y: auto; position: relative; background: #fff; flex-grow: 1; }
+        .header-cell { 
+            background: var(--primary); 
+            color: white; 
+            padding: 10px 5px; 
+            font-weight: bold; 
+            position: sticky; 
+            top: 0; 
+            z-index: 10; 
+            border-right: 1px solid rgba(255,255,255,0.2);
+            
+            /* NEW: Match Time Column Size & Flex Centering */
+            font-size: 0.95em;
+            display: flex;
+            flex-direction: column; /* Keeps the date below the day name */
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
         
         /* Row Banding */
-        .row-alt { background-color: #fafafa; }
+        .row-alt { background-color: #f0f0f0; }
 
         /* Time Cell Styling */
         .time-cell { 
             display: flex; align-items: center; justify-content: center;
             font-size: 0.95em; font-weight: bold; color: #555; 
-            border-bottom: 1px solid #eee; border-right: 2px solid #ddd; 
+            border-bottom: 1px solid #ccc; border-right: 2px solid #bbb; 
             background: #fff; position: sticky; left: 0; z-index: 5; 
         }
-        .time-cell.row-alt { background-color: #fafafa; }
+        .time-cell.row-alt { background-color: #f0f0f0; }
         
         /* Slots */
         .slot { 
-            border-bottom: 1px dotted #eee; 
-            border-right: 1px solid #eee; 
+            border-bottom: 1px dotted #ccc; 
+            border-right: 1px solid #ccc; 
             padding: 2px; 
             font-size: 0.95em; 
             min-height: 25px; 
@@ -87,27 +132,24 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
-        .slot.closed { background-color: #eeeeee !important; cursor: not-allowed; opacity: 1; pointer-events: none; }
+        .slot.closed { background-color: #cccccc !important; border-color: #cccccc; cursor: not-allowed; opacity: 1; pointer-events: none; }
         
-        /* === UPDATED: MERGED CELL STYLES === */
+        /* Merged Cell Styles */
         .slot.booked-head { 
             color: white; 
-            border-radius: 4px; /* Rounded corners for the whole block */
+            border-radius: 4px; 
             padding: 6px 8px; 
             font-weight: 600; 
             z-index: 2; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            
-            /* Flex layout for vertical content */
             display: flex;
             flex-direction: column; 
             align-items: flex-start;
             justify-content: flex-start; 
-            height: 100%; /* Fill merged space */
+            height: 100%; 
             overflow: hidden; 
         }
         
-        /* We hide the 'body' cells now because the head spans over them */
         .slot.booked-body { display: none; } 
         
         .slot.booked-head.with-staff { border-left: 5px solid #f1c40f; } 
@@ -121,23 +163,22 @@
         .bg-color-0 { background-color: var(--app-color-1); }
         .bg-color-1 { background-color: var(--app-color-2); }
         
-        /* === UPDATED: TEXT STYLES === */
+        /* Text Styles */
         .slot-name { 
             display: block; 
             width: 100%;
-            white-space: normal; /* Allow wrapping */
+            white-space: normal; 
             word-break: break-word; 
             overflow: visible; 
             font-size: 0.95em; 
             line-height: 1.3;
-            /* removed flex: 1 so it doesn't push staff down */
         }
         .slot-staff { 
             font-size: 0.9em; 
             color: rgba(255,255,255,0.9); 
             font-style: italic; 
             display: block; 
-            margin-top: 2px; /* Small gap */
+            margin-top: 2px; 
         }
 
         /* Modals */
@@ -171,7 +212,7 @@
 
         .loading-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.8); z-index: 2000; display:flex; justify-content:center; align-items:center; font-size: 2rem; color: var(--primary); font-weight:bold; }
 
-        /* === ADDED: TOAST NOTIFICATIONS === */
+        /* Toast Notifications */
         #toast-container { 
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 6000; 
             display: flex; flex-direction: column; gap: 10px; pointer-events: none; 
@@ -222,7 +263,11 @@
     </div>
 </header>
 
-<div id="gridContainer" class="grid-container"></div>
+<div class="layout-wrapper">
+    <div id="infoSidebar" class="hidden info-sidebar"></div>
+    
+    <div id="gridContainer" class="grid-container"></div>
+</div>
 
 <div id="bookingModal" class="modal">
     <div class="modal-content">
@@ -236,7 +281,7 @@
         </div>
         
         <div class="form-group">
-            <label>Patron/Event Name</label>
+            <label>Event Name/Patron Name</label>
             <input type="text" id="bookName" placeholder="e.g. John Doe">
         </div>
         
@@ -247,12 +292,12 @@
             </div>
             <div id="staffInputContainer" class="hidden" style="margin-top: 10px;">
                 <label style="font-size:0.8em; color:#666;">Assigned Staff Member:</label>
-                <input type="text" id="bookStaffName" placeholder="e.g. Terra">
+                <input type="text" id="bookStaffName" placeholder="e.g. John">
             </div>
         </div>
         
         <div class="form-group">
-            <label>Notes (Internal)</label>
+            <label>Notes</label>
             <textarea id="bookNotes" rows="3"></textarea>
             <div style="margin-top: 5px; display:flex; align-items:center; gap:5px;">
                 <input type="checkbox" id="bookShowNotes" style="width:auto;">
@@ -310,6 +355,17 @@
                         <small style="color:#666">These will appear as columns in Day View.</small>
                     </div>
                 </div>
+
+                <div class="form-group" style="background: #fdf2e9; padding: 10px; border-radius: 4px; border: 1px solid #fae5d3;">
+                    <div class="flex gap">
+                        <input type="checkbox" id="editEnableSidebar" onchange="toggleSidebarConfig()" style="width:auto;">
+                        <label for="editEnableSidebar" style="margin:0; cursor:pointer; font-weight:bold; color:#d35400;">Enable Sidebar Information?</label>
+                    </div>
+                    <div id="sidebarTextConfig" class="hidden" style="margin-top:10px;">
+                        <label>Sidebar Text (Policies/Rules)</label>
+                        <textarea id="editSidebarText" rows="4" placeholder="Enter policies here..."></textarea>
+                    </div>
+                </div>
                 
                 <div class="form-group" style="background: #f0f8ff; padding: 10px; border-radius: 4px; border: 1px solid #d0e1f5;">
                     <div class="flex gap">
@@ -353,14 +409,12 @@ const firebaseConfig = {
     const db = firebase.firestore();
     const auth = firebase.auth();
 
-    // SYSTEM EMAIL - HARDCODED (Staff only needs to know the password)
     const STAFF_EMAIL = "staff@library.internal"; 
     const ADMIN_PASS = "library"; 
 
     const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const DEFAULT_HOURS = [0,0, 10,18, 10,20, 10,18, 10,18, 10,17, 10,17]; 
 
-    // ADDED: Toast Helper Function
     function showToast(message, type = 'success') {
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
@@ -386,7 +440,6 @@ const firebaseConfig = {
     let activeListenerUnsub = null;
 
     function init() {
-        // Date Setup
         const d = new Date();
         const day = d.getDay();
         const diff = d.getDate() - day; 
@@ -398,15 +451,12 @@ const firebaseConfig = {
         currentDayDate = new Date();
         currentDayDate.setHours(0,0,0,0);
 
-        // AUTH LISTENER
         auth.onAuthStateChanged(user => {
             if (user) {
-                // Logged In
                 document.getElementById('loginOverlay').style.display = 'none';
                 document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected (Staff)</span>";
                 setupRealtimeListeners();
             } else {
-                // Logged Out
                 document.getElementById('loginOverlay').style.display = 'flex';
                 document.getElementById('status-bar').innerHTML = "<span class='offline'>Locked</span>";
             }
@@ -441,14 +491,10 @@ const firebaseConfig = {
             }
             handleResourceUpdate();
         }, (err) => showToast("Permissions Error: " + err.message, "error"));
-        
-        // DELETED: The global 'appointments' snapshot listener.
-        // We now load appointments inside 'handleResourceUpdate' or navigation functions.
     }
 
     // --- CORE LOGIC ---
     function loadBookingsForCurrentView() {
-        // 1. Unsubscribe from the old listener if it exists
         if (activeListenerUnsub) {
             activeListenerUnsub();
             activeListenerUnsub = null;
@@ -457,11 +503,9 @@ const firebaseConfig = {
         const res = resources.find(r => r.id === currentResId);
         if (!res) return;
 
-        // 2. Calculate the ID prefix for this week (e.g. "res-123_2025-01-01")
         const activeWeekKey = getWeekKey(currentWeekStart); 
         const queryPrefix = `${res.id}_${activeWeekKey}`;
 
-        // 3. Start a new listener for ONLY documents starting with that prefix
         activeListenerUnsub = db.collection('appointments')
             .where(firebase.firestore.FieldPath.documentId(), '>=', queryPrefix)
             .where(firebase.firestore.FieldPath.documentId(), '<', queryPrefix + '\uf8ff') 
@@ -481,16 +525,13 @@ const firebaseConfig = {
         const mainSel = document.getElementById('resourceSelect');
         const adminSel = document.getElementById('settingResSelect');
 
-        // --- ENSURE THIS BLOCK IS PRESENT ---
         if (!currentResId) {
             const urlParams = new URLSearchParams(window.location.search);
             const paramId = urlParams.get('resource');
-            // If the URL has a valid ID, use it immediately
             if (paramId && resources.some(r => r.id === paramId)) {
                 currentResId = paramId;
             }
         }
-        // ------------------------------------
         
         const populate = (sel, selectedId) => {
             sel.innerHTML = '';
@@ -550,6 +591,16 @@ const firebaseConfig = {
         if(!res) return;
         const isDayView = res.viewMode === 'day';
         
+        // --- NEW: Handle Sidebar Visibility & Text ---
+        const sidebar = document.getElementById('infoSidebar');
+        if (res.enableSidebar) {
+            sidebar.classList.remove('hidden');
+            sidebar.innerHTML = marked.parse(res.sidebarText || "");
+        } else {
+            sidebar.classList.add('hidden');
+        }
+        // ---------------------------------------------
+
         if (isDayView) {
             const d = currentDayDate;
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -660,7 +711,6 @@ const firebaseConfig = {
                         slot.onmouseleave = () => unhighlightBooking(booking.id);
 
                         if (timeVal === booking.start) {
-                            // MERGED CELL LOGIC
                             const spanCount = booking.data.duration * 2; 
                             slot.style.gridRow = `span ${spanCount}`;
                             slot.style.height = "100%"; 
@@ -668,15 +718,12 @@ const firebaseConfig = {
                             slot.className = `slot ${rowClass} booked-head ${colorClass}`;
                             if(booking.data.hasStaff) slot.classList.add('with-staff');
                             
-                            // UPDATED: Content (Name, Time, Staff, Note)
-                            // Removed <br> between name and time as requested
                             slot.innerHTML = `<span class="slot-name">${booking.data.name} <span style="font-weight:normal; font-size:0.9em; opacity:0.9">(${formatTime(booking.start)} - ${formatTime(booking.end)})</span></span>`;
                             
                             if(booking.data.hasStaff) {
                                 slot.innerHTML += `<span class="slot-staff">w/ ${booking.data.staffName}</span>`;
                             }
                             
-                            // ADDED: Note rendering if toggle is ON
                             if(booking.data.showNotes && booking.data.notes) {
                                 slot.innerHTML += `<span style="display:block; font-size:0.85em; margin-top:4px; opacity:0.9; border-top:1px solid rgba(255,255,255,0.2); padding-top:2px;">${booking.data.notes}</span>`;
                             }
@@ -684,14 +731,13 @@ const firebaseConfig = {
                             slot.onclick = () => openBookingModal(booking.id, booking.data, col.subIndex);
                             container.appendChild(slot);
                         } else {
-                            // Skip rendering subsequent slots
                             return; 
                         }
                     } else {
                         let emptyId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${timeVal}`;
                         if (col.subIndex !== null) emptyId += `_${col.subIndex}`;
                         slot.onclick = () => openBookingModal(emptyId, null, col.subIndex);
-                        slot.setAttribute('data-time', displayTime);
+                        slot.setAttribute('data-time', `${displayTime} - ${formatTime(timeVal + 0.5)}`);
                         container.appendChild(slot);
                     }
                 }
@@ -714,7 +760,6 @@ const firebaseConfig = {
              start = parseFloat(parts[2]);
              document.getElementById('subRoomIndex').value = parts[3] || ''; 
         } else {
-             // New booking
              dayIdx = parseInt(parts[1]);
              start = parseFloat(parts[2]);
              document.getElementById('subRoomIndex').value = (subIdx !== null && subIdx !== undefined) ? subIdx : '';
@@ -749,7 +794,6 @@ const firebaseConfig = {
         document.getElementById('bookName').value = data ? data.name : '';
         document.getElementById('bookNotes').value = data ? data.notes : '';
         
-        // ADDED: Logic for "Show Notes" checkbox (Data val OR Admin Default)
         document.getElementById('bookShowNotes').checked = data ? (data.showNotes || false) : (res.defaultShowNotes || false);
 
         const showStaff = res.hasStaffField;
@@ -771,7 +815,16 @@ const firebaseConfig = {
             if (val > limit && (!data || data.duration !== val)) continue;
             const opt = document.createElement('option');
             opt.value = val;
-            opt.innerText = val + (val === 1 ? " Hour" : " Hours");
+
+            // --- UPDATED: Range Format (Option 2) ---
+            const endVal = start + val;
+            const startString = formatTime(start); 
+            const endString = formatTime(endVal);
+            
+            // Result: "1.5 Hours (2:00pm - 3:30pm)"
+            opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (${startString} - ${endString})`;
+            // ----------------------------------------
+            
             if(data && data.duration == val) opt.selected = true;
             durSel.appendChild(opt);
         }
@@ -783,7 +836,7 @@ const firebaseConfig = {
         const slotId = document.getElementById('slotId').value;
         const name = document.getElementById('bookName').value;
         const duration = parseFloat(document.getElementById('bookDuration').value);
-        // CHANGED: Validation to Toast
+        
         if(!name.trim()) return showToast("Please enter a name.", "error");
         if(isNaN(duration)) return showToast("Invalid duration.", "error");
 
@@ -800,45 +853,32 @@ const firebaseConfig = {
         const start = parseFloat(parts[2]);
         const dayIdx = parseInt(parts[1]);
 
-        // Identify the specific sub-room (if any)
         const subIdx = parts[3] ? parseInt(parts[3]) : null;
-        
         const dayEnd = res.hours[(dayIdx * 2) + 1];
         
-        // CHANGED: Validation to Toast
         if (start + duration > dayEnd) return showToast("Exceeds closing time.", "error");
 
-        // --- NEW: THE OVERLAP CHECK ---
         const end = start + duration;
         let conflictFound = false;
 
-        // Iterate through all currently loaded bookings to check for collisions
         Object.keys(allBookings).forEach(key => {
-            // 1. Ignore the booking itself (in case we are just editing the name)
             if (key === slotId) return;
 
-            // 2. Parse the other booking's ID to see if it's on the same day/room
-            // ID Format: resID_Date_DayIndex_StartTime_SubIndex
             const kSuffix = key.substring(prefix.length);
             const kParts = kSuffix.split('_');
             
-            // Check if it belongs to the same week/resource context
             if (!key.startsWith(prefix)) return; 
 
             const kDay = parseInt(kParts[1]);
             const kSub = kParts[3] ? parseInt(kParts[3]) : null;
 
-            // If it's a different day or different sub-column, it's not a conflict
             if (kDay !== dayIdx) return;
-            // "!==" works for null vs null, but let's be safe with loose equality for null/undefined mixups
             if (kSub != subIdx) return; 
 
-            // 3. Check Time Intersection
             const bStart = parseFloat(kParts[2]);
             const bDuration = allBookings[key].duration;
             const bEnd = bStart + bDuration;
 
-            // The Logic: (StartA < EndB) and (EndA > StartB)
             if (start < bEnd && end > bStart) {
                 conflictFound = true;
             }
@@ -847,9 +887,7 @@ const firebaseConfig = {
         if (conflictFound) {
             return showToast("Conflict: Time overlaps with another booking.", "error");
         }
-        // ------------------------------------------
         
-        // ADDED: Capture Show Notes Toggle
         const showNotes = document.getElementById('bookShowNotes').checked;
 
         const data = { 
@@ -863,13 +901,12 @@ const firebaseConfig = {
 
         showLoading(true);
         try { await db.collection('appointments').doc(slotId).set(data); closeModal('bookingModal'); } 
-        catch(e) { showToast("Error: " + e.message, "error"); } // CHANGED: Toast
+        catch(e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
     }
 
     function openAdminPanel() { 
         const pass = prompt("Enter Admin Password:");
-        // CHANGED: Error to Toast
         if (pass !== ADMIN_PASS) return pass ? showToast("Incorrect Password.", "error") : null;
         document.getElementById('settingsOverlay').style.display = 'flex'; 
         document.getElementById('settingResSelect').value = currentResId; 
@@ -885,9 +922,13 @@ const firebaseConfig = {
         document.getElementById('editResOrientation').checked = r.hasStaffField || false;
         document.getElementById('editViewMode').value = r.viewMode || 'week';
         document.getElementById('editSubRooms').value = r.subRooms || '';
-        
-        // ADDED: Load Default Note Setting
         document.getElementById('editDefaultShowNotes').checked = r.defaultShowNotes || false;
+        
+        // --- NEW: Load Sidebar Settings ---
+        document.getElementById('editEnableSidebar').checked = r.enableSidebar || false;
+        document.getElementById('editSidebarText').value = r.sidebarText || '';
+        toggleSidebarConfig(); // show/hide the text box
+        // ----------------------------------
 
         toggleSubRoomInput();
         const container = document.getElementById('daysConfigContainer');
@@ -895,19 +936,38 @@ const firebaseConfig = {
         DAYS.forEach((d, i) => {
             const start = r.hours[i*2];
             const end = r.hours[(i*2)+1];
-            container.innerHTML += `<div class="day-box"><strong>${d}</strong><input type="number" id="s_${i}" value="${start}" min="0" max="24"><input type="number" id="e_${i}" value="${end}" min="0" max="24"></div>`;
-        });
+            container.innerHTML += `<div class="day-box"><strong>${d}</strong><input type="number" id="s_${i}" value="${start}" min="0" max="24" step="0.5"><input type="number" id="e_${i}" value="${end}" min="0" max="24" step="0.5"></div>`;
+            });
     }
+    
     function toggleSubRoomInput() { const mode = document.getElementById('editViewMode').value; const container = document.getElementById('subRoomConfig'); if (mode === 'day') { container.classList.remove('hidden'); } else { container.classList.add('hidden'); } }
+
+    // --- NEW: Toggle Sidebar Input Helper ---
+    function toggleSidebarConfig() {
+        const isEnabled = document.getElementById('editEnableSidebar').checked;
+        const container = document.getElementById('sidebarTextConfig');
+        if (isEnabled) container.classList.remove('hidden');
+        else container.classList.add('hidden');
+    }
     
     async function addNewResource() {
         const name = prompt("Name for new resource?");
         if(!name) return;
         showLoading(true);
-        // ADDED: defaultShowNotes property
-        const newRes = { id: 'res-' + Date.now(), name: name, viewMode: 'week', hasStaffField: false, defaultShowNotes: false, maxDuration: 2, hours: [...DEFAULT_HOURS] };
+        // Added defaults for sidebar
+        const newRes = { 
+            id: 'res-' + Date.now(), 
+            name: name, 
+            viewMode: 'week', 
+            hasStaffField: false, 
+            defaultShowNotes: false, 
+            enableSidebar: false, 
+            sidebarText: "",
+            maxDuration: 2, 
+            hours: [...DEFAULT_HOURS] 
+        };
         try { await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); pendingSelectionId = newRes.id; } 
-        catch (e) { showToast("Error: " + e.message, "error"); } // CHANGED: Toast
+        catch (e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
     }
     
@@ -916,7 +976,7 @@ const firebaseConfig = {
         if(!delId || !confirm("Delete this resource?")) return;
         showLoading(true);
         try { await db.collection('system').doc('resources').set({ list: resources.filter(r => r.id !== delId) }); } 
-        catch (e) { showToast("Error: " + e.message, "error"); } // CHANGED: Toast
+        catch (e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
     }
     
@@ -931,31 +991,28 @@ const firebaseConfig = {
         target.hasStaffField = document.getElementById('editResOrientation').checked;
         target.viewMode = document.getElementById('editViewMode').value;
         target.subRooms = document.getElementById('editSubRooms').value;
-        
-        // ADDED: Save Default Note Setting
         target.defaultShowNotes = document.getElementById('editDefaultShowNotes').checked;
 
-        for(let i=0; i<7; i++) { target.hours[i*2] = parseInt(document.getElementById(`s_${i}`).value) || 0; target.hours[(i*2)+1] = parseInt(document.getElementById(`e_${i}`).value) || 0; }
+        // --- NEW: Save Sidebar Settings ---
+        target.enableSidebar = document.getElementById('editEnableSidebar').checked;
+        target.sidebarText = document.getElementById('editSidebarText').value;
+
+        for(let i=0; i<7; i++) { target.hours[i*2] = parseFloat(document.getElementById(`s_${i}`).value) || 0; target.hours[(i*2)+1] = parseFloat(document.getElementById(`e_${i}`).value) || 0; }
         showLoading(true);
-        try { await db.collection('system').doc('resources').set({ list: updatedList }); showToast("Settings Saved!", "success"); } // CHANGED: Toast
-        catch (e) { showToast("Error: " + e.message, "error"); } // CHANGED: Toast
+        try { await db.collection('system').doc('resources').set({ list: updatedList }); showToast("Settings Saved!", "success"); } 
+        catch (e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
     }
     
     function handleResourceChange() { 
         currentResId = document.getElementById('resourceSelect').value; 
 
-        // --- NEW: Update URL without reloading (Silent Update) ---
-        // This puts "?resource=..." in the address bar so it can be bookmarked.
         const url = new URL(window.location);
         url.searchParams.set('resource', currentResId);
         window.history.pushState({}, '', url);
-        // --------------------------------------------------------
         
         updateUIControls(); 
         
-        // CHANGED: We now call the data fetcher instead of just renderGrid().
-        // This updates the database listener to look at the NEW resource's ID.
         loadBookingsForCurrentView(); 
     }
     function highlightBooking(id) { document.querySelectorAll(`.slot[data-bid="${id}"]`).forEach(s => s.classList.add('booking-hover-effect')); }
@@ -964,7 +1021,6 @@ const firebaseConfig = {
     function deleteBooking() { 
         const slotId = document.getElementById('slotId').value;
         if(!allBookings[slotId]) return closeModal('bookingModal');
-        // Kept confirm() for safety as discussed
         if(confirm("Delete booking?")) { showLoading(true); db.collection('appointments').doc(slotId).delete().then(()=>closeModal('bookingModal')); showLoading(false); }
     }
     
@@ -991,7 +1047,6 @@ const firebaseConfig = {
     init();
 </script>
 </body>
-
 </html>
 
 
