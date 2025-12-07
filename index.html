@@ -634,7 +634,7 @@ const firebaseConfig = {
         overlayElement: null,
         tooltipElement: null
     };
-    let lastResizeEndTime = 0;
+    let resizeJustEnded = false;
 
     function init() {
         const d = new Date();
@@ -932,8 +932,9 @@ const firebaseConfig = {
                             slot.appendChild(resizeHandle);
 
                             slot.onclick = (e) => {
-                                // Don't open modal if clicking resize handle
+                                // Don't open modal if clicking resize handle or just finished resizing
                                 if (e.target.classList.contains('resize-handle')) return;
+                                if (resizeJustEnded) return;
                                 openBookingModal(booking.id, booking.data, col.subIndex);
                             };
                             
@@ -963,7 +964,7 @@ const firebaseConfig = {
                         // Click opens modal (but only if not dragging to create or just finished resizing)
                         slot.onclick = (e) => {
                             if (selectionState.active) return;
-                            if (Date.now() - lastResizeEndTime < 200) return;
+                            if (resizeJustEnded) return;
                             openBookingModal(emptyId, null, col.subIndex);
                         };
                         
@@ -1344,7 +1345,7 @@ const firebaseConfig = {
         // Only start on left click, not during other operations
         if (e.button !== 0) return;
         if (dragState.isSaving || dragState.isDragging || resizeState.active || selectionState.active) return;
-        if (Date.now() - lastResizeEndTime < 200) return;
+        if (resizeJustEnded) return;
         
         e.preventDefault();
         
@@ -1673,8 +1674,9 @@ const firebaseConfig = {
         document.removeEventListener('mousemove', doResize);
         document.removeEventListener('mouseup', endResize);
         
-        // Track when resize ended to prevent accidental clicks
-        lastResizeEndTime = Date.now();
+        // Set flag to prevent accidental clicks, clear after event loop settles
+        resizeJustEnded = true;
+        setTimeout(() => { resizeJustEnded = false; }, 100);
         
         // Clean up overlay and tooltip
         if (resizeState.overlayElement) {
