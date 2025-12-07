@@ -243,6 +243,20 @@
             pointer-events: none;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
+        
+        /* Highlight overlay for showing target slot within a booked element */
+        .drag-slot-highlight {
+            position: fixed;
+            background: rgba(39, 174, 96, 0.4);
+            border: 2px solid var(--success);
+            border-radius: 3px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        .drag-slot-highlight.invalid {
+            background: rgba(192, 57, 43, 0.4);
+            border-color: var(--danger);
+        }
         .slot.drag-over-valid { 
             background-color: rgba(39, 174, 96, 0.3) !important; 
             box-shadow: inset 0 0 0 2px var(--success);
@@ -478,9 +492,9 @@
             </div>
         </div>
         
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-            <button onclick="cancelMove()">Cancel</button>
+        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
             <button class="btn-success" onclick="executeMoveBooking()">Move Booking</button>
+            <button onclick="cancelMove()">Cancel</button>
         </div>
     </div>
 </div>
@@ -515,9 +529,9 @@
             </div>
         </div>
         
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-            <button onclick="cancelResize()">Cancel</button>
+        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
             <button class="btn-success" onclick="executeResize()">Update Duration</button>
+            <button onclick="cancelResize()">Cancel</button>
         </div>
     </div>
 </div>
@@ -654,7 +668,10 @@ const firebaseConfig = {
         sourceData: null,
         isDragging: false,
         isSaving: false,
-        tooltipElement: null
+        tooltipElement: null,
+        highlightElement: null,
+        lastInvalidReason: null,
+        wasOverValidTarget: false
     };
 
     // DRAG-TO-CREATE SELECTION STATE
@@ -983,6 +1000,8 @@ const firebaseConfig = {
                             
                             if(booking.data.showNotes && booking.data.notes) {
                                 slot.innerHTML += `<span style="display:block; font-size:0.85em; margin-top:4px; opacity:0.9; border-top:1px solid rgba(255,255,255,0.2); padding-top:2px;">${escapeHtml(booking.data.notes)}</span>`;
+                            } else if(!booking.data.showNotes && booking.data.notes) {
+                                slot.innerHTML += `<span style="display:block; font-size:0.8em; margin-top:4px; opacity:0.75; font-style:italic;">📝 Click to view note</span>`;
                             }
 
                             // Add resize handle
@@ -1081,10 +1100,21 @@ const firebaseConfig = {
         dragState.isDragging = false;
         e.target.classList.remove('dragging');
         
+        // Show toast if user released on invalid target with a reason
+        if (dragState.lastInvalidReason && !dragState.wasOverValidTarget) {
+            showToast(dragState.lastInvalidReason, 'error');
+        }
+        
         // Clean up floating tooltip
         if (dragState.tooltipElement) {
             dragState.tooltipElement.remove();
             dragState.tooltipElement = null;
+        }
+        
+        // Clean up highlight element
+        if (dragState.highlightElement) {
+            dragState.highlightElement.remove();
+            dragState.highlightElement = null;
         }
         
         // Clean up any lingering drag-over classes and data-time attributes
@@ -1100,6 +1130,8 @@ const firebaseConfig = {
             dragState.sourceId = null;
             dragState.sourceData = null;
         }
+        dragState.lastInvalidReason = null;
+        dragState.wasOverValidTarget = false;
     }
 
     function handleDragOver(e) {
@@ -1118,9 +1150,13 @@ const firebaseConfig = {
         if (validation.valid) {
             slot.classList.add('drag-over-valid');
             e.dataTransfer.dropEffect = 'move';
+            dragState.lastInvalidReason = null;
+            dragState.wasOverValidTarget = true;
         } else {
             slot.classList.add('drag-over-invalid');
             e.dataTransfer.dropEffect = 'none';
+            dragState.lastInvalidReason = validation.reason;
+            dragState.wasOverValidTarget = false;
         }
     }
 
@@ -1130,10 +1166,14 @@ const firebaseConfig = {
         // Clean up data-time if it was set on a booked slot during drag
         if (el.classList.contains('booked-head')) {
             el.removeAttribute('data-time');
-            // Remove floating tooltip when leaving booked slot
+            // Remove floating tooltip and highlight when leaving booked slot
             if (dragState.tooltipElement) {
                 dragState.tooltipElement.remove();
                 dragState.tooltipElement = null;
+            }
+            if (dragState.highlightElement) {
+                dragState.highlightElement.remove();
+                dragState.highlightElement = null;
             }
         }
     }
@@ -1156,7 +1196,12 @@ const firebaseConfig = {
         slot.classList.remove('drag-over-valid', 'drag-over-invalid');
         
         // Calculate target time based on mouse position
-        const targetTime = getTimeSlotFromPosition(e, booking.start, booking.data.duration);
+        const rect = slot.getBoundingClientRect();
+        const relativeY = e.clientY - rect.top;
+        const slotHeight = rect.height / (booking.data.duration * 2);
+        const maxSlotIndex = (booking.data.duration * 2) - 1;
+        const slotIndex = Math.max(0, Math.min(maxSlotIndex, Math.floor(relativeY / slotHeight)));
+        const targetTime = booking.start + (slotIndex * 0.5);
         
         // Create or update floating tooltip
         const tooltipText = `${formatTime(targetTime)} - ${formatTime(targetTime + 0.5)}`;
@@ -1167,14 +1212,30 @@ const firebaseConfig = {
             dragState.tooltipElement = tooltip;
         }
         dragState.tooltipElement.innerText = tooltipText;
-        const rect = slot.getBoundingClientRect();
         dragState.tooltipElement.style.left = (rect.left + rect.width / 2 - dragState.tooltipElement.offsetWidth / 2) + 'px';
         dragState.tooltipElement.style.top = (rect.top - 35) + 'px';
         
+        // Create or update slot highlight
+        if (!dragState.highlightElement) {
+            const highlight = document.createElement('div');
+            highlight.className = 'drag-slot-highlight';
+            document.body.appendChild(highlight);
+            dragState.highlightElement = highlight;
+        }
+        
+        // Position highlight over the specific slot
+        const highlightTop = rect.top + (slotIndex * slotHeight);
+        dragState.highlightElement.style.left = rect.left + 'px';
+        dragState.highlightElement.style.top = highlightTop + 'px';
+        dragState.highlightElement.style.width = rect.width + 'px';
+        dragState.highlightElement.style.height = slotHeight + 'px';
+        
         // If dragging over a different booking, always invalid
         if (booking.id !== dragState.sourceId) {
-            slot.classList.add('drag-over-invalid');
+            dragState.highlightElement.classList.add('invalid');
             e.dataTransfer.dropEffect = 'none';
+            dragState.lastInvalidReason = "Cannot drop onto another booking.";
+            dragState.wasOverValidTarget = false;
             return;
         }
         
@@ -1184,8 +1245,10 @@ const firebaseConfig = {
         
         // Check if same slot
         if (isSameSlot(dragState.sourceId, virtualTargetId)) {
-            slot.classList.add('drag-over-invalid');
+            dragState.highlightElement.classList.add('invalid');
             e.dataTransfer.dropEffect = 'none';
+            dragState.lastInvalidReason = null; // Same slot is not an error
+            dragState.wasOverValidTarget = false;
             return;
         }
         
@@ -1193,11 +1256,15 @@ const firebaseConfig = {
         const validation = validateDropTarget(virtualTargetId);
         
         if (validation.valid) {
-            slot.classList.add('drag-over-valid');
+            dragState.highlightElement.classList.remove('invalid');
             e.dataTransfer.dropEffect = 'move';
+            dragState.lastInvalidReason = null;
+            dragState.wasOverValidTarget = true;
         } else {
-            slot.classList.add('drag-over-invalid');
+            dragState.highlightElement.classList.add('invalid');
             e.dataTransfer.dropEffect = 'none';
+            dragState.lastInvalidReason = validation.reason;
+            dragState.wasOverValidTarget = false;
         }
     }
 
@@ -1208,10 +1275,14 @@ const firebaseConfig = {
         slot.classList.remove('drag-over-valid', 'drag-over-invalid');
         slot.removeAttribute('data-time');
         
-        // Clean up floating tooltip
+        // Clean up floating tooltip and highlight
         if (dragState.tooltipElement) {
             dragState.tooltipElement.remove();
             dragState.tooltipElement = null;
+        }
+        if (dragState.highlightElement) {
+            dragState.highlightElement.remove();
+            dragState.highlightElement = null;
         }
         
         if (!dragState.isDragging || !dragState.sourceId) return;
