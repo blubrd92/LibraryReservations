@@ -829,6 +829,16 @@ const firebaseConfig = {
                             slot.ondragstart = (e) => handleDragStart(e, booking.id, booking.data);
                             slot.ondragend = handleDragEnd;
                             
+                            // DRAG-AND-DROP: Make booked slots drop targets for shifting
+                            slot.dataset.bookingId = booking.id;
+                            slot.dataset.bookingStart = booking.start;
+                            slot.dataset.bookingDuration = booking.data.duration;
+                            slot.dataset.dayIndex = col.dayIndex;
+                            slot.dataset.subIndex = col.subIndex !== null ? col.subIndex : '';
+                            slot.ondragover = (e) => handleBookedSlotDragOver(e, booking, col, res, activeWeekKey);
+                            slot.ondragleave = handleDragLeave;
+                            slot.ondrop = (e) => handleBookedSlotDrop(e, booking, col, res, activeWeekKey);
+                            
                             container.appendChild(slot);
                         } else {
                             return; 
@@ -881,9 +891,12 @@ const firebaseConfig = {
         dragState.isDragging = false;
         e.target.classList.remove('dragging');
         
-        // Clean up any lingering drag-over classes
+        // Clean up any lingering drag-over classes and data-time attributes
         document.querySelectorAll('.drag-over-valid, .drag-over-invalid').forEach(el => {
             el.classList.remove('drag-over-valid', 'drag-over-invalid');
+            if (el.classList.contains('booked-head')) {
+                el.removeAttribute('data-time');
+            }
         });
     }
 
@@ -910,7 +923,104 @@ const firebaseConfig = {
     }
 
     function handleDragLeave(e) {
-        e.currentTarget.classList.remove('drag-over-valid', 'drag-over-invalid');
+        const el = e.currentTarget;
+        el.classList.remove('drag-over-valid', 'drag-over-invalid');
+        // Clean up data-time if it was set on a booked slot during drag
+        if (el.classList.contains('booked-head')) {
+            el.removeAttribute('data-time');
+        }
+    }
+
+    // Calculate which time slot the mouse is over within a booked element
+    function getTimeSlotFromPosition(e, bookingStart, bookingDuration) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const relativeY = e.clientY - rect.top;
+        const slotHeight = rect.height / (bookingDuration * 2); // each slot is 0.5 hours
+        const slotIndex = Math.floor(relativeY / slotHeight);
+        const targetTime = bookingStart + (slotIndex * 0.5);
+        return targetTime;
+    }
+
+    function handleBookedSlotDragOver(e, booking, col, res, activeWeekKey) {
+        e.preventDefault();
+        if (!dragState.isDragging || !dragState.sourceId) return;
+        
+        const slot = e.currentTarget;
+        slot.classList.remove('drag-over-valid', 'drag-over-invalid');
+        
+        // Calculate target time based on mouse position
+        const targetTime = getTimeSlotFromPosition(e, booking.start, booking.data.duration);
+        
+        // Set data-time for tooltip display
+        slot.setAttribute('data-time', `${formatTime(targetTime)} - ${formatTime(targetTime + 0.5)}`);
+        
+        // If dragging over a different booking, always invalid
+        if (booking.id !== dragState.sourceId) {
+            slot.classList.add('drag-over-invalid');
+            e.dataTransfer.dropEffect = 'none';
+            return;
+        }
+        
+        // Build virtual target slot ID
+        let virtualTargetId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${targetTime}`;
+        if (col.subIndex !== null) virtualTargetId += `_${col.subIndex}`;
+        
+        // Check if same slot
+        if (isSameSlot(dragState.sourceId, virtualTargetId)) {
+            slot.classList.add('drag-over-invalid');
+            e.dataTransfer.dropEffect = 'none';
+            return;
+        }
+        
+        // Validate the virtual target
+        const validation = validateDropTarget(virtualTargetId);
+        
+        if (validation.valid) {
+            slot.classList.add('drag-over-valid');
+            e.dataTransfer.dropEffect = 'move';
+        } else {
+            slot.classList.add('drag-over-invalid');
+            e.dataTransfer.dropEffect = 'none';
+        }
+    }
+
+    function handleBookedSlotDrop(e, booking, col, res, activeWeekKey) {
+        e.preventDefault();
+        
+        const slot = e.currentTarget;
+        slot.classList.remove('drag-over-valid', 'drag-over-invalid');
+        slot.removeAttribute('data-time');
+        
+        if (!dragState.isDragging || !dragState.sourceId) return;
+        
+        // Only allow dropping on your own booking
+        if (booking.id !== dragState.sourceId) {
+            showToast("Cannot drop onto another booking.", "error");
+            return;
+        }
+        
+        // Calculate target time based on mouse position
+        const targetTime = getTimeSlotFromPosition(e, booking.start, booking.data.duration);
+        
+        // Build virtual target slot ID
+        let virtualTargetId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${targetTime}`;
+        if (col.subIndex !== null) virtualTargetId += `_${col.subIndex}`;
+        
+        // Check for same-slot drop
+        if (isSameSlot(dragState.sourceId, virtualTargetId)) {
+            return;
+        }
+        
+        // Validate the drop target
+        const validation = validateDropTarget(virtualTargetId);
+        
+        if (!validation.valid) {
+            showToast(validation.reason, "error");
+            return;
+        }
+        
+        // Show confirmation modal
+        showMoveConfirmation(dragState.sourceId, virtualTargetId, dragState.sourceData);
     }
 
     function handleDrop(e) {
