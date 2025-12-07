@@ -253,6 +253,49 @@
             overflow: visible;
         }
 
+        /* Resize Handle */
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 8px;
+            cursor: ns-resize;
+            background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.2));
+            border-radius: 0 0 4px 4px;
+            transition: background 0.15s;
+        }
+        .resize-handle:hover {
+            background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.4));
+        }
+        .slot.booked-head.resizing {
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            overflow: visible;
+        }
+        .resize-preview {
+            position: absolute;
+            left: 0;
+            right: 0;
+            background: rgba(39, 174, 96, 0.3);
+            border: 2px dashed var(--success);
+            border-top: none;
+            pointer-events: none;
+            z-index: 99;
+        }
+        .resize-time-tooltip {
+            position: absolute;
+            right: 5px;
+            bottom: 5px;
+            background: #333;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            white-space: nowrap;
+            z-index: 101;
+        }
+
         /* Move Confirmation Modal Styles */
         .move-detail { 
             background: #f8f9fa; 
@@ -536,6 +579,26 @@ const firebaseConfig = {
         sourceData: null,
         isDragging: false,
         isSaving: false
+    };
+
+    // RESIZE STATE
+    let resizeState = {
+        active: false,
+        bookingId: null,
+        bookingData: null,
+        slotElement: null,
+        col: null,
+        res: null,
+        activeWeekKey: null,
+        startY: 0,
+        slotHeight: 0,
+        originalDuration: 0,
+        currentDuration: 0,
+        minDuration: 0.5,
+        maxDuration: 0,
+        bookingStart: 0,
+        previewElement: null,
+        tooltipElement: null
     };
 
     function init() {
@@ -827,7 +890,17 @@ const firebaseConfig = {
                                 slot.innerHTML += `<span style="display:block; font-size:0.85em; margin-top:4px; opacity:0.9; border-top:1px solid rgba(255,255,255,0.2); padding-top:2px;">${booking.data.notes}</span>`;
                             }
 
-                            slot.onclick = () => openBookingModal(booking.id, booking.data, col.subIndex);
+                            // Add resize handle
+                            const resizeHandle = document.createElement('div');
+                            resizeHandle.className = 'resize-handle';
+                            resizeHandle.onmousedown = (e) => startResize(e, booking, col, res, activeWeekKey, slot);
+                            slot.appendChild(resizeHandle);
+
+                            slot.onclick = (e) => {
+                                // Don't open modal if clicking resize handle
+                                if (e.target.classList.contains('resize-handle')) return;
+                                openBookingModal(booking.id, booking.data, col.subIndex);
+                            };
                             
                             // DRAG-AND-DROP: Make booked slots draggable
                             slot.draggable = true;
@@ -872,8 +945,14 @@ const firebaseConfig = {
 
     // --- DRAG-AND-DROP HANDLERS ---
     function handleDragStart(e, bookingId, bookingData) {
-        // Block if a move is already in progress
-        if (dragState.isSaving) {
+        // Don't start drag from resize handle
+        if (e.target.classList.contains('resize-handle')) {
+            e.preventDefault();
+            return;
+        }
+        
+        // Block if a move is already in progress or resize is active
+        if (dragState.isSaving || resizeState.active) {
             e.preventDefault();
             return;
         }
@@ -1220,6 +1299,164 @@ const firebaseConfig = {
         // Clear drag state on cancel
         dragState.sourceId = null;
         dragState.sourceData = null;
+    }
+
+    // --- RESIZE HANDLERS ---
+    function startResize(e, booking, col, res, activeWeekKey, slotElement) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Block if saving or another operation is active
+        if (dragState.isSaving || dragState.isDragging || resizeState.active) return;
+        
+        // Calculate max duration based on closing time and collisions
+        const dayEnd = res.hours[(col.dayIndex * 2) + 1];
+        const maxByClose = dayEnd - booking.start;
+        const maxByResource = res.maxDuration;
+        
+        // Find next booking in same column
+        let nextBookingStart = dayEnd;
+        const prefix = res.id + "_";
+        Object.keys(allBookings).forEach(key => {
+            if (key === booking.id) return;
+            if (!key.startsWith(prefix + activeWeekKey)) return;
+            
+            const kSuffix = key.substring(prefix.length);
+            const kParts = kSuffix.split('_');
+            const kDay = parseInt(kParts[1]);
+            const kTime = parseFloat(kParts[2]);
+            const kSubRaw = kParts[3];
+            const kSub = normalizeSubIndex(kSubRaw);
+            
+            if (kDay !== col.dayIndex) return;
+            if (kSub !== normalizeSubIndex(col.subIndex)) return;
+            
+            // Only consider bookings that start after this one
+            if (kTime > booking.start && kTime < nextBookingStart) {
+                nextBookingStart = kTime;
+            }
+        });
+        
+        const maxByCollision = nextBookingStart - booking.start;
+        const maxDuration = Math.min(maxByClose, maxByResource, maxByCollision);
+        
+        // Get slot height (height of one 30-min slot)
+        const slotHeight = slotElement.getBoundingClientRect().height / (booking.data.duration * 2);
+        
+        resizeState = {
+            active: true,
+            bookingId: booking.id,
+            bookingData: booking.data,
+            slotElement: slotElement,
+            col: col,
+            res: res,
+            activeWeekKey: activeWeekKey,
+            startY: e.clientY,
+            slotHeight: slotHeight,
+            originalDuration: booking.data.duration,
+            currentDuration: booking.data.duration,
+            minDuration: 0.5,
+            maxDuration: maxDuration,
+            bookingStart: booking.start,
+            previewElement: null,
+            tooltipElement: null
+        };
+        
+        slotElement.classList.add('resizing');
+        
+        // Create tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = 'resize-time-tooltip';
+        tooltip.innerText = formatTime(booking.start + booking.data.duration);
+        slotElement.appendChild(tooltip);
+        resizeState.tooltipElement = tooltip;
+        
+        // Add document listeners
+        document.addEventListener('mousemove', doResize);
+        document.addEventListener('mouseup', endResize);
+    }
+    
+    function doResize(e) {
+        if (!resizeState.active) return;
+        
+        const deltaY = e.clientY - resizeState.startY;
+        const slotsDelta = Math.round(deltaY / resizeState.slotHeight);
+        const durationDelta = slotsDelta * 0.5;
+        
+        let newDuration = resizeState.originalDuration + durationDelta;
+        newDuration = Math.max(resizeState.minDuration, Math.min(resizeState.maxDuration, newDuration));
+        
+        // Round to 0.5
+        newDuration = Math.round(newDuration * 2) / 2;
+        
+        const newSpan = newDuration * 2;
+        resizeState.slotElement.style.gridRow = `span ${newSpan}`;
+        
+        // Update tooltip
+        if (resizeState.tooltipElement) {
+            const newEndTime = resizeState.bookingStart + newDuration;
+            resizeState.tooltipElement.innerText = `${formatTime(resizeState.bookingStart)} - ${formatTime(newEndTime)} (${newDuration}h)`;
+        }
+        
+        // Store current duration for save
+        resizeState.currentDuration = newDuration;
+    }
+    
+    async function endResize(e) {
+        if (!resizeState.active) return;
+        
+        document.removeEventListener('mousemove', doResize);
+        document.removeEventListener('mouseup', endResize);
+        
+        const slotElement = resizeState.slotElement;
+        slotElement.classList.remove('resizing');
+        
+        // Remove tooltip
+        if (resizeState.tooltipElement) {
+            resizeState.tooltipElement.remove();
+        }
+        
+        const newDuration = resizeState.currentDuration || resizeState.originalDuration;
+        
+        // Only save if duration actually changed
+        if (newDuration !== resizeState.originalDuration) {
+            dragState.isSaving = true;
+            showLoading(true);
+            
+            try {
+                const updatedData = { ...resizeState.bookingData, duration: newDuration };
+                await db.collection('appointments').doc(resizeState.bookingId).set(updatedData);
+                showToast(`Duration updated to ${newDuration} hour${newDuration === 1 ? '' : 's'}`, 'success');
+            } catch (error) {
+                console.error("Resize error:", error);
+                showToast("Failed to update duration: " + error.message, "error");
+                // Force re-render to revert visual state
+                renderGrid();
+            } finally {
+                dragState.isSaving = false;
+                showLoading(false);
+            }
+        }
+        
+        // Reset state
+        resizeState = {
+            active: false,
+            bookingId: null,
+            bookingData: null,
+            slotElement: null,
+            col: null,
+            res: null,
+            activeWeekKey: null,
+            startY: 0,
+            slotHeight: 0,
+            originalDuration: 0,
+            currentDuration: 0,
+            minDuration: 0.5,
+            maxDuration: 0,
+            bookingStart: 0,
+            previewElement: null,
+            tooltipElement: null
+        };
     }
 
     async function executeMoveBooking() {
