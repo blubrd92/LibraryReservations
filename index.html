@@ -407,12 +407,14 @@
             display: flex;
             gap: 8px;
             margin-bottom: 10px;
+            flex-wrap: wrap;
         }
         .closure-add-row input[type="date"] {
-            flex: 0 0 150px;
+            flex: 0 0 140px;
         }
         .closure-add-row input[type="text"] {
             flex: 1;
+            min-width: 150px;
         }
         .closure-actions {
             display: flex;
@@ -698,8 +700,10 @@
                     <label style="font-weight:bold; color:#c2185b; margin-bottom:10px; display:block;">📅 Closure Dates (Holidays/Closures)</label>
                     
                     <div class="closure-add-row">
-                        <input type="date" id="newClosureDate">
-                        <input type="text" id="newClosureReason" placeholder="Reason (e.g. Christmas Day)">
+                        <input type="date" id="newClosureDate" title="Start Date">
+                        <span style="align-self: center; color: #666;">to</span>
+                        <input type="date" id="newClosureEndDate" title="End Date (optional, leave blank for single day)">
+                        <input type="text" id="newClosureReason" placeholder="Reason (e.g. Holiday)">
                         <button class="btn-success" onclick="addClosureDate()">Add</button>
                     </div>
                     
@@ -718,8 +722,9 @@
                 </div>
             </div>
             
-            <div style="text-align: right; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-                <button class="btn-primary" onclick="saveAllSettings()" style="width: 200px; padding: 12px;">SAVE CHANGES</button>
+            <div style="display: flex; justify-content: space-between; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+                <button class="btn-success" onclick="saveAllSettings()">Save Changes</button>
+                <button onclick="closeModal('settingsOverlay')">Cancel</button>
             </div>
         </div>
     </div>
@@ -1013,8 +1018,21 @@ const firebaseConfig = {
     function getClosureReason(res, date) {
         if (!res.closureDates || !Array.isArray(res.closureDates)) return null;
         const dateStr = formatDateISO(date);
-        const closure = res.closureDates.find(c => c.date === dateStr);
-        return closure ? closure.reason : null;
+        
+        for (const closure of res.closureDates) {
+            // Single day closure
+            if (!closure.endDate) {
+                if (closure.date === dateStr) {
+                    return closure.reason;
+                }
+            } else {
+                // Range closure - check if date falls within range
+                if (dateStr >= closure.date && dateStr <= closure.endDate) {
+                    return closure.reason;
+                }
+            }
+        }
+        return null;
     }
 
     // Format date as YYYY-MM-DD for comparison
@@ -2344,19 +2362,32 @@ const firebaseConfig = {
             return;
         }
         
-        // Sort by date
+        // Sort by start date
         const sorted = [...closures].sort((a, b) => a.date.localeCompare(b.date));
         
         container.innerHTML = sorted.map((c, idx) => {
-            const dateObj = new Date(c.date + 'T00:00');
-            const formatted = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            const startDate = new Date(c.date + 'T00:00');
+            const startFormatted = startDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            
+            let dateDisplay;
+            if (c.endDate && c.endDate !== c.date) {
+                const endDate = new Date(c.endDate + 'T00:00');
+                const endFormatted = endDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                dateDisplay = `${startFormatted} → ${endFormatted}`;
+            } else {
+                dateDisplay = startFormatted;
+            }
+            
+            // Use start date as unique identifier, include end date if present
+            const removeKey = c.endDate ? `${c.date}|${c.endDate}` : c.date;
+            
             return `
                 <div class="closure-item">
                     <div class="closure-item-info">
-                        <span class="closure-item-date">${formatted}</span>
+                        <span class="closure-item-date">${dateDisplay}</span>
                         <span class="closure-item-reason">${escapeHtml(c.reason || 'No reason specified')}</span>
                     </div>
-                    <button class="btn-danger" onclick="removeClosureDate('${c.date}')">Remove</button>
+                    <button class="btn-danger" onclick="removeClosureDate('${removeKey}')">Remove</button>
                 </div>
             `;
         }).join('');
@@ -2364,13 +2395,21 @@ const firebaseConfig = {
 
     function addClosureDate() {
         const dateInput = document.getElementById('newClosureDate');
+        const endDateInput = document.getElementById('newClosureEndDate');
         const reasonInput = document.getElementById('newClosureReason');
         
-        const dateVal = dateInput.value;
+        const startDate = dateInput.value;
+        const endDate = endDateInput.value;
         const reason = reasonInput.value.trim();
         
-        if (!dateVal) {
-            showToast("Please select a date.", "error");
+        if (!startDate) {
+            showToast("Please select a start date.", "error");
+            return;
+        }
+        
+        // Validate end date is after start date if provided
+        if (endDate && endDate < startDate) {
+            showToast("End date must be on or after start date.", "error");
             return;
         }
         
@@ -2381,16 +2420,37 @@ const firebaseConfig = {
         // Initialize array if needed
         if (!r.closureDates) r.closureDates = [];
         
-        // Check for duplicate
-        if (r.closureDates.some(c => c.date === dateVal)) {
-            showToast("This date is already set as a closure.", "error");
+        // Check for overlapping closures
+        const newStart = startDate;
+        const newEnd = endDate || startDate;
+        
+        const hasOverlap = r.closureDates.some(c => {
+            const existingStart = c.date;
+            const existingEnd = c.endDate || c.date;
+            // Check if ranges overlap
+            return newStart <= existingEnd && newEnd >= existingStart;
+        });
+        
+        if (hasOverlap) {
+            showToast("This date range overlaps with an existing closure.", "error");
             return;
         }
         
-        r.closureDates.push({ date: dateVal, reason: reason || 'Closed' });
+        const closureEntry = { 
+            date: startDate, 
+            reason: reason || 'Closed' 
+        };
+        
+        // Only add endDate if it's different from start (making it a range)
+        if (endDate && endDate !== startDate) {
+            closureEntry.endDate = endDate;
+        }
+        
+        r.closureDates.push(closureEntry);
         
         // Clear inputs
         dateInput.value = '';
+        endDateInput.value = '';
         reasonInput.value = '';
         
         // Re-render
@@ -2398,12 +2458,26 @@ const firebaseConfig = {
         showToast("Closure date added. Remember to save changes.", "success");
     }
 
-    function removeClosureDate(dateStr) {
+    function removeClosureDate(key) {
         const editId = document.getElementById('settingResSelect').value;
         const r = resources.find(x => x.id === editId);
         if (!r || !r.closureDates) return;
         
-        r.closureDates = r.closureDates.filter(c => c.date !== dateStr);
+        // Key format is either "date" for single day or "date|endDate" for ranges
+        const parts = key.split('|');
+        const startDate = parts[0];
+        const endDate = parts[1] || null;
+        
+        r.closureDates = r.closureDates.filter(c => {
+            if (endDate) {
+                // Match range closure
+                return !(c.date === startDate && c.endDate === endDate);
+            } else {
+                // Match single day closure (no endDate)
+                return !(c.date === startDate && !c.endDate);
+            }
+        });
+        
         renderClosureList(r);
         showToast("Closure date removed. Remember to save changes.", "success");
     }
@@ -2571,7 +2645,11 @@ const firebaseConfig = {
 
         for(let i=0; i<7; i++) { target.hours[i*2] = parseFloat(document.getElementById(`s_${i}`).value) || 0; target.hours[(i*2)+1] = parseFloat(document.getElementById(`e_${i}`).value) || 0; }
         showLoading(true);
-        try { await db.collection('system').doc('resources').set({ list: updatedList }); showToast("Settings Saved!", "success"); } 
+        try { 
+            await db.collection('system').doc('resources').set({ list: updatedList }); 
+            showToast("Settings Saved!", "success"); 
+            closeModal('settingsOverlay');
+        } 
         catch (e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
     }
