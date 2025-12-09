@@ -348,19 +348,16 @@
             pointer-events: none;
         }
 
-        /* Closure Date Column Styles */
-        .header-cell.closed-day {
-            background: #7f8c8d;
-        }
-        .closure-reason {
-            font-size: 0.75em;
-            font-weight: normal;
-            opacity: 0.9;
-            margin-top: 4px;
-            font-style: italic;
-        }
+        /* Closure Date Cell Styles */
         .slot.closed.closure-day {
-            background-color: #b0b0b0 !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #555;
+            padding: 5px;
         }
 
         /* Closure Date Admin Styles */
@@ -1069,12 +1066,7 @@ const firebaseConfig = {
 
         container.appendChild(createDiv('header-cell', 'Time'));
         columns.forEach(col => { 
-            const closureReason = getClosureReason(res, col.date);
             const headerDiv = createDiv('header-cell', col.header);
-            if (closureReason) {
-                headerDiv.classList.add('closed-day');
-                headerDiv.innerHTML += `<span class="closure-reason">${escapeHtml(closureReason)}</span>`;
-            }
             container.appendChild(headerDiv); 
         });
 
@@ -1114,6 +1106,10 @@ const firebaseConfig = {
         if(minH > maxH) { minH = 9; maxH = 17; }
 
         const totalSlots = (maxH - minH) * 2;
+        
+        // Track which columns have already shown their closure reason
+        const closureReasonShown = {};
+        
         for (let i = 0; i < totalSlots; i++) {
             const timeVal = minH + (i * 0.5);
             const displayTime = formatTime(timeVal);
@@ -1122,7 +1118,7 @@ const firebaseConfig = {
             
             container.appendChild(createDiv(`time-cell ${rowClass}`, displayTime));
 
-            columns.forEach(col => {
+            columns.forEach((col, colIndex) => {
                 const closureReason = getClosureReason(res, col.date);
                 const dayStart = res.hours[col.dayIndex * 2];
                 const dayEnd = res.hours[(col.dayIndex * 2) + 1];
@@ -1132,6 +1128,14 @@ const firebaseConfig = {
                 // Check for closure date first (entire day closed)
                 if (closureReason) {
                     slot.classList.add('closed', 'closure-day');
+                    
+                    // Show reason text only in the first cell of this column
+                    const colKey = `${col.dayIndex}-${col.subIndex}`;
+                    if (!closureReasonShown[colKey]) {
+                        slot.innerText = closureReason;
+                        closureReasonShown[colKey] = true;
+                    }
+                    
                     container.appendChild(slot);
                 } else if (timeVal < dayStart || timeVal >= dayEnd || dayStart === dayEnd) {
                     slot.classList.add('closed');
