@@ -53,7 +53,7 @@
             display: flex;
             align-items: stretch;
             gap: 20px;
-            height: 80vh; /* Moved height here from grid-container */
+            height: 82vh; /* Moved height here from grid-container */
         }
 
         /* === NEW: SIDEBAR STYLES === */
@@ -1731,6 +1731,14 @@ const firebaseConfig = {
         
         const rect = slotElement.getBoundingClientRect();
         
+        // Get accurate slot height from time cells (consistent measurement)
+        const container = document.getElementById('gridContainer');
+        const timeCells = container.querySelectorAll('.time-cell');
+        let slotHeight = rect.height; // fallback
+        if (timeCells.length > 0) {
+            slotHeight = timeCells[0].getBoundingClientRect().height;
+        }
+        
         selectionState = {
             active: true,
             startSlotId: slotId,
@@ -1738,7 +1746,7 @@ const firebaseConfig = {
             startDayIndex: col.dayIndex,
             subIndex: col.subIndex,
             startY: e.clientY,
-            slotHeight: rect.height,
+            slotHeight: slotHeight,
             maxDuration: maxDuration,
             currentDuration: 0.5,
             res: res,
@@ -1748,13 +1756,13 @@ const firebaseConfig = {
             tooltipElement: null
         };
         
-        // Create overlay
+        // Create overlay using time cell height for accuracy
         const overlay = document.createElement('div');
         overlay.className = 'selection-overlay';
         overlay.style.left = rect.left + 'px';
         overlay.style.top = rect.top + 'px';
         overlay.style.width = rect.width + 'px';
-        overlay.style.height = rect.height + 'px';
+        overlay.style.height = slotHeight + 'px';
         document.body.appendChild(overlay);
         selectionState.overlayElement = overlay;
         
@@ -1948,8 +1956,19 @@ const firebaseConfig = {
         
         const rect = slotElement.getBoundingClientRect();
         
-        // Get slot height from the actual booking element
-        const slotHeight = rect.height / (booking.data.duration * 2);
+        // Get accurate slot height from time cells (they don't stretch like bookings with content)
+        const container = document.getElementById('gridContainer');
+        const timeCells = container.querySelectorAll('.time-cell');
+        let slotHeight = rect.height / (booking.data.duration * 2); // fallback
+        if (timeCells.length > 0) {
+            slotHeight = timeCells[0].getBoundingClientRect().height;
+        }
+        
+        // Calculate where the booking SHOULD start based on consistent slot heights
+        const headerCell = container.querySelector('.header-cell');
+        const headerHeight = headerCell ? headerCell.getBoundingClientRect().height : 0;
+        const containerRect = container.getBoundingClientRect();
+        const slotsFromTop = (booking.start - (res.hours[col.dayIndex * 2] < 24 ? Math.min(...res.hours.filter((h,i) => i % 2 === 0 && res.hours[i] !== res.hours[i+1])) : 9)) * 2;
         
         resizeState = {
             active: true,
@@ -1970,13 +1989,13 @@ const firebaseConfig = {
             tooltipElement: null
         };
         
-        // Create overlay positioned over the booking - use actual rect height
+        // Create overlay using time cell height for accuracy
         const overlay = document.createElement('div');
         overlay.className = 'resize-overlay';
         overlay.style.left = rect.left + 'px';
         overlay.style.top = rect.top + 'px';
         overlay.style.width = rect.width + 'px';
-        overlay.style.height = rect.height + 'px';
+        overlay.style.height = (slotHeight * booking.data.duration * 2) + 'px';
         document.body.appendChild(overlay);
         resizeState.overlayElement = overlay;
         
@@ -2791,4 +2810,3 @@ const firebaseConfig = {
 </script>
 </body>
 </html>
-
