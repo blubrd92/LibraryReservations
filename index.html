@@ -53,7 +53,7 @@
             display: flex;
             align-items: stretch;
             gap: 20px;
-            height: 82vh; /* Moved height here from grid-container */
+            height: 75vh; /* Moved height here from grid-container */
         }
 
         /* === NEW: SIDEBAR STYLES === */
@@ -163,6 +163,14 @@
             width: 100%;
             word-wrap: break-word;
             overflow-wrap: break-word;
+        }
+        
+        .booking-float .slot-time {
+            display: block;
+            width: 100%;
+            font-weight: normal;
+            font-size: 0.85em;
+            opacity: 0.9;
         }
         
         /* Overflow indicator */
@@ -1323,7 +1331,8 @@ const firebaseConfig = {
                 bookingEl.style.height = (endRect.bottom - startRect.top) + 'px';
                 
                 // Content
-                bookingEl.innerHTML = `<span class="slot-name">${escapeHtml(booking.data.name)} <span style="font-weight:normal; font-size:0.9em; opacity:0.9">(${formatTime(booking.start)} - ${formatTime(booking.end)})</span></span>`;
+                bookingEl.innerHTML = `<span class="slot-name">${escapeHtml(booking.data.name)}</span>`;
+                bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatTime(booking.end)} (${booking.data.duration}h)</span>`;
                 
                 if (booking.data.hasStaff) {
                     bookingEl.innerHTML += `<span class="slot-staff">w/ ${escapeHtml(booking.data.staffName)}</span>`;
@@ -2166,6 +2175,7 @@ const firebaseConfig = {
             startY: e.clientY,
             startSlotIndex: startSlotIndex,
             slotPositions: slotPositions,
+            slotHeight: slotPositions.length > 0 ? slotPositions[0].height : 30,
             originalDuration: booking.data.duration,
             currentDuration: booking.data.duration,
             minDuration: 0.5,
