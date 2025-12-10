@@ -113,7 +113,7 @@
             border-right: 1px solid #ccc; 
             padding: 2px; 
             font-size: 0.95em; 
-            min-height: 28px; 
+            min-height: 30px; 
             cursor: pointer; 
             position: relative; 
             transition: background 0.1s; 
@@ -353,8 +353,8 @@
             /* Same as regular closed cells */
         }
         
-        /* Closure reason overlay - uses CSS grid positioning */
-        .closure-overlay {
+        /* Middle cell with closure reason text */
+        .slot.closed.closure-day.has-reason {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -362,11 +362,8 @@
             font-size: 1.1em;
             font-weight: 600;
             color: #555;
-            padding: 10px;
-            pointer-events: none;
+            overflow: visible;
             z-index: 6;
-            box-sizing: border-box;
-            background: transparent;
         }
 
         /* Closure Date Admin Styles */
@@ -733,7 +730,7 @@
                     <h4 style="margin: 15px 0 5px 0; border-bottom: 2px solid #eee; padding-bottom:5px;">Operating Hours (24h Format)</h4>
                     <div class="day-config-grid" id="daysConfigContainer"></div>
                     <div class="closure-actions" style="margin-top: 10px;">
-                        <button onclick="applyHoursToAllResources()" style="font-size:0.85em;">Apply Hours to All Resources</button>
+                        <button onclick="applyHoursToAllResources()" style="font-size:0.85em;">Apply to All Resources</button>
                     </div>
                 </div>
             </div>
@@ -1125,9 +1122,10 @@ const firebaseConfig = {
         if(minH > maxH) { minH = 9; maxH = 17; }
 
         const totalSlots = (maxH - minH) * 2;
+        const middleSlotIndex = Math.floor(totalSlots / 2);
         
-        // Track closure columns for overlay creation
-        const closureColumns = {};
+        // Track which columns have shown their closure reason
+        const closureReasonShown = {};
         
         for (let i = 0; i < totalSlots; i++) {
             const timeVal = minH + (i * 0.5);
@@ -1148,13 +1146,12 @@ const firebaseConfig = {
                 if (closureReason) {
                     slot.classList.add('closed', 'closure-day');
                     
-                    // Track this column for overlay (store column grid position)
+                    // Show reason text only in the middle cell of this column
                     const colKey = `${col.dayIndex}-${col.subIndex}`;
-                    if (!closureColumns[colKey]) {
-                        closureColumns[colKey] = {
-                            reason: closureReason,
-                            gridColumn: colIndex + 2 // +2 because grid is 1-indexed and first col is time
-                        };
+                    if (!closureReasonShown[colKey] && i === middleSlotIndex) {
+                        slot.classList.add('has-reason');
+                        slot.innerText = closureReason;
+                        closureReasonShown[colKey] = true;
                     }
                     
                     container.appendChild(slot);
@@ -1252,21 +1249,6 @@ const firebaseConfig = {
                 }
             });
         }
-        
-        // Create closure overlays using grid positioning
-        Object.keys(closureColumns).forEach(colKey => {
-            const closureData = closureColumns[colKey];
-            
-            const overlay = document.createElement('div');
-            overlay.className = 'closure-overlay';
-            overlay.innerText = closureData.reason;
-            
-            // Position using CSS grid
-            overlay.style.gridColumn = closureData.gridColumn;
-            overlay.style.gridRow = `2 / -1`; // From row 2 (after header) to last row
-            
-            container.appendChild(overlay);
-        });
     }
 
     // --- DRAG-AND-DROP HANDLERS ---
