@@ -53,7 +53,7 @@
             display: flex;
             align-items: stretch;
             gap: 20px;
-            height: 80vh; /* Moved height here from grid-container */
+            height: 75vh; /* Moved height here from grid-container */
         }
 
         /* === NEW: SIDEBAR STYLES === */
@@ -1323,12 +1323,13 @@ const firebaseConfig = {
                 if (booking.data.hasStaff) bookingEl.classList.add('with-staff');
                 bookingEl.dataset.bid = booking.id;
                 
-                // Position relative to container
+                // Position relative to container with small inset for cleaner look
+                const inset = 2; // pixels of padding from cell edges
                 bookingEl.style.position = 'absolute';
-                bookingEl.style.left = (startRect.left - containerRect.left + container.scrollLeft) + 'px';
-                bookingEl.style.top = (startRect.top - containerRect.top + container.scrollTop) + 'px';
-                bookingEl.style.width = startRect.width + 'px';
-                bookingEl.style.height = (endRect.bottom - startRect.top) + 'px';
+                bookingEl.style.left = (startRect.left - containerRect.left + container.scrollLeft + inset) + 'px';
+                bookingEl.style.top = (startRect.top - containerRect.top + container.scrollTop + inset) + 'px';
+                bookingEl.style.width = (startRect.width - (inset * 2)) + 'px';
+                bookingEl.style.height = (endRect.bottom - startRect.top - (inset * 2)) + 'px';
                 
                 // Content
                 bookingEl.innerHTML = `<span class="slot-name">${escapeHtml(booking.data.name)}</span>`;
@@ -3066,4 +3067,3 @@ const firebaseConfig = {
 </script>
 </body>
 </html>
-
