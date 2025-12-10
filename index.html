@@ -1341,16 +1341,6 @@ const firebaseConfig = {
                 resizeHandle.onmousedown = (e) => startResize(e, booking, col, res, activeWeekKey, bookingEl);
                 bookingEl.appendChild(resizeHandle);
                 
-                // Check for overflow after element is in DOM and add indicator if needed
-                const checkOverflow = () => {
-                    if (bookingEl.scrollHeight > bookingEl.clientHeight) {
-                        const indicator = document.createElement('span');
-                        indicator.className = 'overflow-indicator';
-                        indicator.innerText = 'Hover for details';
-                        bookingEl.appendChild(indicator);
-                    }
-                };
-                
                 // Event handlers - popover on hover
                 bookingEl.onmouseenter = (e) => {
                     highlightBooking(booking.id);
@@ -1387,8 +1377,17 @@ const firebaseConfig = {
                 
                 container.appendChild(bookingEl);
                 
-                // Check overflow after element is in DOM
-                requestAnimationFrame(checkOverflow);
+                // Check overflow after layout is fully complete (double rAF ensures paint)
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        if (bookingEl.scrollHeight > bookingEl.clientHeight) {
+                            const indicator = document.createElement('span');
+                            indicator.className = 'overflow-indicator';
+                            indicator.innerText = 'Hover for details';
+                            bookingEl.appendChild(indicator);
+                        }
+                    });
+                });
             });
         });
     }
