@@ -966,14 +966,17 @@ const firebaseConfig = {
                 // Determine role based on which email logged in
                 if (user.email === STAFF_EMAIL) {
                     currentUserRole = 'admin';
+                    console.log('Logged in as ADMIN');
                     document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected (Admin)</span>";
                     document.getElementById('btnAdminSettings').style.display = '';
                 } else if (user.email === VIEWER_EMAIL) {
                     currentUserRole = 'staff';
+                    console.log('Logged in as STAFF');
                     document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected (Staff)</span>";
                     document.getElementById('btnAdminSettings').style.display = 'none';
                 } else {
                     currentUserRole = 'staff'; // Default to limited permissions
+                    console.log('Logged in as UNKNOWN, defaulting to staff');
                     document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected</span>";
                     document.getElementById('btnAdminSettings').style.display = 'none';
                 }
@@ -1014,7 +1017,9 @@ const firebaseConfig = {
     function canEditResource(res) {
         if (currentUserRole === 'admin') return true;
         if (!res) return false;
-        return !res.adminOnly; // staff can edit if not admin-only
+        const result = !res.adminOnly; // staff can edit if not admin-only
+        console.log('canEditResource:', res.name, 'adminOnly:', res.adminOnly, 'result:', result);
+        return result;
     }
 
     function setupRealtimeListeners() {
@@ -1191,6 +1196,7 @@ const firebaseConfig = {
         container.innerHTML = '';
         const res = resources.find(r => r.id === currentResId);
         if(!res) return;
+        console.log('renderGrid for:', res.name, 'adminOnly:', res.adminOnly, 'currentUserRole:', currentUserRole);
         const isDayView = res.viewMode === 'day';
         
         let columns = []; 
