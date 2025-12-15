@@ -1072,7 +1072,7 @@ const firebaseConfig = {
                 // Determine role based on which email logged in
                 if (user.email === STAFF_EMAIL) {
                     currentUserRole = 'admin';
-                    document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected (Admin)</span>";
+                    document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected</span>";
                 } else if (user.email === VIEWER_EMAIL) {
                     currentUserRole = 'staff';
                     document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected (Staff)</span>";
@@ -3653,3 +3653,4 @@ const firebaseConfig = {
 </script>
 </body>
 </html>
+
