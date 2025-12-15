@@ -1301,14 +1301,15 @@ const firebaseConfig = {
                         
                         const canEdit = canEditResource(res);
                         
+                        // Always show time tooltip on hover
+                        slot.setAttribute('data-time', `${displayTime} - ${formatTime(timeVal + 0.5)}`);
+                        
                         if (canEdit) {
                             slot.onclick = (e) => {
                                 if (selectionState.active) return;
                                 if (resizeJustEnded) return;
                                 openBookingModal(emptyId, null, col.subIndex);
                             };
-                            
-                            slot.setAttribute('data-time', `${displayTime} - ${formatTime(timeVal + 0.5)}`);
                             
                             // DRAG-AND-DROP: Set up empty slots as drop targets
                             slot.dataset.slotId = emptyId;
