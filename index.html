@@ -1312,6 +1312,7 @@ const firebaseConfig = {
                         
                         if (canEdit) {
                             slot.onclick = (e) => {
+                                console.log('Slot clicked! selectionState.active:', selectionState.active, 'resizeJustEnded:', resizeJustEnded);
                                 if (selectionState.active) return;
                                 if (resizeJustEnded) return;
                                 openBookingModal(emptyId, null, col.subIndex);
@@ -1331,6 +1332,7 @@ const firebaseConfig = {
                             // DRAG-TO-CREATE: mousedown starts selection
                             slot.onmousedown = (e) => startSelection(e, emptyId, timeVal, col, res, activeWeekKey, slot);
                         } else {
+                            console.log('Slot NOT editable for resource:', res.name);
                             slot.style.cursor = 'default';
                         }
                     }
@@ -1900,10 +1902,17 @@ const firebaseConfig = {
 
     // --- DRAG-TO-CREATE HANDLERS ---
     function startSelection(e, slotId, timeVal, col, res, activeWeekKey, slotElement) {
+        console.log('startSelection called for:', res.name);
         // Only start on left click, not during other operations
         if (e.button !== 0) return;
-        if (dragState.isSaving || dragState.isDragging || resizeState.active || selectionState.active) return;
-        if (resizeJustEnded) return;
+        if (dragState.isSaving || dragState.isDragging || resizeState.active || selectionState.active) {
+            console.log('startSelection blocked by state:', { isSaving: dragState.isSaving, isDragging: dragState.isDragging, resizeActive: resizeState.active, selectionActive: selectionState.active });
+            return;
+        }
+        if (resizeJustEnded) {
+            console.log('startSelection blocked by resizeJustEnded');
+            return;
+        }
         
         e.preventDefault();
         
@@ -2041,6 +2050,7 @@ const firebaseConfig = {
     }
     
     function endSelection(e) {
+        console.log('endSelection called, selectionState.active:', selectionState.active);
         if (!selectionState.active) return;
         
         document.removeEventListener('mousemove', doSelection);
@@ -2074,12 +2084,15 @@ const firebaseConfig = {
             tooltipElement: null
         };
         
+        console.log('endSelection opening modal for slotId:', slotId, 'duration:', duration);
         openBookingModalWithDuration(slotId, subIndex, duration);
     }
     
     function openBookingModalWithDuration(slotId, subIndex, presetDuration) {
+        console.log('openBookingModalWithDuration called');
         const modal = document.getElementById('bookingModal');
         const res = resources.find(r => r.id === currentResId);
+        console.log('Opening modal for resource:', res.name, 'canEdit:', canEditResource(res));
         
         const prefix = res.id + "_";
         const suffix = slotId.substring(prefix.length);
