@@ -596,9 +596,6 @@
             font-style: italic;
             font-size: 0.8em;
         }
-        .stats-table .stats-empty {
-            color: #ccc;
-        }
         .stats-table .stats-weekend td:first-child {
             background: #ede7f6;
         }
@@ -924,7 +921,7 @@
         <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
             <div>
                 <label style="font-weight: bold;">Resource:</label>
-                <select id="statsResourceSelect" onchange="loadStatsData()"></select>
+                <select id="statsResourceSelect" onchange="handleStatsResourceChange()"></select>
             </div>
             <div>
                 <label style="font-weight: bold;">Year:</label>
@@ -946,6 +943,10 @@
                 <tbody id="statsGridBody"></tbody>
                 <tfoot id="statsGridFoot"></tfoot>
             </table>
+        </div>
+        
+        <div style="margin-top: 15px; text-align: right;">
+            <button onclick="closeModal('statsModal')">Close</button>
         </div>
     </div>
 </div>
@@ -2545,6 +2546,9 @@ const firebaseConfig = {
             
             await batch.commit();
             
+            // Update stats metadata for the new location
+            updateStatsYearMeta(currentResId, targetId);
+            
             showToast("Booking moved successfully!", "success");
         } catch (error) {
             console.error("Move error:", error);
@@ -2727,7 +2731,11 @@ const firebaseConfig = {
         };
 
         showLoading(true);
-        try { await db.collection('appointments').doc(slotId).set(data); closeModal('bookingModal'); } 
+        try { 
+            await db.collection('appointments').doc(slotId).set(data); 
+            updateStatsYearMeta(res.id, slotId); // Update stats metadata
+            closeModal('bookingModal'); 
+        } 
         catch(e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
     }
@@ -3260,7 +3268,40 @@ const firebaseConfig = {
         return new Date(d.setDate(diff));
     }
     
-    function openStatsModal() {
+    // Update stats metadata when a booking is saved
+    async function updateStatsYearMeta(resId, slotId) {
+        try {
+            // Extract year from slotId (format: resId_weekKey_dayIndex_startTime)
+            const prefix = resId + '_';
+            const suffix = slotId.substring(prefix.length);
+            const weekKey = suffix.split('_')[0]; // YYYY-MM-DD
+            const year = parseInt(weekKey.split('-')[0]);
+            
+            if (isNaN(year)) return;
+            
+            // Get current metadata
+            const metaRef = db.collection('system').doc('stats_meta');
+            const metaDoc = await metaRef.get();
+            
+            let meta = metaDoc.exists ? metaDoc.data() : {};
+            
+            // Add year if not already present for this resource
+            if (!meta[resId]) {
+                meta[resId] = [];
+            }
+            
+            if (!meta[resId].includes(year)) {
+                meta[resId].push(year);
+                meta[resId].sort((a, b) => b - a); // Sort descending
+                await metaRef.set(meta);
+            }
+        } catch (err) {
+            console.error('Error updating stats meta:', err);
+            // Non-critical, don't block the save
+        }
+    }
+    
+    async function openStatsModal() {
         const modal = document.getElementById('statsModal');
         
         // Populate resource dropdown
@@ -3274,18 +3315,67 @@ const firebaseConfig = {
             resSel.appendChild(opt);
         });
         
-        // Populate year dropdown (current year and 2 previous)
-        const yearSel = document.getElementById('statsYearSelect');
-        yearSel.innerHTML = '';
-        const currentYear = new Date().getFullYear();
-        for (let y = currentYear; y >= currentYear - 2; y--) {
-            const opt = document.createElement('option');
-            opt.value = y;
-            opt.innerText = y;
-            yearSel.appendChild(opt);
-        }
-        
         modal.style.display = 'flex';
+        await populateYearDropdown();
+        loadStatsData();
+    }
+    
+    async function populateYearDropdown() {
+        const resId = document.getElementById('statsResourceSelect').value;
+        const yearSel = document.getElementById('statsYearSelect');
+        const previousSelection = yearSel.value;
+        
+        yearSel.innerHTML = '<option>Loading...</option>';
+        
+        try {
+            // Read from stats_meta document (single read)
+            const metaDoc = await db.collection('system').doc('stats_meta').get();
+            
+            const yearsWithData = new Set();
+            
+            if (metaDoc.exists && metaDoc.data()[resId]) {
+                metaDoc.data()[resId].forEach(y => yearsWithData.add(y));
+            }
+            
+            // Always include current and next year
+            const currentYear = new Date().getFullYear();
+            yearsWithData.add(currentYear);
+            yearsWithData.add(currentYear + 1);
+            
+            // Sort descending (newest first)
+            const sortedYears = Array.from(yearsWithData).sort((a, b) => b - a);
+            
+            yearSel.innerHTML = '';
+            sortedYears.forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.innerText = y;
+                // Restore previous selection or default to current year
+                if (previousSelection && parseInt(previousSelection) === y) {
+                    opt.selected = true;
+                } else if (!previousSelection && y === currentYear) {
+                    opt.selected = true;
+                }
+                yearSel.appendChild(opt);
+            });
+            
+        } catch (err) {
+            console.error('Error loading years:', err);
+            // Fallback to current + next year
+            const currentYear = new Date().getFullYear();
+            yearSel.innerHTML = '';
+            [currentYear, currentYear + 1].forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.innerText = y;
+                if (y === currentYear) opt.selected = true;
+                yearSel.appendChild(opt);
+            });
+        }
+    }
+    
+    async function handleStatsResourceChange() {
+        await populateYearDropdown();
         loadStatsData();
     }
     
@@ -3332,6 +3422,11 @@ const firebaseConfig = {
             
             await Promise.all(promises);
             
+            // If we found bookings for this year, ensure stats_meta is updated (self-healing)
+            if (Object.keys(bookings).length > 0) {
+                updateStatsYearMeta(resId, Object.keys(bookings)[0]);
+            }
+            
             // Process bookings into daily totals
             const dailyStats = {}; // { 'YYYY-MM-DD': { hours: X, closed: bool, reason: '' } }
             const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -3361,10 +3456,13 @@ const firebaseConfig = {
             // Tally hours from bookings
             Object.keys(bookings).forEach(key => {
                 const booking = bookings[key];
-                const parts = key.split('_');
-                // Key format: resId_weekKey_dayIndex_startTime[_subIndex]
-                const weekKey = parts[1];
-                const dayIndex = parseInt(parts[2]);
+                // Remove resource ID prefix first
+                const prefix = resId + '_';
+                const suffix = key.substring(prefix.length);
+                const parts = suffix.split('_');
+                // Key format after prefix removal: weekKey_dayIndex_startTime[_subIndex]
+                const weekKey = parts[0];
+                const dayIndex = parseInt(parts[1]);
                 
                 // Calculate actual date from week key and day index
                 const [wy, wm, wd] = weekKey.split('-').map(Number);
@@ -3404,7 +3502,7 @@ const firebaseConfig = {
         if (maxHours === 0) maxHours = 1; // Avoid division by zero
         
         // Build header
-        thead.innerHTML = '<tr><th>Day</th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '<th>Total</th></tr>';
+        thead.innerHTML = '<tr><th>Day</th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr>';
         
         // Build rows (days 1-31)
         let html = '';
@@ -3424,8 +3522,8 @@ const firebaseConfig = {
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 
                 if (day > daysInMonth) {
-                    // Day doesn't exist in this month
-                    rowHtml += `<td class="stats-empty">-</td>`;
+                    // Day doesn't exist in this month - show as gray
+                    rowHtml += `<td class="stats-closed"></td>`;
                 } else {
                     const date = new Date(year, month, day);
                     const dateStr = formatDateISO(date);
@@ -3453,7 +3551,6 @@ const firebaseConfig = {
                 }
             }
             
-            rowHtml += `<td>${rowTotal > 0 ? rowTotal : ''}</td>`;
             rowHtml += `</tr>`;
             html += rowHtml;
         }
@@ -3465,7 +3562,7 @@ const firebaseConfig = {
         monthlyTotals.forEach(t => {
             footHtml += `<td>${t > 0 ? t : '-'}</td>`;
         });
-        footHtml += `<td><strong>${grandTotal}</strong></td></tr>`;
+        footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
         
         // Update summary
