@@ -557,6 +557,7 @@
             padding: 6px 8px;
             text-align: center;
             min-width: 65px;
+            cursor: default;
         }
         .stats-table thead th {
             background: #2196F3;
@@ -1072,7 +1073,7 @@ const firebaseConfig = {
                 // Determine role based on which email logged in
                 if (user.email === STAFF_EMAIL) {
                     currentUserRole = 'admin';
-                    document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected</span>";
+                    document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected (Admin)</span>";
                 } else if (user.email === VIEWER_EMAIL) {
                     currentUserRole = 'staff';
                     document.getElementById('status-bar').innerHTML = "<span class='online'>● Connected (Staff)</span>";
@@ -1133,6 +1134,8 @@ const firebaseConfig = {
     }
 
     // --- CORE LOGIC ---
+    let loadVersion = 0; // Track which load request is current
+    
     function loadBookingsForCurrentView() {
         if (activeListenerUnsub) {
             activeListenerUnsub();
@@ -1144,11 +1147,18 @@ const firebaseConfig = {
 
         const activeWeekKey = getWeekKey(currentWeekStart); 
         const queryPrefix = `${res.id}_${activeWeekKey}`;
+        
+        // Increment version for this load request
+        loadVersion++;
+        const thisVersion = loadVersion;
 
         activeListenerUnsub = db.collection('appointments')
             .where(firebase.firestore.FieldPath.documentId(), '>=', queryPrefix)
             .where(firebase.firestore.FieldPath.documentId(), '<', queryPrefix + '\uf8ff') 
             .onSnapshot((snapshot) => {
+                // Only process if this is still the current request
+                if (thisVersion !== loadVersion) return;
+                
                 allBookings = {}; 
                 snapshot.forEach((doc) => { 
                     allBookings[doc.id] = doc.data(); 
@@ -1196,9 +1206,13 @@ const firebaseConfig = {
         if(document.getElementById('settingsOverlay').style.display !== 'none') loadSettingsForEditor();
     }
 
+    let navDebounceTimeout = null;
+    
     function navigateTime(dir) {
         const res = resources.find(r => r.id === currentResId);
         const isDayView = res && res.viewMode === 'day';
+        
+        // Update dates immediately for responsive UI
         if (isDayView) {
             currentDayDate.setDate(currentDayDate.getDate() + dir);
             const d = new Date(currentDayDate);
@@ -1209,8 +1223,15 @@ const firebaseConfig = {
             currentWeekStart.setDate(currentWeekStart.getDate() + (dir * 7));
             currentDayDate = new Date(currentWeekStart);
         }
+        
+        // Update UI immediately
         updateUIControls();
-        loadBookingsForCurrentView();
+        
+        // Debounce the data loading to avoid race conditions
+        clearTimeout(navDebounceTimeout);
+        navDebounceTimeout = setTimeout(() => {
+            loadBookingsForCurrentView();
+        }, 150);
     }
 
     function handleDatePick() {
@@ -3504,6 +3525,16 @@ const firebaseConfig = {
         // Build header
         thead.innerHTML = '<tr><th>Day</th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr>';
         
+        // Helper to format date with ordinal suffix
+        function formatDateWithOrdinal(month, day, year) {
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+            const suffix = (day === 1 || day === 21 || day === 31) ? 'st' : 
+                          (day === 2 || day === 22) ? 'nd' : 
+                          (day === 3 || day === 23) ? 'rd' : 'th';
+            return `${monthNames[month]} ${day}${suffix}, ${year}`;
+        }
+        
         // Build rows (days 1-31)
         let html = '';
         const monthlyTotals = new Array(12).fill(0);
@@ -3528,6 +3559,7 @@ const firebaseConfig = {
                     const date = new Date(year, month, day);
                     const dateStr = formatDateISO(date);
                     const stat = dailyStats[dateStr];
+                    const dateTooltip = formatDateWithOrdinal(month, day, year);
                     
                     if (stat.dayOfWeek === 0 || stat.dayOfWeek === 6) {
                         isWeekendRow = true;
@@ -3535,7 +3567,8 @@ const firebaseConfig = {
                     
                     if (stat.closed) {
                         const shortReason = stat.reason.length > 8 ? stat.reason.substring(0, 7) + '…' : stat.reason;
-                        rowHtml += `<td class="stats-closed" title="${stat.reason}">${shortReason || 'C'}</td>`;
+                        const closedTooltip = `${dateTooltip} - ${stat.reason}`;
+                        rowHtml += `<td class="stats-closed" title="${closedTooltip}">${shortReason || 'C'}</td>`;
                         monthlyClosedDays[month]++;
                     } else {
                         const hours = stat.hours;
@@ -3546,7 +3579,8 @@ const firebaseConfig = {
                         
                         // Calculate heat map level (0-8)
                         const heatLevel = hours === 0 ? 0 : Math.min(8, Math.ceil((hours / maxHours) * 8));
-                        rowHtml += `<td class="stats-heat-${heatLevel}">${hours > 0 ? hours : ''}</td>`;
+                        const hoursText = hours > 0 ? `${hours} hour${hours === 1 ? '' : 's'}` : 'No bookings';
+                        rowHtml += `<td class="stats-heat-${heatLevel}" title="${dateTooltip} - ${hoursText}">${hours > 0 ? hours : ''}</td>`;
                     }
                 }
             }
@@ -3653,4 +3687,3 @@ const firebaseConfig = {
 </script>
 </body>
 </html>
-
