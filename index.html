@@ -694,6 +694,7 @@
         
         <div style="display: flex; justify-content: space-between; margin-top: 20px;">
             <button id="btnSaveBooking" class="btn-success" onclick="saveBooking()">Save Booking</button>
+            <button id="btnReschedule" class="btn-primary hidden" onclick="openRescheduleModal()">Reschedule</button>
             <button id="btnDeleteBooking" class="btn-danger" onclick="deleteBooking()">Delete</button>
             <button onclick="closeModal('bookingModal')">Cancel</button>
         </div>
@@ -773,6 +774,59 @@
         <div style="display: flex; justify-content: space-between; margin-top: 20px;">
             <button class="btn-success" onclick="executeResize()">Update Duration</button>
             <button onclick="cancelResize()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Reschedule to Another Week Modal -->
+<div id="rescheduleModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">Reschedule to Another Week</div>
+        <input type="hidden" id="rescheduleSourceId">
+
+        <div class="move-detail">
+            <div class="move-detail-row">
+                <span class="move-detail-label">Patron:</span>
+                <span class="move-detail-value" id="reschedulePatronName"></span>
+            </div>
+            <div class="move-detail-row">
+                <span class="move-detail-label">Current:</span>
+                <span class="move-detail-value" id="rescheduleCurrentTime"></span>
+            </div>
+            <div class="move-detail-row">
+                <span class="move-detail-label">Duration:</span>
+                <span class="move-detail-value" id="rescheduleDuration"></span>
+            </div>
+        </div>
+
+        <div class="move-arrow">↓</div>
+
+        <div class="form-group">
+            <label>Select Target Week (pick any day in that week):</label>
+            <input type="date" id="rescheduleTargetWeek" onchange="updateRescheduleDayOptions()">
+        </div>
+
+        <div class="form-group">
+            <label>Select Day:</label>
+            <select id="rescheduleTargetDay" onchange="updateRescheduleTimeOptions()">
+                <option value="">-- Select a week first --</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Select Time:</label>
+            <select id="rescheduleTargetTime">
+                <option value="">-- Select a day first --</option>
+            </select>
+        </div>
+
+        <div id="rescheduleConflictWarning" class="hidden" style="padding: 10px; background: #ffebee; border: 1px solid #ef5350; border-radius: 4px; color: #c62828; margin-bottom: 15px;">
+            ⚠️ This time slot conflicts with an existing booking.
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+            <button id="btnExecuteReschedule" class="btn-success" onclick="executeRescheduleToWeek()">Reschedule</button>
+            <button onclick="closeModal('rescheduleModal')">Cancel</button>
         </div>
     </div>
 </div>
@@ -2267,6 +2321,7 @@ const firebaseConfig = {
         const canEdit = canEditResource(res);
         document.getElementById('btnSaveBooking').style.display = canEdit ? '' : 'none';
         document.getElementById('btnDeleteBooking').style.display = 'none'; // New booking, no delete
+        document.getElementById('btnReschedule').classList.add('hidden'); // New booking, no reschedule
         document.getElementById('readOnlyNotice').style.display = canEdit ? 'none' : '';
         
         // Enable/disable form fields based on permissions
@@ -2582,6 +2637,238 @@ const firebaseConfig = {
         }
     }
 
+    // --- RESCHEDULE TO ANOTHER WEEK ---
+    const DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    let rescheduleBookingData = null;
+
+    function openRescheduleModal() {
+        const slotId = document.getElementById('slotId').value;
+        const booking = allBookings[slotId];
+        if (!booking) {
+            showToast("No booking found to reschedule.", "error");
+            return;
+        }
+
+        rescheduleBookingData = { ...booking };
+        document.getElementById('rescheduleSourceId').value = slotId;
+
+        // Parse current booking info
+        const res = resources.find(r => r.id === currentResId);
+        const prefix = res.id + "_";
+        const suffix = slotId.substring(prefix.length);
+        const parts = suffix.split('_');
+        const weekKey = parts[0];
+        const dayIdx = parseInt(parts[1]);
+        const startTime = parseFloat(parts[2]);
+
+        // Display current booking info
+        document.getElementById('reschedulePatronName').textContent = booking.name;
+        document.getElementById('rescheduleCurrentTime').textContent =
+            `${DAYS_FULL[dayIdx]}, ${weekKey} at ${formatTime(startTime)}`;
+        document.getElementById('rescheduleDuration').textContent = `${booking.duration} hour${booking.duration === 1 ? '' : 's'}`;
+
+        // Reset form
+        document.getElementById('rescheduleTargetWeek').value = '';
+        document.getElementById('rescheduleTargetDay').innerHTML = '<option value="">-- Select a week first --</option>';
+        document.getElementById('rescheduleTargetTime').innerHTML = '<option value="">-- Select a day first --</option>';
+        document.getElementById('rescheduleConflictWarning').classList.add('hidden');
+        document.getElementById('btnExecuteReschedule').disabled = true;
+
+        closeModal('bookingModal');
+        document.getElementById('rescheduleModal').style.display = 'flex';
+    }
+
+    function updateRescheduleDayOptions() {
+        const dateInput = document.getElementById('rescheduleTargetWeek').value;
+        const daySelect = document.getElementById('rescheduleTargetDay');
+        const timeSelect = document.getElementById('rescheduleTargetTime');
+
+        daySelect.innerHTML = '<option value="">-- Select a day --</option>';
+        timeSelect.innerHTML = '<option value="">-- Select a day first --</option>';
+        document.getElementById('btnExecuteReschedule').disabled = true;
+
+        if (!dateInput) return;
+
+        const res = resources.find(r => r.id === currentResId);
+        if (!res) return;
+
+        // Get the week start (Sunday) for the selected date
+        const selectedDate = new Date(dateInput + 'T00:00:00');
+        const dayOfWeek = selectedDate.getDay();
+        const weekStart = new Date(selectedDate);
+        weekStart.setDate(selectedDate.getDate() - dayOfWeek);
+
+        // Populate days that have operating hours
+        for (let i = 0; i < 7; i++) {
+            const dayStart = res.hours[i * 2];
+            const dayEnd = res.hours[(i * 2) + 1];
+
+            if (dayStart < dayEnd) { // Day has operating hours
+                const dayDate = new Date(weekStart);
+                dayDate.setDate(weekStart.getDate() + i);
+                const dateStr = `${dayDate.getMonth() + 1}/${dayDate.getDate()}`;
+                daySelect.innerHTML += `<option value="${i}">${DAYS_FULL[i]} (${dateStr})</option>`;
+            }
+        }
+    }
+
+    function updateRescheduleTimeOptions() {
+        const dateInput = document.getElementById('rescheduleTargetWeek').value;
+        const dayIdx = parseInt(document.getElementById('rescheduleTargetDay').value);
+        const timeSelect = document.getElementById('rescheduleTargetTime');
+
+        timeSelect.innerHTML = '<option value="">-- Select a time --</option>';
+        document.getElementById('rescheduleConflictWarning').classList.add('hidden');
+        document.getElementById('btnExecuteReschedule').disabled = true;
+
+        if (!dateInput || isNaN(dayIdx)) return;
+
+        const res = resources.find(r => r.id === currentResId);
+        if (!res) return;
+
+        // Get the week key for the target week
+        const selectedDate = new Date(dateInput + 'T00:00:00');
+        const dayOfWeek = selectedDate.getDay();
+        const weekStart = new Date(selectedDate);
+        weekStart.setDate(selectedDate.getDate() - dayOfWeek);
+        const targetWeekKey = getWeekKey(weekStart);
+
+        const dayStart = res.hours[dayIdx * 2];
+        const dayEnd = res.hours[(dayIdx * 2) + 1];
+        const duration = rescheduleBookingData.duration;
+
+        // Get source slot info to preserve subroom
+        const sourceId = document.getElementById('rescheduleSourceId').value;
+        const sourceParts = sourceId.substring(res.id.length + 1).split('_');
+        const subIdx = sourceParts[3] || '';
+
+        // Get existing bookings for that day/week
+        const existingBookings = [];
+        Object.keys(allBookings).forEach(key => {
+            if (!key.startsWith(res.id + '_' + targetWeekKey + '_' + dayIdx + '_')) return;
+            const kParts = key.substring(res.id.length + 1).split('_');
+            const kSub = kParts[3] || '';
+            if (kSub !== subIdx) return; // Different subroom
+
+            const bStart = parseFloat(kParts[2]);
+            const bDuration = allBookings[key].duration;
+            existingBookings.push({ start: bStart, end: bStart + bDuration });
+        });
+
+        // Generate available time slots
+        for (let time = dayStart; time + duration <= dayEnd; time += 0.5) {
+            const slotEnd = time + duration;
+
+            // Check for conflicts
+            let hasConflict = false;
+            for (const booking of existingBookings) {
+                if (time < booking.end && slotEnd > booking.start) {
+                    hasConflict = true;
+                    break;
+                }
+            }
+
+            const timeStr = formatTime(time);
+            const endTimeStr = formatTime(slotEnd);
+            if (hasConflict) {
+                timeSelect.innerHTML += `<option value="${time}" disabled style="color: #999;">${timeStr} - ${endTimeStr} (Unavailable)</option>`;
+            } else {
+                timeSelect.innerHTML += `<option value="${time}">${timeStr} - ${endTimeStr}</option>`;
+            }
+        }
+
+        // Enable execute button when a time is selected
+        timeSelect.onchange = function() {
+            const selectedTime = this.value;
+            document.getElementById('btnExecuteReschedule').disabled = !selectedTime || this.selectedOptions[0].disabled;
+        };
+    }
+
+    async function executeRescheduleToWeek() {
+        const sourceId = document.getElementById('rescheduleSourceId').value;
+        const dateInput = document.getElementById('rescheduleTargetWeek').value;
+        const dayIdx = parseInt(document.getElementById('rescheduleTargetDay').value);
+        const targetTime = parseFloat(document.getElementById('rescheduleTargetTime').value);
+
+        if (!sourceId || !dateInput || isNaN(dayIdx) || isNaN(targetTime)) {
+            showToast("Please select a valid date, day, and time.", "error");
+            return;
+        }
+
+        const res = resources.find(r => r.id === currentResId);
+        if (!res) return;
+
+        // Calculate target week key
+        const selectedDate = new Date(dateInput + 'T00:00:00');
+        const dayOfWeek = selectedDate.getDay();
+        const weekStart = new Date(selectedDate);
+        weekStart.setDate(selectedDate.getDate() - dayOfWeek);
+        const targetWeekKey = getWeekKey(weekStart);
+
+        // Get subroom from source
+        const sourceParts = sourceId.substring(res.id.length + 1).split('_');
+        const subIdx = sourceParts[3] || '';
+
+        // Build target slot ID
+        let targetId = `${res.id}_${targetWeekKey}_${dayIdx}_${targetTime}`;
+        if (subIdx) targetId += `_${subIdx}`;
+
+        // Final conflict check
+        const duration = rescheduleBookingData.duration;
+        const targetEnd = targetTime + duration;
+        let conflictFound = false;
+
+        Object.keys(allBookings).forEach(key => {
+            if (key === sourceId) return; // Skip source booking
+            if (!key.startsWith(res.id + '_' + targetWeekKey + '_' + dayIdx + '_')) return;
+
+            const kParts = key.substring(res.id.length + 1).split('_');
+            const kSub = kParts[3] || '';
+            if (kSub !== subIdx) return;
+
+            const bStart = parseFloat(kParts[2]);
+            const bDuration = allBookings[key].duration;
+            const bEnd = bStart + bDuration;
+
+            if (targetTime < bEnd && targetEnd > bStart) {
+                conflictFound = true;
+            }
+        });
+
+        if (conflictFound) {
+            showToast("Conflict: This time slot is no longer available.", "error");
+            return;
+        }
+
+        showLoading(true);
+        closeModal('rescheduleModal');
+
+        try {
+            const batch = db.batch();
+
+            // Delete old booking
+            const oldRef = db.collection('appointments').doc(sourceId);
+            batch.delete(oldRef);
+
+            // Create new booking with same data
+            const newRef = db.collection('appointments').doc(targetId);
+            batch.set(newRef, rescheduleBookingData);
+
+            await batch.commit();
+
+            // Update stats for new location
+            updateStatsYearMeta(currentResId, targetId);
+
+            showToast("Booking rescheduled successfully!", "success");
+        } catch (error) {
+            console.error("Reschedule error:", error);
+            showToast("Failed to reschedule booking: " + error.message, "error");
+        } finally {
+            showLoading(false);
+            rescheduleBookingData = null;
+        }
+    }
+
     // --- MODAL & SAVE ---
     function openBookingModal(slotId, data, subIdx) {
         const modal = document.getElementById('bookingModal');
@@ -2671,8 +2958,14 @@ const firebaseConfig = {
         const canEdit = canEditResource(res);
         document.getElementById('btnSaveBooking').style.display = canEdit ? '' : 'none';
         document.getElementById('btnDeleteBooking').style.display = (canEdit && data) ? '' : 'none';
+        // Show reschedule button only for existing bookings that user can edit
+        if (canEdit && data) {
+            document.getElementById('btnReschedule').classList.remove('hidden');
+        } else {
+            document.getElementById('btnReschedule').classList.add('hidden');
+        }
         document.getElementById('readOnlyNotice').style.display = canEdit ? 'none' : '';
-        
+
         // Disable form fields if read-only
         document.getElementById('bookName').disabled = !canEdit;
         document.getElementById('bookDuration').disabled = !canEdit;
@@ -2680,7 +2973,7 @@ const firebaseConfig = {
         document.getElementById('bookShowNotes').disabled = !canEdit;
         document.getElementById('bookHasStaff').disabled = !canEdit;
         document.getElementById('bookStaffName').disabled = !canEdit;
-        
+
         modal.style.display = 'flex';
     }
 
