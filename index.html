@@ -3636,8 +3636,7 @@ const firebaseConfig = {
     async function populateYearDropdown() {
         const resId = document.getElementById('statsResourceSelect').value;
         const yearSel = document.getElementById('statsYearSelect');
-        const previousSelection = yearSel.value;
-        
+
         yearSel.innerHTML = '<option>Loading...</option>';
         
         try {
@@ -3658,7 +3657,7 @@ const firebaseConfig = {
             // Sort descending (newest first)
             const sortedYears = Array.from(yearsWithData).sort((a, b) => b - a);
             
-            // Default to the year of the week currently being viewed
+            // Always default to the year of the week/day currently being viewed
             const viewingYear = currentWeekStart.getFullYear();
 
             yearSel.innerHTML = '';
@@ -3666,10 +3665,7 @@ const firebaseConfig = {
                 const opt = document.createElement('option');
                 opt.value = y;
                 opt.innerText = y;
-                // Restore previous selection or default to the year being viewed
-                if (previousSelection && parseInt(previousSelection) === y) {
-                    opt.selected = true;
-                } else if (!previousSelection && y === viewingYear) {
+                if (y === viewingYear) {
                     opt.selected = true;
                 }
                 yearSel.appendChild(opt);
