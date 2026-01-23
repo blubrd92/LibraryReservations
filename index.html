@@ -3658,15 +3658,18 @@ const firebaseConfig = {
             // Sort descending (newest first)
             const sortedYears = Array.from(yearsWithData).sort((a, b) => b - a);
             
+            // Default to the year of the week currently being viewed
+            const viewingYear = currentWeekStart.getFullYear();
+
             yearSel.innerHTML = '';
             sortedYears.forEach(y => {
                 const opt = document.createElement('option');
                 opt.value = y;
                 opt.innerText = y;
-                // Restore previous selection or default to current year
+                // Restore previous selection or default to the year being viewed
                 if (previousSelection && parseInt(previousSelection) === y) {
                     opt.selected = true;
-                } else if (!previousSelection && y === currentYear) {
+                } else if (!previousSelection && y === viewingYear) {
                     opt.selected = true;
                 }
                 yearSel.appendChild(opt);
