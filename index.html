@@ -2679,7 +2679,7 @@ const firebaseConfig = {
         closeModal('bookingModal');
 
         // Re-render to highlight source booking
-        renderCalendar();
+        loadBookingsForCurrentView();
     }
 
     function cancelRescheduleMode() {
@@ -2696,7 +2696,7 @@ const firebaseConfig = {
         document.getElementById('rescheduleBanner').classList.add('hidden');
 
         // Re-render to remove highlight
-        renderCalendar();
+        loadBookingsForCurrentView();
     }
 
     function isSourceBookingSlot(slotId) {
@@ -2768,16 +2768,34 @@ const firebaseConfig = {
         }
 
         const originalDuration = rescheduleMode.sourceData.duration;
+        const patronName = rescheduleMode.sourceData.name;
+
+        // Format target date/time for confirmation message
+        const targetDayDate = new Date(targetWeekKey + 'T00:00:00');
+        targetDayDate.setDate(targetDayDate.getDate() + targetDayIdx);
+        const targetDateStr = targetDayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        const targetTimeStr = formatTime(targetTime);
 
         if (maxAvail >= originalDuration) {
-            // Full duration fits - proceed
-            executeReschedule(targetWeekKey, targetDayIdx, targetTime, targetSubIdx, originalDuration);
+            // Full duration fits - confirm before proceeding
+            const confirmMove = confirm(
+                `Move ${patronName}'s booking to:\n\n` +
+                `${targetDateStr} at ${targetTimeStr}\n` +
+                `Duration: ${originalDuration} hour${originalDuration === 1 ? '' : 's'}\n\n` +
+                `Proceed with reschedule?`
+            );
+
+            if (confirmMove) {
+                executeReschedule(targetWeekKey, targetDayIdx, targetTime, targetSubIdx, originalDuration);
+            }
         } else {
-            // Slot is smaller - ask user
+            // Slot is smaller - ask user about duration adjustment
             const confirmAdjust = confirm(
-                `This slot only has ${maxAvail} hour${maxAvail === 1 ? '' : 's'} available, ` +
+                `Move ${patronName}'s booking to:\n\n` +
+                `${targetDateStr} at ${targetTimeStr}\n\n` +
+                `Note: This slot only has ${maxAvail} hour${maxAvail === 1 ? '' : 's'} available, ` +
                 `but the original booking is ${originalDuration} hour${originalDuration === 1 ? '' : 's'}.\n\n` +
-                `Do you want to shorten the booking to ${maxAvail} hour${maxAvail === 1 ? '' : 's'} to fit this slot?`
+                `Shorten the booking to ${maxAvail} hour${maxAvail === 1 ? '' : 's'} and proceed?`
             );
 
             if (confirmAdjust) {
