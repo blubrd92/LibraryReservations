@@ -762,6 +762,53 @@
     </div>
 </div>
 
+<!-- Reschedule Confirmation Modal -->
+<div id="rescheduleConfirmModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">Confirm Reschedule</div>
+        <input type="hidden" id="rescheduleTargetWeekKey">
+        <input type="hidden" id="rescheduleTargetDayIdx">
+        <input type="hidden" id="rescheduleTargetTime">
+        <input type="hidden" id="rescheduleTargetSubIdx">
+        <input type="hidden" id="rescheduleNewDuration">
+
+        <div class="move-detail">
+            <div class="move-detail-row">
+                <span class="move-detail-label">Patron:</span>
+                <span class="move-detail-value" id="rescheduleConfirmPatron"></span>
+            </div>
+        </div>
+
+        <div class="move-detail">
+            <div class="move-detail-row">
+                <span class="move-detail-label">From:</span>
+                <span class="move-detail-value" id="rescheduleConfirmFrom"></span>
+            </div>
+        </div>
+
+        <div class="move-arrow">↓</div>
+
+        <div class="move-detail">
+            <div class="move-detail-row">
+                <span class="move-detail-label">To:</span>
+                <span class="move-detail-value" id="rescheduleConfirmTo"></span>
+            </div>
+            <div class="move-detail-row" id="rescheduleConfirmDurationRow" style="display: none;">
+                <span class="move-detail-label">Duration:</span>
+                <span class="move-detail-value" id="rescheduleConfirmDuration"></span>
+            </div>
+        </div>
+
+        <div id="rescheduleConfirmWarning" style="display: none; background: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; margin-bottom: 15px; color: #856404;">
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+            <button class="btn-success" onclick="confirmReschedule()">Move Booking</button>
+            <button onclick="closeModal('rescheduleConfirmModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <!-- Resize Confirmation Modal -->
 <div id="resizeModal" class="modal">
     <div class="modal-content">
@@ -2769,41 +2816,61 @@ const firebaseConfig = {
 
         const originalDuration = rescheduleMode.sourceData.duration;
         const patronName = rescheduleMode.sourceData.name;
+        const newDuration = Math.min(maxAvail, originalDuration);
 
-        // Format target date/time for confirmation message
+        // Format source date/time
+        const sourceDayDate = new Date(rescheduleMode.sourceWeekKey + 'T00:00:00');
+        sourceDayDate.setDate(sourceDayDate.getDate() + rescheduleMode.sourceDayIdx);
+        const sourceDateStr = sourceDayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        const sourceTimeStr = formatTime(rescheduleMode.sourceStartTime);
+        const sourceEndStr = formatTime(rescheduleMode.sourceStartTime + originalDuration);
+
+        // Format target date/time
         const targetDayDate = new Date(targetWeekKey + 'T00:00:00');
         targetDayDate.setDate(targetDayDate.getDate() + targetDayIdx);
         const targetDateStr = targetDayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
         const targetTimeStr = formatTime(targetTime);
+        const targetEndStr = formatTime(targetTime + newDuration);
 
-        if (maxAvail >= originalDuration) {
-            // Full duration fits - confirm before proceeding
-            const confirmMove = confirm(
-                `Move ${patronName}'s booking to:\n\n` +
-                `${targetDateStr} at ${targetTimeStr}\n` +
-                `Duration: ${originalDuration} hour${originalDuration === 1 ? '' : 's'}\n\n` +
-                `Proceed with reschedule?`
-            );
+        // Populate modal
+        document.getElementById('rescheduleTargetWeekKey').value = targetWeekKey;
+        document.getElementById('rescheduleTargetDayIdx').value = targetDayIdx;
+        document.getElementById('rescheduleTargetTime').value = targetTime;
+        document.getElementById('rescheduleTargetSubIdx').value = targetSubIdx;
+        document.getElementById('rescheduleNewDuration').value = newDuration;
 
-            if (confirmMove) {
-                executeReschedule(targetWeekKey, targetDayIdx, targetTime, targetSubIdx, originalDuration);
-            }
+        document.getElementById('rescheduleConfirmPatron').textContent = patronName;
+        document.getElementById('rescheduleConfirmFrom').textContent = `${sourceDateStr}, ${sourceTimeStr} - ${sourceEndStr}`;
+        document.getElementById('rescheduleConfirmTo').textContent = `${targetDateStr}, ${targetTimeStr} - ${targetEndStr}`;
+
+        // Show duration change warning if applicable
+        const warningEl = document.getElementById('rescheduleConfirmWarning');
+        const durationRowEl = document.getElementById('rescheduleConfirmDurationRow');
+        if (newDuration < originalDuration) {
+            warningEl.innerHTML = `<strong>Note:</strong> Duration will be shortened from ${originalDuration}h to ${newDuration}h to fit this slot.`;
+            warningEl.style.display = 'block';
+            document.getElementById('rescheduleConfirmDuration').textContent = `${newDuration} hour${newDuration === 1 ? '' : 's'} (was ${originalDuration}h)`;
+            durationRowEl.style.display = 'flex';
         } else {
-            // Slot is smaller - ask user about duration adjustment
-            const confirmAdjust = confirm(
-                `Move ${patronName}'s booking to:\n\n` +
-                `${targetDateStr} at ${targetTimeStr}\n\n` +
-                `Note: This slot only has ${maxAvail} hour${maxAvail === 1 ? '' : 's'} available, ` +
-                `but the original booking is ${originalDuration} hour${originalDuration === 1 ? '' : 's'}.\n\n` +
-                `Shorten the booking to ${maxAvail} hour${maxAvail === 1 ? '' : 's'} and proceed?`
-            );
-
-            if (confirmAdjust) {
-                executeReschedule(targetWeekKey, targetDayIdx, targetTime, targetSubIdx, maxAvail);
-            }
+            warningEl.style.display = 'none';
+            durationRowEl.style.display = 'none';
         }
 
+        // Show modal
+        document.getElementById('rescheduleConfirmModal').style.display = 'flex';
+
         return true;
+    }
+
+    function confirmReschedule() {
+        const targetWeekKey = document.getElementById('rescheduleTargetWeekKey').value;
+        const targetDayIdx = parseInt(document.getElementById('rescheduleTargetDayIdx').value);
+        const targetTime = parseFloat(document.getElementById('rescheduleTargetTime').value);
+        const targetSubIdx = document.getElementById('rescheduleTargetSubIdx').value;
+        const newDuration = parseFloat(document.getElementById('rescheduleNewDuration').value);
+
+        closeModal('rescheduleConfirmModal');
+        executeReschedule(targetWeekKey, targetDayIdx, targetTime, targetSubIdx, newDuration);
     }
 
     async function executeReschedule(targetWeekKey, targetDayIdx, targetTime, targetSubIdx, newDuration) {
