@@ -780,48 +780,30 @@
 
 <!-- Reschedule to Another Week Modal -->
 <div id="rescheduleModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">Reschedule to Another Week</div>
+    <div class="modal-content" style="max-width: 95%; width: 1100px;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>Reschedule Booking</span>
+            <button onclick="closeModal('rescheduleModal')" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+        </div>
         <input type="hidden" id="rescheduleSourceId">
 
-        <div class="move-detail">
-            <div class="move-detail-row">
-                <span class="move-detail-label">Patron:</span>
-                <span class="move-detail-value" id="reschedulePatronName"></span>
-            </div>
-            <div class="move-detail-row">
-                <span class="move-detail-label">Current:</span>
-                <span class="move-detail-value" id="rescheduleCurrentTime"></span>
-            </div>
-            <div class="move-detail-row">
-                <span class="move-detail-label">Duration:</span>
-                <span class="move-detail-value" id="rescheduleDuration"></span>
-            </div>
+        <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+            <div><strong>Patron:</strong> <span id="reschedulePatronName"></span></div>
+            <div><strong>Current:</strong> <span id="rescheduleCurrentTime"></span></div>
+            <div><strong>Duration:</strong> <span id="rescheduleDuration"></span></div>
         </div>
 
-        <div class="move-arrow">↓</div>
-
-        <div class="form-group">
-            <label>Select Target Week (pick any day in that week):</label>
-            <input type="date" id="rescheduleTargetWeek" onchange="updateRescheduleDayOptions()">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <button class="btn-nav" onclick="navigateRescheduleWeek(-1)">◀</button>
+            <span id="rescheduleWeekDisplay" style="font-weight: bold; font-size: 1.1rem;"></span>
+            <button class="btn-nav" onclick="navigateRescheduleWeek(1)">▶</button>
         </div>
 
-        <div class="form-group">
-            <label>Select Day:</label>
-            <select id="rescheduleTargetDay" onchange="updateRescheduleTimeOptions()">
-                <option value="">-- Select a week first --</option>
-            </select>
-        </div>
+        <div id="rescheduleGridContainer" style="display: grid; grid-template-columns: 70px repeat(7, 1fr); height: 400px; overflow-y: auto; border: 1px solid #ccc; font-size: 0.85em;"></div>
 
-        <div class="form-group">
-            <label>Select Time:</label>
-            <select id="rescheduleTargetTime">
-                <option value="">-- Select a day first --</option>
-            </select>
-        </div>
+        <p style="margin-top: 10px; color: #666; font-size: 0.9em;">Click on an available time slot to reschedule the booking.</p>
 
-        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-            <button id="btnExecuteReschedule" class="btn-success" onclick="executeRescheduleToWeek()">Reschedule</button>
+        <div style="display: flex; justify-content: flex-end; margin-top: 15px;">
             <button onclick="closeModal('rescheduleModal')">Cancel</button>
         </div>
     </div>
@@ -2633,9 +2615,11 @@ const firebaseConfig = {
         }
     }
 
-    // --- RESCHEDULE TO ANOTHER WEEK ---
+    // --- RESCHEDULE TO ANOTHER WEEK (Visual Grid) ---
     const DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     let rescheduleBookingData = null;
+    let rescheduleWeekDate = null;  // Date object for current week being viewed
+    let rescheduleSourceInfo = null; // { weekKey, dayIdx, startTime, subIdx }
 
     function openRescheduleModal() {
         const slotId = document.getElementById('slotId').value;
@@ -2656,6 +2640,9 @@ const firebaseConfig = {
         const weekKey = parts[0];
         const dayIdx = parseInt(parts[1]);
         const startTime = parseFloat(parts[2]);
+        const subIdx = parts[3] || '';
+
+        rescheduleSourceInfo = { weekKey, dayIdx, startTime, subIdx };
 
         // Display current booking info
         document.getElementById('reschedulePatronName').textContent = booking.name;
@@ -2663,151 +2650,186 @@ const firebaseConfig = {
             `${DAYS_FULL[dayIdx]}, ${weekKey} at ${formatTime(startTime)}`;
         document.getElementById('rescheduleDuration').textContent = `${booking.duration} hour${booking.duration === 1 ? '' : 's'}`;
 
-        // Reset form
-        document.getElementById('rescheduleTargetWeek').value = '';
-        document.getElementById('rescheduleTargetDay').innerHTML = '<option value="">-- Select a week first --</option>';
-        document.getElementById('rescheduleTargetTime').innerHTML = '<option value="">-- Select a day first --</option>';
-        document.getElementById('btnExecuteReschedule').disabled = true;
+        // Initialize to current week being viewed
+        rescheduleWeekDate = new Date(currentWeekStart);
 
         closeModal('bookingModal');
         document.getElementById('rescheduleModal').style.display = 'flex';
+        renderRescheduleGrid();
     }
 
-    function updateRescheduleDayOptions() {
-        const dateInput = document.getElementById('rescheduleTargetWeek').value;
-        const daySelect = document.getElementById('rescheduleTargetDay');
-        const timeSelect = document.getElementById('rescheduleTargetTime');
+    function navigateRescheduleWeek(dir) {
+        rescheduleWeekDate.setDate(rescheduleWeekDate.getDate() + (dir * 7));
+        renderRescheduleGrid();
+    }
 
-        daySelect.innerHTML = '<option value="">-- Select a day --</option>';
-        timeSelect.innerHTML = '<option value="">-- Select a day first --</option>';
-        document.getElementById('btnExecuteReschedule').disabled = true;
-
-        if (!dateInput) return;
-
+    function renderRescheduleGrid() {
         const res = resources.find(r => r.id === currentResId);
         if (!res) return;
 
-        // Get the week start (Sunday) for the selected date
-        const selectedDate = new Date(dateInput + 'T00:00:00');
-        const dayOfWeek = selectedDate.getDay();
-        const weekStart = new Date(selectedDate);
-        weekStart.setDate(selectedDate.getDate() - dayOfWeek);
+        const weekKey = getWeekKey(rescheduleWeekDate);
+        const container = document.getElementById('rescheduleGridContainer');
 
-        // Populate days that have operating hours
-        for (let i = 0; i < 7; i++) {
-            const dayStart = res.hours[i * 2];
-            const dayEnd = res.hours[(i * 2) + 1];
+        // Update week display
+        const weekEnd = new Date(rescheduleWeekDate);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        document.getElementById('rescheduleWeekDisplay').textContent =
+            `${rescheduleWeekDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
-            if (dayStart < dayEnd) { // Day has operating hours
-                const dayDate = new Date(weekStart);
-                dayDate.setDate(weekStart.getDate() + i);
-                const dateStr = `${dayDate.getMonth() + 1}/${dayDate.getDate()}`;
-                daySelect.innerHTML += `<option value="${i}">${DAYS_FULL[i]} (${dateStr})</option>`;
-            }
-        }
-    }
-
-    function updateRescheduleTimeOptions() {
-        const dateInput = document.getElementById('rescheduleTargetWeek').value;
-        const dayIdx = parseInt(document.getElementById('rescheduleTargetDay').value);
-        const timeSelect = document.getElementById('rescheduleTargetTime');
-
-        timeSelect.innerHTML = '<option value="">-- Select a time --</option>';
-        document.getElementById('btnExecuteReschedule').disabled = true;
-
-        if (!dateInput || isNaN(dayIdx)) return;
-
-        const res = resources.find(r => r.id === currentResId);
-        if (!res) return;
-
-        // Get the week key for the target week
-        const selectedDate = new Date(dateInput + 'T00:00:00');
-        const dayOfWeek = selectedDate.getDay();
-        const weekStart = new Date(selectedDate);
-        weekStart.setDate(selectedDate.getDate() - dayOfWeek);
-        const targetWeekKey = getWeekKey(weekStart);
-
-        const dayStart = res.hours[dayIdx * 2];
-        const dayEnd = res.hours[(dayIdx * 2) + 1];
-        const duration = rescheduleBookingData.duration;
-
-        // Get source slot info to preserve subroom
-        const sourceId = document.getElementById('rescheduleSourceId').value;
-        const sourceParts = sourceId.substring(res.id.length + 1).split('_');
-        const subIdx = sourceParts[3] || '';
-
-        // Get existing bookings for that day/week
-        const existingBookings = [];
-        Object.keys(allBookings).forEach(key => {
-            if (!key.startsWith(res.id + '_' + targetWeekKey + '_' + dayIdx + '_')) return;
-            const kParts = key.substring(res.id.length + 1).split('_');
-            const kSub = kParts[3] || '';
-            if (kSub !== subIdx) return; // Different subroom
-
-            const bStart = parseFloat(kParts[2]);
-            const bDuration = allBookings[key].duration;
-            existingBookings.push({ start: bStart, end: bStart + bDuration });
-        });
-
-        // Generate available time slots (only show slots without conflicts)
-        for (let time = dayStart; time + duration <= dayEnd; time += 0.5) {
-            const slotEnd = time + duration;
-
-            // Check for conflicts
-            let hasConflict = false;
-            for (const booking of existingBookings) {
-                if (time < booking.end && slotEnd > booking.start) {
-                    hasConflict = true;
-                    break;
-                }
-            }
-
-            // Only add available slots
-            if (!hasConflict) {
-                const timeStr = formatTime(time);
-                const endTimeStr = formatTime(slotEnd);
-                timeSelect.innerHTML += `<option value="${time}">${timeStr} - ${endTimeStr}</option>`;
+        // Find time range across all days
+        let minTime = 24, maxTime = 0;
+        for (let d = 0; d < 7; d++) {
+            const start = res.hours[d * 2];
+            const end = res.hours[d * 2 + 1];
+            if (start < end) {
+                minTime = Math.min(minTime, start);
+                maxTime = Math.max(maxTime, end);
             }
         }
 
-        // Enable execute button when a time is selected
-        timeSelect.onchange = function() {
-            document.getElementById('btnExecuteReschedule').disabled = !this.value;
-        };
-    }
-
-    async function executeRescheduleToWeek() {
-        const sourceId = document.getElementById('rescheduleSourceId').value;
-        const dateInput = document.getElementById('rescheduleTargetWeek').value;
-        const dayIdx = parseInt(document.getElementById('rescheduleTargetDay').value);
-        const targetTime = parseFloat(document.getElementById('rescheduleTargetTime').value);
-
-        if (!sourceId || !dateInput || isNaN(dayIdx) || isNaN(targetTime)) {
-            showToast("Please select a valid date, day, and time.", "error");
+        if (minTime >= maxTime) {
+            container.innerHTML = '<div style="grid-column: 1/-1; padding: 20px; text-align: center;">No operating hours configured.</div>';
             return;
         }
 
+        // Build grid HTML
+        let html = '';
+
+        // Header row with day names
+        html += '<div style="background:#f0f0f0; padding:4px; font-weight:bold; border-bottom:1px solid #ccc;"></div>';
+        for (let d = 0; d < 7; d++) {
+            const dayDate = new Date(rescheduleWeekDate);
+            dayDate.setDate(dayDate.getDate() + d);
+            const dateStr = `${dayDate.getMonth() + 1}/${dayDate.getDate()}`;
+            html += `<div style="background:#f0f0f0; padding:4px; font-weight:bold; text-align:center; border-bottom:1px solid #ccc;">${DAYS_FULL[d].substring(0,3)}<br><small>${dateStr}</small></div>`;
+        }
+
+        // Get bookings for this week
+        const weekBookings = {};
+        Object.keys(allBookings).forEach(key => {
+            if (!key.startsWith(res.id + '_' + weekKey + '_')) return;
+            const kParts = key.substring(res.id.length + 1).split('_');
+            const kDay = parseInt(kParts[1]);
+            const kStart = parseFloat(kParts[2]);
+            const kSub = kParts[3] || '';
+
+            // Only show bookings for the same subroom
+            if (kSub !== rescheduleSourceInfo.subIdx) return;
+
+            if (!weekBookings[kDay]) weekBookings[kDay] = [];
+            weekBookings[kDay].push({
+                id: key,
+                start: kStart,
+                end: kStart + allBookings[key].duration,
+                name: allBookings[key].name,
+                duration: allBookings[key].duration
+            });
+        });
+
+        // Generate time rows
+        for (let time = minTime; time < maxTime; time += 0.5) {
+            // Time label
+            html += `<div style="background:#f8f8f8; padding:2px 4px; font-size:0.8em; border-bottom:1px solid #eee; text-align:right;">${formatTime(time)}</div>`;
+
+            // Day cells
+            for (let d = 0; d < 7; d++) {
+                const dayStart = res.hours[d * 2];
+                const dayEnd = res.hours[d * 2 + 1];
+
+                if (time < dayStart || time >= dayEnd) {
+                    // Outside operating hours
+                    html += '<div style="background:#e0e0e0; border-bottom:1px solid #ccc;"></div>';
+                } else {
+                    // Check if this slot is occupied by an existing booking
+                    const dayBookings = weekBookings[d] || [];
+                    let occupyingBooking = null;
+                    for (const b of dayBookings) {
+                        if (time >= b.start && time < b.end) {
+                            occupyingBooking = b;
+                            break;
+                        }
+                    }
+
+                    if (occupyingBooking) {
+                        // Show booking (different style if it's the source booking)
+                        const isSource = occupyingBooking.id === document.getElementById('rescheduleSourceId').value;
+                        const bgColor = isSource ? '#ffcc80' : '#b3d4fc';
+                        const label = time === occupyingBooking.start ? occupyingBooking.name : '';
+                        html += `<div style="background:${bgColor}; border-bottom:1px solid #ccc; padding:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:0.75em;" title="${occupyingBooking.name}">${label}</div>`;
+                    } else {
+                        // Available slot - calculate max available duration from this time
+                        let maxAvail = dayEnd - time;
+                        for (const b of dayBookings) {
+                            if (b.start > time && b.start < time + maxAvail) {
+                                maxAvail = b.start - time;
+                            }
+                        }
+
+                        const originalDuration = rescheduleBookingData.duration;
+                        const canFitFull = maxAvail >= originalDuration;
+
+                        // Only show as clickable if at least 0.5 hours available
+                        if (maxAvail >= 0.5) {
+                            const slotColor = canFitFull ? '#d4edda' : '#fff3cd';
+                            const title = canFitFull
+                                ? `Click to move here (${formatTime(time)} - ${formatTime(time + originalDuration)})`
+                                : `Available: ${maxAvail}h (original: ${originalDuration}h) - click to adjust`;
+                            html += `<div class="reschedule-slot" style="background:${slotColor}; border-bottom:1px solid #ccc; cursor:pointer;" data-day="${d}" data-time="${time}" data-max="${maxAvail}" title="${title}"></div>`;
+                        } else {
+                            html += '<div style="background:#f9f9f9; border-bottom:1px solid #ccc;"></div>';
+                        }
+                    }
+                }
+            }
+        }
+
+        container.innerHTML = html;
+
+        // Add click handlers
+        container.querySelectorAll('.reschedule-slot').forEach(slot => {
+            slot.addEventListener('click', function() {
+                const dayIdx = parseInt(this.dataset.day);
+                const targetTime = parseFloat(this.dataset.time);
+                const maxAvail = parseFloat(this.dataset.max);
+                handleRescheduleSlotClick(dayIdx, targetTime, maxAvail);
+            });
+        });
+    }
+
+    function handleRescheduleSlotClick(dayIdx, targetTime, maxAvail) {
+        const originalDuration = rescheduleBookingData.duration;
+
+        if (maxAvail >= originalDuration) {
+            // Full duration fits - proceed directly
+            executeRescheduleToWeek(dayIdx, targetTime, originalDuration);
+        } else {
+            // Slot is smaller - ask user if they want to adjust duration
+            const confirmAdjust = confirm(
+                `This slot only has ${maxAvail} hour${maxAvail === 1 ? '' : 's'} available, ` +
+                `but the original booking is ${originalDuration} hour${originalDuration === 1 ? '' : 's'}.\n\n` +
+                `Do you want to shorten the booking to ${maxAvail} hour${maxAvail === 1 ? '' : 's'} to fit this slot?`
+            );
+
+            if (confirmAdjust) {
+                executeRescheduleToWeek(dayIdx, targetTime, maxAvail);
+            }
+        }
+    }
+
+    async function executeRescheduleToWeek(dayIdx, targetTime, newDuration) {
+        const sourceId = document.getElementById('rescheduleSourceId').value;
         const res = resources.find(r => r.id === currentResId);
         if (!res) return;
 
-        // Calculate target week key
-        const selectedDate = new Date(dateInput + 'T00:00:00');
-        const dayOfWeek = selectedDate.getDay();
-        const weekStart = new Date(selectedDate);
-        weekStart.setDate(selectedDate.getDate() - dayOfWeek);
-        const targetWeekKey = getWeekKey(weekStart);
-
-        // Get subroom from source
-        const sourceParts = sourceId.substring(res.id.length + 1).split('_');
-        const subIdx = sourceParts[3] || '';
+        const targetWeekKey = getWeekKey(rescheduleWeekDate);
+        const subIdx = rescheduleSourceInfo.subIdx;
 
         // Build target slot ID
         let targetId = `${res.id}_${targetWeekKey}_${dayIdx}_${targetTime}`;
         if (subIdx) targetId += `_${subIdx}`;
 
         // Final conflict check
-        const duration = rescheduleBookingData.duration;
-        const targetEnd = targetTime + duration;
+        const targetEnd = targetTime + newDuration;
         let conflictFound = false;
 
         Object.keys(allBookings).forEach(key => {
@@ -2842,22 +2864,27 @@ const firebaseConfig = {
             const oldRef = db.collection('appointments').doc(sourceId);
             batch.delete(oldRef);
 
-            // Create new booking with same data
+            // Create new booking with updated data
+            const newBookingData = { ...rescheduleBookingData, duration: newDuration };
             const newRef = db.collection('appointments').doc(targetId);
-            batch.set(newRef, rescheduleBookingData);
+            batch.set(newRef, newBookingData);
 
             await batch.commit();
 
             // Update stats for new location
             updateStatsYearMeta(currentResId, targetId);
 
-            showToast("Booking rescheduled successfully!", "success");
+            const durationMsg = newDuration !== rescheduleBookingData.duration
+                ? ` (duration adjusted to ${newDuration}h)`
+                : '';
+            showToast(`Booking rescheduled successfully!${durationMsg}`, "success");
         } catch (error) {
             console.error("Reschedule error:", error);
             showToast("Failed to reschedule booking: " + error.message, "error");
         } finally {
             showLoading(false);
             rescheduleBookingData = null;
+            rescheduleSourceInfo = null;
         }
     }
 
