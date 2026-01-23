@@ -820,10 +820,6 @@
             </select>
         </div>
 
-        <div id="rescheduleConflictWarning" class="hidden" style="padding: 10px; background: #ffebee; border: 1px solid #ef5350; border-radius: 4px; color: #c62828; margin-bottom: 15px;">
-            ⚠️ This time slot conflicts with an existing booking.
-        </div>
-
         <div style="display: flex; justify-content: space-between; margin-top: 20px;">
             <button id="btnExecuteReschedule" class="btn-success" onclick="executeRescheduleToWeek()">Reschedule</button>
             <button onclick="closeModal('rescheduleModal')">Cancel</button>
@@ -2671,7 +2667,6 @@ const firebaseConfig = {
         document.getElementById('rescheduleTargetWeek').value = '';
         document.getElementById('rescheduleTargetDay').innerHTML = '<option value="">-- Select a week first --</option>';
         document.getElementById('rescheduleTargetTime').innerHTML = '<option value="">-- Select a day first --</option>';
-        document.getElementById('rescheduleConflictWarning').classList.add('hidden');
         document.getElementById('btnExecuteReschedule').disabled = true;
 
         closeModal('bookingModal');
@@ -2718,7 +2713,6 @@ const firebaseConfig = {
         const timeSelect = document.getElementById('rescheduleTargetTime');
 
         timeSelect.innerHTML = '<option value="">-- Select a time --</option>';
-        document.getElementById('rescheduleConflictWarning').classList.add('hidden');
         document.getElementById('btnExecuteReschedule').disabled = true;
 
         if (!dateInput || isNaN(dayIdx)) return;
@@ -2755,7 +2749,7 @@ const firebaseConfig = {
             existingBookings.push({ start: bStart, end: bStart + bDuration });
         });
 
-        // Generate available time slots
+        // Generate available time slots (only show slots without conflicts)
         for (let time = dayStart; time + duration <= dayEnd; time += 0.5) {
             const slotEnd = time + duration;
 
@@ -2768,19 +2762,17 @@ const firebaseConfig = {
                 }
             }
 
-            const timeStr = formatTime(time);
-            const endTimeStr = formatTime(slotEnd);
-            if (hasConflict) {
-                timeSelect.innerHTML += `<option value="${time}" disabled style="color: #999;">${timeStr} - ${endTimeStr} (Unavailable)</option>`;
-            } else {
+            // Only add available slots
+            if (!hasConflict) {
+                const timeStr = formatTime(time);
+                const endTimeStr = formatTime(slotEnd);
                 timeSelect.innerHTML += `<option value="${time}">${timeStr} - ${endTimeStr}</option>`;
             }
         }
 
         // Enable execute button when a time is selected
         timeSelect.onchange = function() {
-            const selectedTime = this.value;
-            document.getElementById('btnExecuteReschedule').disabled = !selectedTime || this.selectedOptions[0].disabled;
+            document.getElementById('btnExecuteReschedule').disabled = !this.value;
         };
     }
 
