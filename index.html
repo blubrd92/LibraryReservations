@@ -578,6 +578,7 @@
             position: sticky;
             top: 0;
             z-index: 2;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
         }
         .stats-table thead th:first-child {
             position: sticky;
@@ -597,6 +598,7 @@
             position: sticky;
             bottom: 0;
             z-index: 2;
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.15);
         }
         .stats-table tfoot td:first-child {
             position: sticky;
@@ -939,6 +941,10 @@
                     <div class="flex gap" style="margin-top:8px; padding-top:8px; border-top:1px solid #d0e1f5;">
                         <input type="checkbox" id="editAdminOnly" style="width:auto;">
                         <label for="editAdminOnly" style="margin:0; cursor:pointer;">🔒 Admin Only (restrict editing to admin account)</label>
+                    </div>
+                    <div class="flex gap" style="margin-top:8px; padding-top:8px; border-top:1px solid #d0e1f5;">
+                        <input type="checkbox" id="editUseQuarterHour" style="width:auto;">
+                        <label for="editUseQuarterHour" style="margin:0; cursor:pointer;">Enable 15-Minute Scheduling?</label>
                     </div>
                 </div>
 
@@ -1496,19 +1502,38 @@ const firebaseConfig = {
                         if (col.subIndex !== null) emptyId += `_${col.subIndex}`;
                         
                         const canEdit = canEditResource(res);
-                        
+
                         // Always show time tooltip on hover
                         slot.setAttribute('data-time', `${displayTime} - ${formatTime(timeVal + 0.5)}`);
-                        
+
+                        // For quarter-hour mode, update tooltip dynamically on mousemove
+                        if (res.useQuarterHour) {
+                            slot.onmousemove = (e) => {
+                                const offset = getQuarterHourOffset(e, slot, res);
+                                const adjustedStart = timeVal + offset;
+                                slot.setAttribute('data-time', `${formatTime(adjustedStart)} - ${formatTime(adjustedStart + 0.5)}`);
+                            };
+                        }
+
                         if (canEdit) {
                             slot.onclick = (e) => {
                                 if (selectionState.active) return;
                                 if (resizeJustEnded) return;
                                 if (rescheduleMode.active) {
-                                    handleRescheduleSlotClick(emptyId, col.subIndex);
+                                    // For quarter-hour mode, adjust the slotId
+                                    const offset = getQuarterHourOffset(e, slot, res);
+                                    const adjustedTime = timeVal + offset;
+                                    let adjustedSlotId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${adjustedTime}`;
+                                    if (col.subIndex !== null) adjustedSlotId += `_${col.subIndex}`;
+                                    handleRescheduleSlotClick(adjustedSlotId, col.subIndex);
                                     return;
                                 }
-                                openBookingModal(emptyId, null, col.subIndex);
+                                // For quarter-hour mode, adjust the slotId
+                                const offset = getQuarterHourOffset(e, slot, res);
+                                const adjustedTime = timeVal + offset;
+                                let adjustedSlotId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${adjustedTime}`;
+                                if (col.subIndex !== null) adjustedSlotId += `_${col.subIndex}`;
+                                openBookingModal(adjustedSlotId, null, col.subIndex);
                             };
                             
                             // DRAG-AND-DROP: Set up empty slots as drop targets
@@ -1732,10 +1757,27 @@ const firebaseConfig = {
     function handleDragOver(e) {
         e.preventDefault();
         if (!dragState.isDragging || !dragState.sourceId) return;
-        
+
+        // Clean up floating tooltip/highlight from booked slot hover (in case dragLeave didn't fire)
+        if (dragState.tooltipElement) {
+            dragState.tooltipElement.remove();
+            dragState.tooltipElement = null;
+        }
+        if (dragState.highlightElement) {
+            dragState.highlightElement.remove();
+            dragState.highlightElement = null;
+        }
+
+        // Clean up drag-over classes from any other elements (in case dragLeave didn't fire)
+        document.querySelectorAll('.drag-over-valid, .drag-over-invalid').forEach(el => {
+            if (el !== e.currentTarget) {
+                el.classList.remove('drag-over-valid', 'drag-over-invalid');
+            }
+        });
+
         const slot = e.currentTarget;
         const targetSlotId = slot.dataset.slotId;
-        
+
         // Remove existing classes
         slot.classList.remove('drag-over-valid', 'drag-over-invalid');
         
@@ -1786,7 +1828,14 @@ const firebaseConfig = {
     function handleBookedSlotDragOver(e, booking, col, res, activeWeekKey) {
         e.preventDefault();
         if (!dragState.isDragging || !dragState.sourceId) return;
-        
+
+        // Clean up drag-over classes from any other elements (in case dragLeave didn't fire)
+        document.querySelectorAll('.drag-over-valid, .drag-over-invalid').forEach(el => {
+            if (el !== e.currentTarget) {
+                el.classList.remove('drag-over-valid', 'drag-over-invalid');
+            }
+        });
+
         const slot = e.currentTarget;
         slot.classList.remove('drag-over-valid', 'drag-over-invalid');
         
@@ -2110,40 +2159,49 @@ const firebaseConfig = {
         if (rescheduleMode.active) return;
 
         e.preventDefault();
-        
+
+        // Calculate quarter-hour offset if enabled
+        const quarterOffset = getQuarterHourOffset(e, slotElement, res);
+        const adjustedTimeVal = timeVal + quarterOffset;
+
+        // Build adjusted slotId with quarter offset
+        let adjustedSlotId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${adjustedTimeVal}`;
+        if (col.subIndex !== null) adjustedSlotId += `_${col.subIndex}`;
+
         // Calculate max duration based on closing time and collisions
         const dayEnd = res.hours[(col.dayIndex * 2) + 1];
-        const maxByClose = dayEnd - timeVal;
+        const maxByClose = dayEnd - adjustedTimeVal;
         const maxByResource = res.maxDuration;
-        
+
         // Find next booking in same column
         let nextBookingStart = dayEnd;
         const prefix = res.id + "_";
         Object.keys(allBookings).forEach(key => {
             if (!key.startsWith(prefix + activeWeekKey)) return;
-            
+
             const kSuffix = key.substring(prefix.length);
             const kParts = kSuffix.split('_');
             const kDay = parseInt(kParts[1]);
             const kTime = parseFloat(kParts[2]);
             const kSubRaw = kParts[3];
             const kSub = normalizeSubIndex(kSubRaw);
-            
+
             if (kDay !== col.dayIndex) return;
             if (kSub !== normalizeSubIndex(col.subIndex)) return;
-            
-            if (kTime >= timeVal && kTime < nextBookingStart) {
+
+            if (kTime >= adjustedTimeVal && kTime < nextBookingStart) {
                 nextBookingStart = kTime;
             }
         });
-        
-        const maxByCollision = nextBookingStart - timeVal;
+
+        const maxByCollision = nextBookingStart - adjustedTimeVal;
         const maxDuration = Math.min(maxByClose, maxByResource, maxByCollision);
-        
-        if (maxDuration < 0.5) return;
-        
+
+        const minDuration = res.useQuarterHour ? 0.25 : 0.5;
+        if (maxDuration < minDuration) return;
+
         const rect = slotElement.getBoundingClientRect();
-        
+
         // Build array of time cell positions for accurate slot detection
         const container = document.getElementById('gridContainer');
         const timeCells = Array.from(container.querySelectorAll('.time-cell'));
@@ -2151,25 +2209,27 @@ const firebaseConfig = {
             const cellRect = cell.getBoundingClientRect();
             return { top: cellRect.top, bottom: cellRect.bottom, height: cellRect.height };
         });
-        
+
         selectionState = {
             active: true,
-            startSlotId: slotId,
-            startTime: timeVal,
+            startSlotId: adjustedSlotId,
+            startTime: adjustedTimeVal,
             startDayIndex: col.dayIndex,
             subIndex: col.subIndex,
             startY: e.clientY,
             startSlotIndex: 0, // which slot we started in
             slotPositions: slotPositions,
             maxDuration: maxDuration,
-            currentDuration: 0.5,
+            currentDuration: minDuration,
             res: res,
             activeWeekKey: activeWeekKey,
             startSlotRect: rect,
             overlayElement: null,
-            tooltipElement: null
+            tooltipElement: null,
+            useQuarterHour: res.useQuarterHour || false,
+            quarterOffset: quarterOffset
         };
-        
+
         // Find which slot index we're starting in
         for (let i = 0; i < slotPositions.length; i++) {
             if (e.clientY >= slotPositions[i].top && e.clientY < slotPositions[i].bottom) {
@@ -2177,36 +2237,41 @@ const firebaseConfig = {
                 break;
             }
         }
-        
+
         // Create overlay
         const overlay = document.createElement('div');
         overlay.className = 'selection-overlay';
         overlay.style.left = rect.left + 'px';
-        overlay.style.top = slotPositions[selectionState.startSlotIndex].top + 'px';
+        // Adjust overlay top position for quarter offset
+        const overlayTop = slotPositions[selectionState.startSlotIndex].top + (quarterOffset > 0 ? slotPositions[selectionState.startSlotIndex].height / 2 : 0);
+        overlay.style.top = overlayTop + 'px';
         overlay.style.width = rect.width + 'px';
-        overlay.style.height = slotPositions[selectionState.startSlotIndex].height + 'px';
+        overlay.style.height = (slotPositions[selectionState.startSlotIndex].height / (res.useQuarterHour ? 2 : 1)) + 'px';
         document.body.appendChild(overlay);
         selectionState.overlayElement = overlay;
-        
+
         // Create tooltip
         const tooltip = document.createElement('div');
         tooltip.className = 'selection-tooltip';
-        tooltip.innerText = `${formatTime(timeVal)} - ${formatTime(timeVal + 0.5)} (0.5h)`;
+        tooltip.innerText = `${formatTime(adjustedTimeVal)} - ${formatTime(adjustedTimeVal + minDuration)} (${minDuration}h)`;
         tooltip.style.left = (rect.right + 10) + 'px';
         tooltip.style.top = rect.top + 'px';
         document.body.appendChild(tooltip);
         selectionState.tooltipElement = tooltip;
-        
+
         document.addEventListener('mousemove', doSelection);
         document.addEventListener('mouseup', endSelection);
     }
     
     function doSelection(e) {
         if (!selectionState.active) return;
-        
+
         const positions = selectionState.slotPositions;
         const startIdx = selectionState.startSlotIndex;
-        
+        const useQuarter = selectionState.useQuarterHour;
+        const increment = useQuarter ? 0.25 : 0.5;
+        const minDuration = increment;
+
         // Find which slot the mouse is currently over
         let currentSlotIndex = startIdx;
         for (let i = startIdx; i < positions.length; i++) {
@@ -2219,25 +2284,57 @@ const firebaseConfig = {
                 currentSlotIndex = i;
             }
         }
-        
-        // Calculate duration based on slots covered
+
+        // Calculate base duration from slots covered (each slot = 0.5h)
         const slotsCovered = currentSlotIndex - startIdx + 1;
-        let newDuration = slotsCovered * 0.5;
-        newDuration = Math.max(0.5, Math.min(selectionState.maxDuration, newDuration));
-        
-        selectionState.currentDuration = newDuration;
-        
-        // Update overlay to span from start slot to current slot
-        if (selectionState.overlayElement && positions[startIdx]) {
-            const endIdx = startIdx + (newDuration * 2) - 1;
-            const clampedEndIdx = Math.min(endIdx, positions.length - 1);
-            const startTop = positions[startIdx].top;
-            const endBottom = positions[clampedEndIdx].bottom;
-            
-            selectionState.overlayElement.style.top = startTop + 'px';
-            selectionState.overlayElement.style.height = (endBottom - startTop) + 'px';
+        let baseDuration = slotsCovered * 0.5;
+
+        // For quarter-hour mode, add finer granularity based on mouse position within current slot
+        if (useQuarter && positions[currentSlotIndex]) {
+            const currentSlotRect = positions[currentSlotIndex];
+            const relativeY = e.clientY - currentSlotRect.top;
+            const inBottomHalf = relativeY >= currentSlotRect.height / 2;
+
+            // Adjust duration: subtract initial offset, add current position offset
+            baseDuration = baseDuration - selectionState.quarterOffset;
+            if (inBottomHalf) {
+                baseDuration += 0.25;
+            }
         }
-        
+
+        let newDuration = Math.max(minDuration, Math.min(selectionState.maxDuration, baseDuration));
+        // Snap to increment
+        newDuration = Math.round(newDuration / increment) * increment;
+        newDuration = Math.max(minDuration, Math.min(selectionState.maxDuration, newDuration));
+
+        selectionState.currentDuration = newDuration;
+
+        // Update overlay to span from start to end
+        if (selectionState.overlayElement && positions[startIdx]) {
+            // Calculate overlay position considering quarter offsets
+            const quarterOffset = selectionState.quarterOffset;
+            const startTop = positions[startIdx].top + (quarterOffset > 0 ? positions[startIdx].height / 2 : 0);
+
+            // Calculate end position based on duration
+            const durationInSlots = newDuration * 2; // Convert hours to half-hour slots
+            const endSlotOffset = selectionState.quarterOffset + (newDuration * 2);
+            const endSlotIndex = startIdx + Math.floor(endSlotOffset) - (endSlotOffset % 1 === 0 ? 1 : 0);
+            const clampedEndIdx = Math.min(endSlotIndex, positions.length - 1);
+            const endInBottomHalf = (endSlotOffset % 1) >= 0.5 || endSlotOffset % 1 === 0;
+
+            let endBottom;
+            if (endInBottomHalf && positions[clampedEndIdx]) {
+                endBottom = positions[clampedEndIdx].bottom;
+            } else if (positions[clampedEndIdx]) {
+                endBottom = positions[clampedEndIdx].top + positions[clampedEndIdx].height / 2;
+            } else {
+                endBottom = positions[positions.length - 1].bottom;
+            }
+
+            selectionState.overlayElement.style.top = startTop + 'px';
+            selectionState.overlayElement.style.height = Math.max(10, endBottom - startTop) + 'px';
+        }
+
         if (selectionState.tooltipElement) {
             const endTime = selectionState.startTime + newDuration;
             selectionState.tooltipElement.innerText = `${formatTime(selectionState.startTime)} - ${formatTime(endTime)} (${newDuration}h)`;
@@ -2331,9 +2428,10 @@ const firebaseConfig = {
 
         const durSel = document.getElementById('bookDuration');
         durSel.innerHTML = '';
-        const maxIterations = res.maxDuration * 2;
+        const increment = res.useQuarterHour ? 0.25 : 0.5;
+        const maxIterations = res.maxDuration / increment;
         for (let i = 1; i <= maxIterations; i++) {
-            const val = i * 0.5;
+            const val = i * increment;
             if (val > limit) continue;
             const opt = document.createElement('option');
             opt.value = val;
@@ -2453,11 +2551,12 @@ const firebaseConfig = {
             slotHeight: slotPositions.length > 0 ? slotPositions[0].height : 30,
             originalDuration: booking.data.duration,
             currentDuration: booking.data.duration,
-            minDuration: 0.5,
+            minDuration: res.useQuarterHour ? 0.25 : 0.5,
             maxDuration: maxDuration,
             originalRect: rect,
             overlayElement: null,
-            tooltipElement: null
+            tooltipElement: null,
+            useQuarterHour: res.useQuarterHour || false
         };
         
         // Create overlay spanning the correct slots
@@ -2490,23 +2589,30 @@ const firebaseConfig = {
     
     function doResize(e) {
         if (!resizeState.active) return;
-        
+
+        const useQuarter = resizeState.useQuarterHour;
+        const increment = useQuarter ? 0.25 : 0.5;
+
         const deltaY = e.clientY - resizeState.startY;
-        const slotsDelta = Math.round(deltaY / resizeState.slotHeight);
-        const durationDelta = slotsDelta * 0.5;
-        
+        // For quarter-hour, each half-slot represents 0.25h
+        const pixelsPerIncrement = useQuarter ? resizeState.slotHeight / 2 : resizeState.slotHeight;
+        const incrementsDelta = Math.round(deltaY / pixelsPerIncrement);
+        const durationDelta = incrementsDelta * increment;
+
         let newDuration = resizeState.originalDuration + durationDelta;
         newDuration = Math.max(resizeState.minDuration, Math.min(resizeState.maxDuration, newDuration));
-        newDuration = Math.round(newDuration * 2) / 2;
-        
+        // Snap to increment
+        newDuration = Math.round(newDuration / increment) * increment;
+        newDuration = Math.max(resizeState.minDuration, Math.min(resizeState.maxDuration, newDuration));
+
         resizeState.currentDuration = newDuration;
-        
+
         // Update overlay height (not the actual grid element)
         if (resizeState.overlayElement) {
             const newHeight = resizeState.slotHeight * (newDuration * 2);
             resizeState.overlayElement.style.height = newHeight + 'px';
         }
-        
+
         // Update tooltip
         if (resizeState.tooltipElement) {
             const newEndTime = resizeState.bookingStart + newDuration;
@@ -2928,22 +3034,23 @@ const firebaseConfig = {
 
         const durSel = document.getElementById('bookDuration');
         durSel.innerHTML = '';
-        const maxIterations = res.maxDuration * 2; 
+        const increment = res.useQuarterHour ? 0.25 : 0.5;
+        const maxIterations = res.maxDuration / increment;
         for(let i=1; i<=maxIterations; i++) {
-            const val = i*0.5;
+            const val = i * increment;
             if (val > limit && (!data || data.duration !== val)) continue;
             const opt = document.createElement('option');
             opt.value = val;
 
             // --- UPDATED: Range Format (Option 2) ---
             const endVal = start + val;
-            const startString = formatTime(start); 
+            const startString = formatTime(start);
             const endString = formatTime(endVal);
-            
+
             // Result: "1.5 Hours (2:00pm - 3:30pm)"
             opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (${startString} - ${endString})`;
             // ----------------------------------------
-            
+
             if(data && data.duration == val) opt.selected = true;
             durSel.appendChild(opt);
         }
@@ -3068,7 +3175,8 @@ const firebaseConfig = {
         document.getElementById('editSubRooms').value = r.subRooms || '';
         document.getElementById('editDefaultShowNotes').checked = r.defaultShowNotes || false;
         document.getElementById('editAdminOnly').checked = r.adminOnly || false;
-        
+        document.getElementById('editUseQuarterHour').checked = r.useQuarterHour || false;
+
         // Load Sidebar Settings
         document.getElementById('editEnableSidebar').checked = r.enableSidebar || false;
         document.getElementById('editSidebarText').value = r.sidebarText || '';
@@ -3077,10 +3185,11 @@ const firebaseConfig = {
         toggleSubRoomInput();
         const container = document.getElementById('daysConfigContainer');
         container.innerHTML = '';
+        const stepVal = r.useQuarterHour ? '0.25' : '0.5';
         DAYS.forEach((d, i) => {
             const start = r.hours[i*2];
             const end = r.hours[(i*2)+1];
-            container.innerHTML += `<div class="day-box"><strong>${d}</strong><input type="number" id="s_${i}" value="${start}" min="0" max="24" step="0.5"><input type="number" id="e_${i}" value="${end}" min="0" max="24" step="0.5"></div>`;
+            container.innerHTML += `<div class="day-box"><strong>${d}</strong><input type="number" id="s_${i}" value="${start}" min="0" max="24" step="${stepVal}"><input type="number" id="e_${i}" value="${end}" min="0" max="24" step="${stepVal}"></div>`;
         });
         
         // Load Closure Dates
@@ -3307,17 +3416,18 @@ const firebaseConfig = {
         // If there are existing resources, show import options
         if (resources.length > 0) {
             // Show import modal
-            pendingNewResource = { 
-                id: 'res-' + Date.now(), 
-                name: name, 
-                viewMode: 'week', 
-                hasStaffField: false, 
-                defaultShowNotes: false, 
-                enableSidebar: false, 
+            pendingNewResource = {
+                id: 'res-' + Date.now(),
+                name: name,
+                viewMode: 'week',
+                hasStaffField: false,
+                defaultShowNotes: false,
+                enableSidebar: false,
                 sidebarText: "",
-                maxDuration: 2, 
+                maxDuration: 2,
                 hours: [...DEFAULT_HOURS],
-                closureDates: []
+                closureDates: [],
+                useQuarterHour: false
             };
             
             // Populate closure dates dropdown
@@ -3345,17 +3455,18 @@ const firebaseConfig = {
         } else {
             // No existing resources, create directly with defaults
             showLoading(true);
-            const newRes = { 
-                id: 'res-' + Date.now(), 
-                name: name, 
-                viewMode: 'week', 
-                hasStaffField: false, 
-                defaultShowNotes: false, 
-                enableSidebar: false, 
+            const newRes = {
+                id: 'res-' + Date.now(),
+                name: name,
+                viewMode: 'week',
+                hasStaffField: false,
+                defaultShowNotes: false,
+                enableSidebar: false,
                 sidebarText: "",
-                maxDuration: 2, 
+                maxDuration: 2,
                 hours: [...DEFAULT_HOURS],
-                closureDates: []
+                closureDates: [],
+                useQuarterHour: false
             };
             try { 
                 await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); 
@@ -3436,6 +3547,7 @@ const firebaseConfig = {
         target.subRooms = document.getElementById('editSubRooms').value;
         target.defaultShowNotes = document.getElementById('editDefaultShowNotes').checked;
         target.adminOnly = document.getElementById('editAdminOnly').checked;
+        target.useQuarterHour = document.getElementById('editUseQuarterHour').checked;
 
         // Save Sidebar Settings
         target.enableSidebar = document.getElementById('editEnableSidebar').checked;
@@ -3567,10 +3679,23 @@ const firebaseConfig = {
     }
     function formatTime(val) {
         const h = Math.floor(val);
-        const m = (val % 1 === 0) ? '00' : '30';
+        const frac = val % 1;
+        let m;
+        if (frac === 0) m = '00';
+        else if (frac === 0.25) m = '15';
+        else if (frac === 0.5) m = '30';
+        else if (frac === 0.75) m = '45';
+        else m = String(Math.round(frac * 60)).padStart(2, '0');
         const suffix = h >= 12 ? 'pm' : 'am';
         const h12 = h % 12 || 12;
         return `${h12}:${m}${suffix}`;
+    }
+
+    function getQuarterHourOffset(e, slotElement, res) {
+        if (!res.useQuarterHour) return 0;
+        const rect = slotElement.getBoundingClientRect();
+        const relativeY = e.clientY - rect.top;
+        return (relativeY >= rect.height / 2) ? 0.25 : 0;
     }
 
     // --- STATS FUNCTIONS ---
@@ -3869,11 +3994,12 @@ const firebaseConfig = {
                         rowTotal += hours;
                         grandTotal += hours;
                         totalDaysOpen++;
-                        
+
                         // Calculate heat map level (0-8)
                         const heatLevel = hours === 0 ? 0 : Math.min(8, Math.ceil((hours / maxHours) * 8));
-                        const hoursText = hours > 0 ? `${hours} hour${hours === 1 ? '' : 's'}` : 'No bookings';
-                        rowHtml += `<td class="stats-heat-${heatLevel}" title="${dateTooltip} - ${hoursText}">${hours > 0 ? hours : ''}</td>`;
+                        const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : '';
+                        const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'}` : 'No bookings';
+                        rowHtml += `<td class="stats-heat-${heatLevel}" title="${dateTooltip} - ${hoursText}">${displayHours}</td>`;
                     }
                 }
             }
@@ -3887,13 +4013,14 @@ const firebaseConfig = {
         // Build footer (monthly totals)
         let footHtml = '<tr><td>Total</td>';
         monthlyTotals.forEach(t => {
-            footHtml += `<td>${t > 0 ? t : '-'}</td>`;
+            const displayTotal = t > 0 ? parseFloat(t.toFixed(2)) : '-';
+            footHtml += `<td>${displayTotal}</td>`;
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
-        
+
         // Update summary
-        document.getElementById('statsTotalHours').innerText = grandTotal + ' hours';
+        document.getElementById('statsTotalHours').innerText = parseFloat(grandTotal.toFixed(2)) + ' hours';
         
         // Find busiest month
         let busiestIdx = 0;
@@ -3904,7 +4031,7 @@ const firebaseConfig = {
                 busiestIdx = i;
             }
         });
-        document.getElementById('statsBusiestMonth').innerText = busiestVal > 0 ? `${MONTHS[busiestIdx]} (${busiestVal}h)` : '-';
+        document.getElementById('statsBusiestMonth').innerText = busiestVal > 0 ? `${MONTHS[busiestIdx]} (${parseFloat(busiestVal.toFixed(2))}h)` : '-';
         
         // Average hours per open day
         const avgHours = totalDaysOpen > 0 ? (grandTotal / totalDaysOpen).toFixed(1) : 0;
