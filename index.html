@@ -1512,16 +1512,24 @@ const firebaseConfig = {
                     slot.classList.add('closed');
                     container.appendChild(slot);
                 } else {
-                    // Check if this slot is covered by a booking (for visual reference, not content)
+                    // Check if this slot is covered by a booking
                     const booking = gridBookings.find(b => b.dayIndex === col.dayIndex && (b.subIndex === col.subIndex) && timeVal >= b.start && timeVal < b.end);
+                    // Check if slot is FULLY covered (no available quarter-hours)
+                    const slotEnd = timeVal + 0.5;
+                    const isFullyCovered = booking && booking.start <= timeVal && booking.end >= slotEnd;
+                    // In quarter-hour mode, check if any quarter is available
+                    const hasPartialAvailability = res.useQuarterHour && booking && !isFullyCovered;
+
                     if (booking) {
                         slot.classList.add('has-booking');
                         slot.dataset.bid = booking.id;
-                    } else {
-                        // Empty slot - set up for interactions
+                    }
+
+                    // Set up interactions if slot is empty OR has partial availability in quarter-hour mode
+                    if (!booking || hasPartialAvailability) {
                         let emptyId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${timeVal}`;
                         if (col.subIndex !== null) emptyId += `_${col.subIndex}`;
-                        
+
                         const canEdit = canEditResource(res);
 
                         // Always show time tooltip on hover
@@ -1533,14 +1541,26 @@ const firebaseConfig = {
                             slot.onmousemove = (e) => {
                                 const offset = getQuarterHourOffset(e, slot, res);
                                 const adjustedStart = timeVal + offset;
-                                slot.setAttribute('data-time', `${formatTime(adjustedStart)} - ${formatTime(adjustedStart + 0.5)}`);
-                                // Update half-highlight
-                                if (offset > 0) {
-                                    slot.classList.remove('quarter-hover-top');
-                                    slot.classList.add('quarter-hover-bottom');
+                                // Check if this specific quarter is available
+                                const quarterEnd = adjustedStart + 0.25;
+                                const quarterBlocked = gridBookings.some(b =>
+                                    b.dayIndex === col.dayIndex &&
+                                    b.subIndex === col.subIndex &&
+                                    adjustedStart < b.end && quarterEnd > b.start
+                                );
+                                if (quarterBlocked) {
+                                    slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom');
+                                    slot.setAttribute('data-time', '');
                                 } else {
-                                    slot.classList.remove('quarter-hover-bottom');
-                                    slot.classList.add('quarter-hover-top');
+                                    slot.setAttribute('data-time', `${formatTime(adjustedStart)} - ${formatTime(adjustedStart + 0.5)}`);
+                                    // Update half-highlight
+                                    if (offset > 0) {
+                                        slot.classList.remove('quarter-hover-top');
+                                        slot.classList.add('quarter-hover-bottom');
+                                    } else {
+                                        slot.classList.remove('quarter-hover-bottom');
+                                        slot.classList.add('quarter-hover-top');
+                                    }
                                 }
                             };
                             slot.onmouseleave = () => {
@@ -1552,23 +1572,31 @@ const firebaseConfig = {
                             slot.onclick = (e) => {
                                 if (selectionState.active) return;
                                 if (resizeJustEnded) return;
+
+                                // For quarter-hour mode, check if clicked quarter is available
+                                const offset = getQuarterHourOffset(e, slot, res);
+                                const adjustedTime = timeVal + offset;
+                                if (res.useQuarterHour) {
+                                    const quarterEnd = adjustedTime + 0.25;
+                                    const quarterBlocked = gridBookings.some(b =>
+                                        b.dayIndex === col.dayIndex &&
+                                        b.subIndex === col.subIndex &&
+                                        adjustedTime < b.end && quarterEnd > b.start
+                                    );
+                                    if (quarterBlocked) return; // Don't allow clicking on blocked quarter
+                                }
+
                                 if (rescheduleMode.active) {
-                                    // For quarter-hour mode, adjust the slotId
-                                    const offset = getQuarterHourOffset(e, slot, res);
-                                    const adjustedTime = timeVal + offset;
                                     let adjustedSlotId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${adjustedTime}`;
                                     if (col.subIndex !== null) adjustedSlotId += `_${col.subIndex}`;
                                     handleRescheduleSlotClick(adjustedSlotId, col.subIndex);
                                     return;
                                 }
-                                // For quarter-hour mode, adjust the slotId
-                                const offset = getQuarterHourOffset(e, slot, res);
-                                const adjustedTime = timeVal + offset;
                                 let adjustedSlotId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${adjustedTime}`;
                                 if (col.subIndex !== null) adjustedSlotId += `_${col.subIndex}`;
                                 openBookingModal(adjustedSlotId, null, col.subIndex);
                             };
-                            
+
                             // DRAG-AND-DROP: Set up empty slots as drop targets
                             slot.dataset.slotId = emptyId;
                             slot.dataset.dayIndex = col.dayIndex;
@@ -1577,7 +1605,7 @@ const firebaseConfig = {
                             slot.ondragover = handleDragOver;
                             slot.ondragleave = handleDragLeave;
                             slot.ondrop = handleDrop;
-                            
+
                             // DRAG-TO-CREATE: mousedown starts selection
                             slot.onmousedown = (e) => startSelection(e, emptyId, timeVal, col, res, activeWeekKey, slot);
                         } else {
@@ -2282,6 +2310,26 @@ const firebaseConfig = {
         // Calculate quarter-hour offset if enabled
         const quarterOffset = getQuarterHourOffset(e, slotElement, res);
         const adjustedTimeVal = timeVal + quarterOffset;
+
+        // In quarter-hour mode, check if clicked quarter is blocked by existing booking
+        if (res.useQuarterHour) {
+            const quarterEnd = adjustedTimeVal + 0.25;
+            const prefix = res.id + "_";
+            const isBlocked = Object.keys(allBookings).some(key => {
+                if (!key.startsWith(prefix + activeWeekKey)) return false;
+                const kSuffix = key.substring(prefix.length);
+                const kParts = kSuffix.split('_');
+                const kDay = parseInt(kParts[1]);
+                const kTime = parseFloat(kParts[2]);
+                const kSubRaw = kParts[3];
+                const kSub = normalizeSubIndex(kSubRaw);
+                if (kDay !== col.dayIndex) return false;
+                if (kSub !== normalizeSubIndex(col.subIndex)) return false;
+                const bookingEnd = kTime + allBookings[key].duration;
+                return adjustedTimeVal < bookingEnd && quarterEnd > kTime;
+            });
+            if (isBlocked) return;
+        }
 
         // Build adjusted slotId with quarter offset
         let adjustedSlotId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${adjustedTimeVal}`;
