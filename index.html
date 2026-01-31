@@ -1114,6 +1114,8 @@ const firebaseConfig = {
         startDayIndex: 0,
         subIndex: null,
         startY: 0,
+        startSlotIndex: 0,
+        slotPositions: [],
         slotHeight: 0,
         maxDuration: 0,
         currentDuration: 0.5,
@@ -1121,7 +1123,9 @@ const firebaseConfig = {
         activeWeekKey: null,
         startSlotRect: null,
         overlayElement: null,
-        tooltipElement: null
+        tooltipElement: null,
+        useQuarterHour: false,
+        quarterOffset: 0
     };
 
     // RESIZE STATE (for existing bookings)
@@ -1134,6 +1138,8 @@ const firebaseConfig = {
         res: null,
         activeWeekKey: null,
         startY: 0,
+        startSlotIndex: 0,
+        slotPositions: [],
         slotHeight: 0,
         originalDuration: 0,
         currentDuration: 0,
@@ -1141,7 +1147,8 @@ const firebaseConfig = {
         maxDuration: 0,
         originalRect: null,
         overlayElement: null,
-        tooltipElement: null
+        tooltipElement: null,
+        useQuarterHour: false
     };
     let resizeJustEnded = false;
 
@@ -1593,7 +1600,8 @@ const firebaseConfig = {
                 if (!col) return;
                 
                 const colIndex = columns.indexOf(col);
-                // Handle quarter-hour positions: floor to find containing slot
+                // Handle quarter-hour positions: rawStartSlotIndex is time-based (e.g., 9.25 - 9 = 0.25 * 2 = 0.5)
+                // startSlotIndex is floored to get the containing 30-min slot in the DOM
                 const rawStartSlotIndex = (booking.start - minH) * 2;
                 const startSlotIndex = Math.floor(rawStartSlotIndex);
                 const startOffsetFraction = rawStartSlotIndex - startSlotIndex; // 0 or 0.5 for quarter-hour offset
@@ -1961,8 +1969,12 @@ const firebaseConfig = {
             document.body.appendChild(highlight);
             dragState.highlightElement = highlight;
         }
-        
-        // Position highlight over the specific slot
+
+        // Position highlight over the specific time slot within the booking.
+        // For half-hour mode: slotHeight = booking height / (duration * 2) = grid slot height (30 min)
+        // For quarter mode: slotHeight = booking height / (duration * 4) = half grid slot (15 min)
+        // Highlights align with grid slots when booking starts at :00/:30.
+        // When booking starts at :15/:45, highlights show correct time but don't align with grid.
         const highlightTop = rect.top + (slotIndex * slotHeight);
         dragState.highlightElement.style.left = rect.left + 'px';
         dragState.highlightElement.style.top = highlightTop + 'px';
@@ -2324,7 +2336,7 @@ const firebaseConfig = {
             startDayIndex: col.dayIndex,
             subIndex: col.subIndex,
             startY: e.clientY,
-            startSlotIndex: 0, // which slot we started in
+            startSlotIndex: 0, // Index into slotPositions array (not raw time-based slot index)
             slotPositions: slotPositions,
             maxDuration: maxDuration,
             currentDuration: minDuration,
@@ -2418,28 +2430,17 @@ const firebaseConfig = {
 
         // Update overlay to span from start to end
         if (selectionState.overlayElement && positions[startIdx]) {
-            // Calculate overlay position considering quarter offsets
+            const slotHeight = positions[startIdx].height;
+            // quarterOffset is 0 or 0.25 (hours), convert to pixels: 0.25h = 0.5 slots
             const quarterOffset = selectionState.quarterOffset;
-            const startTop = positions[startIdx].top + (quarterOffset > 0 ? positions[startIdx].height / 2 : 0);
+            const startPixelOffset = quarterOffset > 0 ? slotHeight / 2 : 0;
+            const startTop = positions[startIdx].top + startPixelOffset;
 
-            // Calculate end position based on duration
-            const durationInSlots = newDuration * 2; // Convert hours to half-hour slots
-            const endSlotOffset = selectionState.quarterOffset + (newDuration * 2);
-            const endSlotIndex = startIdx + Math.floor(endSlotOffset) - (endSlotOffset % 1 === 0 ? 1 : 0);
-            const clampedEndIdx = Math.min(endSlotIndex, positions.length - 1);
-            const endInBottomHalf = (endSlotOffset % 1) >= 0.5 || endSlotOffset % 1 === 0;
-
-            let endBottom;
-            if (endInBottomHalf && positions[clampedEndIdx]) {
-                endBottom = positions[clampedEndIdx].bottom;
-            } else if (positions[clampedEndIdx]) {
-                endBottom = positions[clampedEndIdx].top + positions[clampedEndIdx].height / 2;
-            } else {
-                endBottom = positions[positions.length - 1].bottom;
-            }
+            // Height directly from duration (each hour = 2 slots)
+            const overlayHeight = newDuration * 2 * slotHeight;
 
             selectionState.overlayElement.style.top = startTop + 'px';
-            selectionState.overlayElement.style.height = Math.max(10, endBottom - startTop) + 'px';
+            selectionState.overlayElement.style.height = Math.max(10, overlayHeight) + 'px';
         }
 
         if (selectionState.tooltipElement) {
@@ -2472,6 +2473,8 @@ const firebaseConfig = {
             startDayIndex: 0,
             subIndex: null,
             startY: 0,
+            startSlotIndex: 0,
+            slotPositions: [],
             slotHeight: 0,
             maxDuration: 0,
             currentDuration: 0.5,
@@ -2479,7 +2482,9 @@ const firebaseConfig = {
             activeWeekKey: null,
             startSlotRect: null,
             overlayElement: null,
-            tooltipElement: null
+            tooltipElement: null,
+            useQuarterHour: false,
+            quarterOffset: 0
         };
         
         openBookingModalWithDuration(slotId, subIndex, duration);
@@ -2631,7 +2636,7 @@ const firebaseConfig = {
             return { top: cellRect.top, bottom: cellRect.bottom, height: cellRect.height };
         });
         
-        // Find which slot index the booking starts in
+        // Find which slot index the booking starts in (index into slotPositions array)
         let startSlotIndex = 0;
         const bookingTopY = rect.top;
         for (let i = 0; i < slotPositions.length; i++) {
@@ -2767,6 +2772,8 @@ const firebaseConfig = {
             res: null,
             activeWeekKey: null,
             startY: 0,
+            startSlotIndex: 0,
+            slotPositions: [],
             slotHeight: 0,
             originalDuration: 0,
             currentDuration: 0,
@@ -2774,7 +2781,8 @@ const firebaseConfig = {
             maxDuration: 0,
             originalRect: null,
             overlayElement: null,
-            tooltipElement: null
+            tooltipElement: null,
+            useQuarterHour: false
         };
     }
 
