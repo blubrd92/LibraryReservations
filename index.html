@@ -1234,7 +1234,7 @@ const firebaseConfig = {
             if (doc.exists) {
                 resources = doc.data().list || [];
             } else {
-                resources = [{ id: 'res_default', name: 'General Area', viewMode: 'week', hours: DEFAULT_HOURS, closureDates: [] }];
+                resources = [{ id: 'res-default', name: 'General Area', viewMode: 'week', hours: DEFAULT_HOURS, closureDates: [] }];
                 db.collection('system').doc('resources').set({ list: resources });
             }
             handleResourceUpdate();
