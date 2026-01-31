@@ -1976,19 +1976,40 @@ const firebaseConfig = {
             }
         });
 
-        const slot = e.currentTarget;
-        slot.classList.remove('drag-over-valid', 'drag-over-invalid');
+        const bookingEl = e.currentTarget;
+        bookingEl.classList.remove('drag-over-valid', 'drag-over-invalid');
 
         // Calculate target time based on mouse position (with quarter-hour support)
-        const rect = slot.getBoundingClientRect();
-        const relativeY = e.clientY - rect.top;
+        const bookingRect = bookingEl.getBoundingClientRect();
+        const relativeY = e.clientY - bookingRect.top;
         const useQuarter = res.useQuarterHour;
         const increment = useQuarter ? 0.25 : 0.5;
         const slotsPerHour = useQuarter ? 4 : 2;
-        const slotHeight = rect.height / (booking.data.duration * slotsPerHour);
+        const bookingSlotHeight = bookingRect.height / (booking.data.duration * slotsPerHour);
         const maxSlotIndex = (booking.data.duration * slotsPerHour) - 1;
-        const slotIndex = Math.max(0, Math.min(maxSlotIndex, Math.floor(relativeY / slotHeight)));
+        const slotIndex = Math.max(0, Math.min(maxSlotIndex, Math.floor(relativeY / bookingSlotHeight)));
         const targetTime = booking.start + (slotIndex * increment);
+
+        // Get grid slot positions to align highlight with actual grid (like empty slots)
+        const container = document.getElementById('gridContainer');
+        const minH = Math.min(...res.hours.filter((_, i) => i % 2 === 0).filter(h => h < 24));
+        const gridSlotIndex = Math.floor((targetTime - minH) * 2); // Grid uses 30-min slots
+        const quarterOffset = useQuarter ? ((targetTime - minH) * 2) % 1 : 0; // 0 or 0.5 for quarter offset
+
+        // Find the grid slot element - slots are in grid order, find by querying
+        const allSlots = Array.from(container.querySelectorAll('.slot'));
+        const timeCells = Array.from(container.querySelectorAll('.time-cell'));
+
+        // Use time-cell to get row position (they align with slot rows)
+        const gridRowRect = timeCells[gridSlotIndex] ? timeCells[gridSlotIndex].getBoundingClientRect() : null;
+
+        // Find a slot in the same column as the booking for width reference
+        const columnSlots = allSlots.filter(s => {
+            const slotRect = s.getBoundingClientRect();
+            return Math.abs(slotRect.left - bookingRect.left) < 10; // Same column (with tolerance)
+        });
+        const refSlot = columnSlots[0];
+        const slotRect = refSlot ? refSlot.getBoundingClientRect() : bookingRect;
 
         // Create or update slot highlight
         if (!dragState.highlightElement) {
@@ -1998,18 +2019,21 @@ const firebaseConfig = {
             dragState.highlightElement = highlight;
         }
 
-        // Position highlight over the specific time slot within the booking.
-        // For half-hour mode: slotHeight = booking height / (duration * 2) = grid slot height (30 min)
-        // For quarter mode: slotHeight = booking height / (duration * 4) = half grid slot (15 min)
-        // Highlights align with grid slots when booking starts at :00/:30.
-        // When booking starts at :15/:45, highlights show correct time but don't align with grid.
-        const highlightTop = rect.top + (slotIndex * slotHeight);
-        dragState.highlightElement.style.left = rect.left + 'px';
-        dragState.highlightElement.style.top = highlightTop + 'px';
-        dragState.highlightElement.style.width = rect.width + 'px';
-        dragState.highlightElement.style.height = slotHeight + 'px';
+        // Position highlight to match actual grid slot (like empty slot behavior)
+        const padding = 2;
+        const gridSlotHeight = gridRowRect ? gridRowRect.height : slotRect.height;
+        const highlightHeight = useQuarter ? (gridSlotHeight / 2) - padding - 1 : gridSlotHeight - padding * 2 - 1;
+        const quarterPixelOffset = quarterOffset > 0 ? gridSlotHeight / 2 : 0;
+        const highlightTop = (gridRowRect ? gridRowRect.top : slotRect.top) + padding + quarterPixelOffset;
+        const highlightLeft = slotRect.left + padding;
+        const highlightWidth = slotRect.width - padding * 2 - 1;
 
-        // Create or update floating tooltip - position above the highlight, not the booking top
+        dragState.highlightElement.style.left = highlightLeft + 'px';
+        dragState.highlightElement.style.top = highlightTop + 'px';
+        dragState.highlightElement.style.width = highlightWidth + 'px';
+        dragState.highlightElement.style.height = Math.max(highlightHeight, 10) + 'px';
+
+        // Create or update floating tooltip - position above the highlight
         const tooltipText = `${formatTime(targetTime)} - ${formatTime(targetTime + increment)}`;
         if (!dragState.tooltipElement) {
             const tooltip = document.createElement('div');
@@ -2018,7 +2042,7 @@ const firebaseConfig = {
             dragState.tooltipElement = tooltip;
         }
         dragState.tooltipElement.innerText = tooltipText;
-        dragState.tooltipElement.style.left = (rect.left + rect.width / 2) + 'px';
+        dragState.tooltipElement.style.left = (highlightLeft + highlightWidth / 2) + 'px';
         dragState.tooltipElement.style.transform = 'translateX(-50%)';
         dragState.tooltipElement.style.top = (highlightTop - 35) + 'px';
         
