@@ -1856,7 +1856,9 @@ const firebaseConfig = {
         // Build adjusted slotId
         const dayIndex = slot.dataset.dayIndex;
         const subIndex = slot.dataset.subIndex;
-        const weekKey = slot.dataset.slotId.split('_')[1]; // Extract weekKey from slotId
+        const prefix = res.id + "_";
+        const suffix = slot.dataset.slotId.substring(prefix.length);
+        const weekKey = suffix.split('_')[0];
         let adjustedSlotId = `${res.id}_${weekKey}_${dayIndex}_${adjustedTime}`;
         if (subIndex) adjustedSlotId += `_${subIndex}`;
 
@@ -4314,5 +4316,3 @@ const firebaseConfig = {
 </script>
 </body>
 </html>
-
-
