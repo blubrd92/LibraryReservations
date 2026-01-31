@@ -2666,18 +2666,16 @@ const firebaseConfig = {
             useQuarterHour: res.useQuarterHour || false
         };
         
-        // Create overlay spanning the correct slots
-        const endSlotIndex = startSlotIndex + (booking.data.duration * 2) - 1;
-        const clampedEndIdx = Math.min(endSlotIndex, slotPositions.length - 1);
-        const overlayTop = slotPositions[startSlotIndex].top;
-        const overlayBottom = slotPositions[clampedEndIdx].bottom;
-        
+        // Create overlay based on booking height (use same calculation as booking render)
+        const slotHeight = slotPositions.length > 0 ? slotPositions[0].height : 30;
+        const overlayHeight = booking.data.duration * 2 * slotHeight;
+
         const overlay = document.createElement('div');
         overlay.className = 'resize-overlay';
         overlay.style.left = rect.left + 'px';
-        overlay.style.top = overlayTop + 'px';
+        overlay.style.top = rect.top + 'px';
         overlay.style.width = rect.width + 'px';
-        overlay.style.height = (overlayBottom - overlayTop) + 'px';
+        overlay.style.height = Math.max(overlayHeight, 20) + 'px';
         document.body.appendChild(overlay);
         resizeState.overlayElement = overlay;
         
