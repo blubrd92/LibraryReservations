@@ -1661,8 +1661,8 @@ const firebaseConfig = {
                 bookingEl.style.left = (startRect.left - containerRect.left + container.scrollLeft + padding) + 'px';
                 bookingEl.style.top = (startRect.top - containerRect.top + container.scrollTop + padding + startPixelOffset) + 'px';
                 bookingEl.style.width = (startRect.width - padding * 2 - 1) + 'px'; // -1 for border-right
-                // Height based on duration (each slot = 0.5 hours)
-                const bookingHeight = (booking.data.duration * 2 * slotHeight) - padding * 2;
+                // Height based on duration (each slot = 0.5 hours), subtract padding and bottom border
+                const bookingHeight = (booking.data.duration * 2 * slotHeight) - padding * 2 - 1;
                 bookingEl.style.height = Math.max(bookingHeight, 20) + 'px'; // minimum 20px for visibility
                 
                 // Content
@@ -2413,7 +2413,9 @@ const firebaseConfig = {
         const overlayTop = slotPositions[selectionState.startSlotIndex].top + (quarterOffset > 0 ? slotPositions[selectionState.startSlotIndex].height / 2 : 0);
         overlay.style.top = overlayTop + 'px';
         overlay.style.width = rect.width + 'px';
-        overlay.style.height = (slotPositions[selectionState.startSlotIndex].height / (res.useQuarterHour ? 2 : 1)) + 'px';
+        // Initial height matches booking render (subtract padding and border)
+        const initialHeight = (slotPositions[selectionState.startSlotIndex].height / (res.useQuarterHour ? 2 : 1)) - 5;
+        overlay.style.height = Math.max(initialHeight, 10) + 'px';
         document.body.appendChild(overlay);
         selectionState.overlayElement = overlay;
 
@@ -2484,8 +2486,9 @@ const firebaseConfig = {
             const startPixelOffset = quarterOffset > 0 ? slotHeight / 2 : 0;
             const startTop = positions[startIdx].top + startPixelOffset;
 
-            // Height directly from duration (each hour = 2 slots)
-            const overlayHeight = newDuration * 2 * slotHeight;
+            // Height directly from duration (each hour = 2 slots), match booking render padding/border
+            const padding = 2;
+            const overlayHeight = (newDuration * 2 * slotHeight) - padding * 2 - 1;
 
             selectionState.overlayElement.style.top = startTop + 'px';
             selectionState.overlayElement.style.height = Math.max(10, overlayHeight) + 'px';
@@ -2721,7 +2724,8 @@ const firebaseConfig = {
         
         // Create overlay based on booking height (use same calculation as booking render)
         const slotHeight = slotPositions.length > 0 ? slotPositions[0].height : 30;
-        const overlayHeight = booking.data.duration * 2 * slotHeight;
+        const padding = 2; // matches booking element padding offset
+        const overlayHeight = (booking.data.duration * 2 * slotHeight) - padding * 2 - 1;
 
         const overlay = document.createElement('div');
         overlay.className = 'resize-overlay';
@@ -2765,10 +2769,11 @@ const firebaseConfig = {
 
         resizeState.currentDuration = newDuration;
 
-        // Update overlay height (not the actual grid element)
+        // Update overlay height (not the actual grid element) - match booking render padding/border
         if (resizeState.overlayElement) {
-            const newHeight = resizeState.slotHeight * (newDuration * 2);
-            resizeState.overlayElement.style.height = newHeight + 'px';
+            const padding = 2;
+            const newHeight = (resizeState.slotHeight * newDuration * 2) - padding * 2 - 1;
+            resizeState.overlayElement.style.height = Math.max(newHeight, 20) + 'px';
         }
 
         // Update tooltip
