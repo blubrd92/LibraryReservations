@@ -120,8 +120,19 @@
             box-sizing: border-box; 
         }
         
-        .slot:not(.has-booking):not(.booked-body):not(.closed):hover { background-color: #e3f2fd; }
-        
+        .slot:not(.has-booking):not(.booked-body):not(.closed):not(.quarter-hour-slot):hover { background-color: #e3f2fd; }
+
+        /* Quarter-hour mode: highlight only top or bottom half */
+        .slot.quarter-hour-slot:not(.has-booking):not(.booked-body):not(.closed) {
+            background: linear-gradient(to bottom, transparent 50%, transparent 50%);
+        }
+        .slot.quarter-hour-slot.quarter-hover-top:not(.has-booking):not(.closed) {
+            background: linear-gradient(to bottom, #e3f2fd 50%, transparent 50%);
+        }
+        .slot.quarter-hour-slot.quarter-hover-bottom:not(.has-booking):not(.closed) {
+            background: linear-gradient(to bottom, transparent 50%, #e3f2fd 50%);
+        }
+
         .slot:not(.has-booking):not(.booked-body):not(.closed):hover::after {
             content: attr(data-time);
             position: absolute;
@@ -1506,12 +1517,24 @@ const firebaseConfig = {
                         // Always show time tooltip on hover
                         slot.setAttribute('data-time', `${displayTime} - ${formatTime(timeVal + 0.5)}`);
 
-                        // For quarter-hour mode, update tooltip dynamically on mousemove
+                        // For quarter-hour mode, update tooltip and highlight dynamically
                         if (res.useQuarterHour) {
+                            slot.classList.add('quarter-hour-slot');
                             slot.onmousemove = (e) => {
                                 const offset = getQuarterHourOffset(e, slot, res);
                                 const adjustedStart = timeVal + offset;
                                 slot.setAttribute('data-time', `${formatTime(adjustedStart)} - ${formatTime(adjustedStart + 0.5)}`);
+                                // Update half-highlight
+                                if (offset > 0) {
+                                    slot.classList.remove('quarter-hover-top');
+                                    slot.classList.add('quarter-hover-bottom');
+                                } else {
+                                    slot.classList.remove('quarter-hover-bottom');
+                                    slot.classList.add('quarter-hover-top');
+                                }
+                            };
+                            slot.onmouseleave = () => {
+                                slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom');
                             };
                         }
 
