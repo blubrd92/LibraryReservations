@@ -1761,13 +1761,13 @@ const firebaseConfig = {
         }
         
         // Clean up any lingering drag-over classes and data-time attributes
-        document.querySelectorAll('.drag-over-valid, .drag-over-invalid').forEach(el => {
-            el.classList.remove('drag-over-valid', 'drag-over-invalid');
+        document.querySelectorAll('.drag-over-valid, .drag-over-invalid, .quarter-hover-top, .quarter-hover-bottom').forEach(el => {
+            el.classList.remove('drag-over-valid', 'drag-over-invalid', 'quarter-hover-top', 'quarter-hover-bottom');
             if (el.classList.contains('booking-float')) {
                 el.removeAttribute('data-time');
             }
         });
-        
+
         // Clear drag state unless modal is open (user is confirming move)
         if (document.getElementById('moveModal').style.display !== 'flex') {
             dragState.sourceId = null;
@@ -1775,38 +1775,95 @@ const firebaseConfig = {
         }
         dragState.lastInvalidReason = null;
         dragState.wasOverValidTarget = false;
+        dragState.adjustedTargetSlotId = null;
+        dragState.quarterOffset = 0;
     }
 
     function handleDragOver(e) {
         e.preventDefault();
         if (!dragState.isDragging || !dragState.sourceId) return;
 
-        // Clean up floating tooltip/highlight from booked slot hover (in case dragLeave didn't fire)
-        if (dragState.tooltipElement) {
-            dragState.tooltipElement.remove();
-            dragState.tooltipElement = null;
+        const slot = e.currentTarget;
+        const res = resources.find(r => r.id === currentResId);
+        const useQuarter = res && res.useQuarterHour;
+        const baseTimeVal = parseFloat(slot.dataset.timeVal);
+
+        // Calculate quarter-hour offset if enabled
+        let quarterOffset = 0;
+        if (useQuarter) {
+            const rect = slot.getBoundingClientRect();
+            const relativeY = e.clientY - rect.top;
+            quarterOffset = (relativeY >= rect.height / 2) ? 0.25 : 0;
         }
-        if (dragState.highlightElement) {
-            dragState.highlightElement.remove();
-            dragState.highlightElement = null;
-        }
+        const adjustedTime = baseTimeVal + quarterOffset;
+
+        // Build adjusted slotId
+        const dayIndex = slot.dataset.dayIndex;
+        const subIndex = slot.dataset.subIndex;
+        const weekKey = slot.dataset.slotId.split('_')[1]; // Extract weekKey from slotId
+        let adjustedSlotId = `${res.id}_${weekKey}_${dayIndex}_${adjustedTime}`;
+        if (subIndex) adjustedSlotId += `_${subIndex}`;
+
+        // Store for use in handleDrop
+        dragState.adjustedTargetSlotId = adjustedSlotId;
+        dragState.quarterOffset = quarterOffset;
 
         // Clean up drag-over classes from any other elements (in case dragLeave didn't fire)
         document.querySelectorAll('.drag-over-valid, .drag-over-invalid').forEach(el => {
             if (el !== e.currentTarget) {
                 el.classList.remove('drag-over-valid', 'drag-over-invalid');
+                el.classList.remove('quarter-hover-top', 'quarter-hover-bottom');
             }
         });
 
-        const slot = e.currentTarget;
-        const targetSlotId = slot.dataset.slotId;
-
         // Remove existing classes
         slot.classList.remove('drag-over-valid', 'drag-over-invalid');
-        
+        slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom');
+
+        // For quarter-hour mode, show half-highlight and floating tooltip
+        if (useQuarter) {
+            // Clean up any existing tooltip/highlight and recreate for empty slot
+            if (dragState.tooltipElement) {
+                dragState.tooltipElement.remove();
+                dragState.tooltipElement = null;
+            }
+            if (dragState.highlightElement) {
+                dragState.highlightElement.remove();
+                dragState.highlightElement = null;
+            }
+
+            // Add half-highlight class
+            if (quarterOffset > 0) {
+                slot.classList.add('quarter-hover-bottom');
+            } else {
+                slot.classList.add('quarter-hover-top');
+            }
+
+            // Create floating tooltip
+            const rect = slot.getBoundingClientRect();
+            const tooltip = document.createElement('div');
+            tooltip.className = 'drag-tooltip';
+            tooltip.innerText = `${formatTime(adjustedTime)} - ${formatTime(adjustedTime + 0.25)}`;
+            tooltip.style.left = (rect.left + rect.width / 2) + 'px';
+            tooltip.style.top = (rect.top - 35) + 'px';
+            tooltip.style.transform = 'translateX(-50%)';
+            document.body.appendChild(tooltip);
+            dragState.tooltipElement = tooltip;
+        } else {
+            // Clean up floating tooltip/highlight from booked slot hover (in case dragLeave didn't fire)
+            if (dragState.tooltipElement) {
+                dragState.tooltipElement.remove();
+                dragState.tooltipElement = null;
+            }
+            if (dragState.highlightElement) {
+                dragState.highlightElement.remove();
+                dragState.highlightElement = null;
+            }
+        }
+
         // Validate the drop target
-        const validation = validateDropTarget(targetSlotId);
-        
+        const validation = validateDropTarget(adjustedSlotId);
+
         if (validation.valid) {
             slot.classList.add('drag-over-valid');
             e.dataTransfer.dropEffect = 'move';
@@ -1823,28 +1880,32 @@ const firebaseConfig = {
     function handleDragLeave(e) {
         const el = e.currentTarget;
         el.classList.remove('drag-over-valid', 'drag-over-invalid');
+        el.classList.remove('quarter-hover-top', 'quarter-hover-bottom');
         // Clean up data-time if it was set on a booked slot during drag
         if (el.classList.contains('booking-float')) {
             el.removeAttribute('data-time');
-            // Remove floating tooltip and highlight when leaving booked slot
-            if (dragState.tooltipElement) {
-                dragState.tooltipElement.remove();
-                dragState.tooltipElement = null;
-            }
-            if (dragState.highlightElement) {
-                dragState.highlightElement.remove();
-                dragState.highlightElement = null;
-            }
+        }
+        // Remove floating tooltip and highlight when leaving any slot
+        if (dragState.tooltipElement) {
+            dragState.tooltipElement.remove();
+            dragState.tooltipElement = null;
+        }
+        if (dragState.highlightElement) {
+            dragState.highlightElement.remove();
+            dragState.highlightElement = null;
         }
     }
 
     // Calculate which time slot the mouse is over within a booked element
-    function getTimeSlotFromPosition(e, bookingStart, bookingDuration) {
+    function getTimeSlotFromPosition(e, bookingStart, bookingDuration, res) {
         const rect = e.currentTarget.getBoundingClientRect();
         const relativeY = e.clientY - rect.top;
-        const slotHeight = rect.height / (bookingDuration * 2); // each slot is 0.5 hours
+        const useQuarter = res && res.useQuarterHour;
+        const increment = useQuarter ? 0.25 : 0.5;
+        const slotsPerHour = useQuarter ? 4 : 2;
+        const slotHeight = rect.height / (bookingDuration * slotsPerHour);
         const slotIndex = Math.floor(relativeY / slotHeight);
-        const targetTime = bookingStart + (slotIndex * 0.5);
+        const targetTime = bookingStart + (slotIndex * increment);
         return targetTime;
     }
 
@@ -1861,17 +1922,20 @@ const firebaseConfig = {
 
         const slot = e.currentTarget;
         slot.classList.remove('drag-over-valid', 'drag-over-invalid');
-        
-        // Calculate target time based on mouse position
+
+        // Calculate target time based on mouse position (with quarter-hour support)
         const rect = slot.getBoundingClientRect();
         const relativeY = e.clientY - rect.top;
-        const slotHeight = rect.height / (booking.data.duration * 2);
-        const maxSlotIndex = (booking.data.duration * 2) - 1;
+        const useQuarter = res.useQuarterHour;
+        const increment = useQuarter ? 0.25 : 0.5;
+        const slotsPerHour = useQuarter ? 4 : 2;
+        const slotHeight = rect.height / (booking.data.duration * slotsPerHour);
+        const maxSlotIndex = (booking.data.duration * slotsPerHour) - 1;
         const slotIndex = Math.max(0, Math.min(maxSlotIndex, Math.floor(relativeY / slotHeight)));
-        const targetTime = booking.start + (slotIndex * 0.5);
-        
+        const targetTime = booking.start + (slotIndex * increment);
+
         // Create or update floating tooltip
-        const tooltipText = `${formatTime(targetTime)} - ${formatTime(targetTime + 0.5)}`;
+        const tooltipText = `${formatTime(targetTime)} - ${formatTime(targetTime + increment)}`;
         if (!dragState.tooltipElement) {
             const tooltip = document.createElement('div');
             tooltip.className = 'drag-tooltip';
@@ -1961,7 +2025,7 @@ const firebaseConfig = {
         }
         
         // Calculate target time based on mouse position
-        const targetTime = getTimeSlotFromPosition(e, booking.start, booking.data.duration);
+        const targetTime = getTimeSlotFromPosition(e, booking.start, booking.data.duration, res);
         
         // Build virtual target slot ID
         let virtualTargetId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${targetTime}`;
@@ -1986,23 +2050,35 @@ const firebaseConfig = {
 
     function handleDrop(e) {
         e.preventDefault();
-        
+
         const slot = e.currentTarget;
         slot.classList.remove('drag-over-valid', 'drag-over-invalid');
-        
+        slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom');
+
+        // Clean up floating tooltip/highlight
+        if (dragState.tooltipElement) {
+            dragState.tooltipElement.remove();
+            dragState.tooltipElement = null;
+        }
+        if (dragState.highlightElement) {
+            dragState.highlightElement.remove();
+            dragState.highlightElement = null;
+        }
+
         if (!dragState.isDragging || !dragState.sourceId) return;
-        
-        const targetSlotId = slot.dataset.slotId;
-        
+
+        // Use adjusted slotId if available (for quarter-hour support)
+        const targetSlotId = dragState.adjustedTargetSlotId || slot.dataset.slotId;
+
         // Check for same-slot drop
         if (isSameSlot(dragState.sourceId, targetSlotId)) {
             // Do nothing for same-slot drops
             return;
         }
-        
+
         // Validate the drop target
         const validation = validateDropTarget(targetSlotId);
-        
+
         if (!validation.valid) {
             showToast(validation.reason, 'error');
             return;
