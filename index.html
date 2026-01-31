@@ -123,20 +123,31 @@
         .slot:not(.has-booking):not(.booked-body):not(.closed):not(.quarter-hour-slot):hover { background-color: #e3f2fd; }
 
         /* Quarter-hour mode: highlight only top or bottom half (preserve row-alt banding) */
-        .slot.quarter-hour-slot.quarter-hover-top:not(.has-booking):not(.closed) {
+        .slot.quarter-hour-slot.quarter-hover-top:not(.closed) {
             background: linear-gradient(to bottom, #e3f2fd 50%, transparent 50%);
         }
-        .slot.quarter-hour-slot.quarter-hover-bottom:not(.has-booking):not(.closed) {
+        .slot.quarter-hour-slot.quarter-hover-bottom:not(.closed) {
             background: linear-gradient(to bottom, transparent 50%, #e3f2fd 50%);
         }
-        .slot.quarter-hour-slot.row-alt.quarter-hover-top:not(.has-booking):not(.closed) {
+        .slot.quarter-hour-slot.row-alt.quarter-hover-top:not(.closed) {
             background: linear-gradient(to bottom, #e3f2fd 50%, #f0f0f0 50%);
         }
-        .slot.quarter-hour-slot.row-alt.quarter-hover-bottom:not(.has-booking):not(.closed) {
+        .slot.quarter-hour-slot.row-alt.quarter-hover-bottom:not(.closed) {
             background: linear-gradient(to bottom, #f0f0f0 50%, #e3f2fd 50%);
         }
 
+        /* Tooltip for empty slots */
         .slot:not(.has-booking):not(.booked-body):not(.closed):hover::after {
+            content: attr(data-time);
+            position: absolute;
+            bottom: 100%; left: 50%; transform: translateX(-50%);
+            background: #333; color: #fff; padding: 4px 8px; border-radius: 4px;
+            font-size: 0.85em; white-space: nowrap; pointer-events: none; z-index: 20;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        /* Tooltip for quarter-hour slots with partial availability */
+        .slot.quarter-hour-slot.has-booking:not(.closed).quarter-hover-top::after,
+        .slot.quarter-hour-slot.has-booking:not(.closed).quarter-hover-bottom::after {
             content: attr(data-time);
             position: absolute;
             bottom: 100%; left: 50%; transform: translateX(-50%);
@@ -2405,14 +2416,15 @@ const firebaseConfig = {
             }
         }
 
-        // Create overlay
+        // Create overlay - position and size to match where booking will appear
+        const overlayPadding = 2; // matches slot padding
         const overlay = document.createElement('div');
         overlay.className = 'selection-overlay';
-        overlay.style.left = rect.left + 'px';
+        overlay.style.left = (rect.left + overlayPadding) + 'px';
         // Adjust overlay top position for quarter offset
-        const overlayTop = slotPositions[selectionState.startSlotIndex].top + (quarterOffset > 0 ? slotPositions[selectionState.startSlotIndex].height / 2 : 0);
+        const overlayTop = slotPositions[selectionState.startSlotIndex].top + overlayPadding + (quarterOffset > 0 ? slotPositions[selectionState.startSlotIndex].height / 2 : 0);
         overlay.style.top = overlayTop + 'px';
-        overlay.style.width = rect.width + 'px';
+        overlay.style.width = (rect.width - overlayPadding * 2 - 1) + 'px'; // match booking width
         // Initial height matches booking render (subtract padding and border)
         const initialHeight = (slotPositions[selectionState.startSlotIndex].height / (res.useQuarterHour ? 2 : 1)) - 5;
         overlay.style.height = Math.max(initialHeight, 10) + 'px';
@@ -2481,13 +2493,13 @@ const firebaseConfig = {
         // Update overlay to span from start to end
         if (selectionState.overlayElement && positions[startIdx]) {
             const slotHeight = positions[startIdx].height;
+            const padding = 2;
             // quarterOffset is 0 or 0.25 (hours), convert to pixels: 0.25h = 0.5 slots
             const quarterOffset = selectionState.quarterOffset;
             const startPixelOffset = quarterOffset > 0 ? slotHeight / 2 : 0;
-            const startTop = positions[startIdx].top + startPixelOffset;
+            const startTop = positions[startIdx].top + padding + startPixelOffset;
 
             // Height directly from duration (each hour = 2 slots), match booking render padding/border
-            const padding = 2;
             const overlayHeight = (newDuration * 2 * slotHeight) - padding * 2 - 1;
 
             selectionState.overlayElement.style.top = startTop + 'px';
@@ -3749,8 +3761,8 @@ const firebaseConfig = {
 
         loadBookingsForCurrentView();
     }
-    function highlightBooking(id) { document.querySelectorAll(`[data-bid="${id}"]`).forEach(s => s.classList.add('booking-hover-effect')); }
-    function unhighlightBooking(id) { document.querySelectorAll(`[data-bid="${id}"]`).forEach(s => s.classList.remove('booking-hover-effect')); }
+    function highlightBooking(id) { document.querySelectorAll(`.booking-float[data-bid="${id}"]`).forEach(s => s.classList.add('booking-hover-effect')); }
+    function unhighlightBooking(id) { document.querySelectorAll(`.booking-float[data-bid="${id}"]`).forEach(s => s.classList.remove('booking-hover-effect')); }
     
     // Popover for booking details
     let activePopover = null;
