@@ -3056,11 +3056,6 @@ const firebaseConfig = {
             return true;
         }
 
-        if (targetSubIdx !== rescheduleMode.sourceSubIdx) {
-            showToast("Cannot move to a different room.", "error");
-            return true;
-        }
-
         // Check for closure
         const targetDayDate = new Date(targetWeekKey + 'T00:00:00');
         targetDayDate.setDate(targetDayDate.getDate() + targetDayIdx);
@@ -3105,6 +3100,12 @@ const firebaseConfig = {
         const sourceDateStr = sourceDayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
         const targetDateStr = targetDayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
+        // Get room names if applicable
+        const subRooms = res.subRooms ? res.subRooms.split(',').map(s => s.trim()).filter(s => s) : [];
+        const sourceRoomName = subRooms.length > 0 && rescheduleMode.sourceSubIdx !== '' ? subRooms[parseInt(rescheduleMode.sourceSubIdx)] || '' : '';
+        const targetRoomName = subRooms.length > 0 && targetSubIdx !== '' ? subRooms[parseInt(targetSubIdx)] || '' : '';
+        const showRoomChange = sourceRoomName && targetRoomName && sourceRoomName !== targetRoomName;
+
         // Populate confirmation modal
         document.getElementById('rescheduleTargetWeekKey').value = targetWeekKey;
         document.getElementById('rescheduleTargetDayIdx').value = targetDayIdx;
@@ -3113,10 +3114,12 @@ const firebaseConfig = {
         document.getElementById('rescheduleNewDuration').value = newDuration;
 
         document.getElementById('rescheduleConfirmPatron').textContent = patronName;
+        const sourceRoomSuffix = sourceRoomName ? ` (${sourceRoomName})` : '';
+        const targetRoomSuffix = targetRoomName ? ` (${targetRoomName})` : '';
         document.getElementById('rescheduleConfirmFrom').textContent =
-            `${sourceDateStr}, ${formatTime(rescheduleMode.sourceStartTime)} - ${formatTime(rescheduleMode.sourceStartTime + originalDuration)}`;
+            `${sourceDateStr}, ${formatTime(rescheduleMode.sourceStartTime)} - ${formatTime(rescheduleMode.sourceStartTime + originalDuration)}${sourceRoomSuffix}`;
         document.getElementById('rescheduleConfirmTo').textContent =
-            `${targetDateStr}, ${formatTime(targetTime)} - ${formatTime(targetTime + newDuration)}`;
+            `${targetDateStr}, ${formatTime(targetTime)} - ${formatTime(targetTime + newDuration)}${targetRoomSuffix}`;
 
         const warningEl = document.getElementById('rescheduleConfirmWarning');
         const durationRowEl = document.getElementById('rescheduleConfirmDurationRow');
