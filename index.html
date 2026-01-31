@@ -385,6 +385,7 @@
             border-radius: 3px;
             pointer-events: none;
             z-index: 1000;
+            box-sizing: border-box;
         }
         .drag-slot-highlight.invalid {
             background: rgba(192, 57, 43, 0.4);
@@ -1989,18 +1990,6 @@ const firebaseConfig = {
         const slotIndex = Math.max(0, Math.min(maxSlotIndex, Math.floor(relativeY / slotHeight)));
         const targetTime = booking.start + (slotIndex * increment);
 
-        // Create or update floating tooltip
-        const tooltipText = `${formatTime(targetTime)} - ${formatTime(targetTime + increment)}`;
-        if (!dragState.tooltipElement) {
-            const tooltip = document.createElement('div');
-            tooltip.className = 'drag-tooltip';
-            document.body.appendChild(tooltip);
-            dragState.tooltipElement = tooltip;
-        }
-        dragState.tooltipElement.innerText = tooltipText;
-        dragState.tooltipElement.style.left = (rect.left + rect.width / 2 - dragState.tooltipElement.offsetWidth / 2) + 'px';
-        dragState.tooltipElement.style.top = (rect.top - 35) + 'px';
-        
         // Create or update slot highlight
         if (!dragState.highlightElement) {
             const highlight = document.createElement('div');
@@ -2019,6 +2008,19 @@ const firebaseConfig = {
         dragState.highlightElement.style.top = highlightTop + 'px';
         dragState.highlightElement.style.width = rect.width + 'px';
         dragState.highlightElement.style.height = slotHeight + 'px';
+
+        // Create or update floating tooltip - position above the highlight, not the booking top
+        const tooltipText = `${formatTime(targetTime)} - ${formatTime(targetTime + increment)}`;
+        if (!dragState.tooltipElement) {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'drag-tooltip';
+            document.body.appendChild(tooltip);
+            dragState.tooltipElement = tooltip;
+        }
+        dragState.tooltipElement.innerText = tooltipText;
+        dragState.tooltipElement.style.left = (rect.left + rect.width / 2) + 'px';
+        dragState.tooltipElement.style.transform = 'translateX(-50%)';
+        dragState.tooltipElement.style.top = (highlightTop - 35) + 'px';
         
         // If dragging over a different booking, always invalid
         if (booking.id !== dragState.sourceId) {
