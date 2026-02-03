@@ -974,6 +974,23 @@
                     </div>
                 </div>
 
+                <!-- Advance Booking Limit Section -->
+                <div class="form-group" style="background: #fef9e7; padding: 10px; border-radius: 4px; border: 1px solid #f9e79f;">
+                    <div class="flex gap">
+                        <input type="checkbox" id="editAdvanceLimitEnabled" onchange="toggleAdvanceLimitConfig()" style="width:auto;">
+                        <label for="editAdvanceLimitEnabled" style="margin:0; cursor:pointer; font-weight:bold; color:#7d6608;">📆 Limit How Far in Advance Bookings Can Be Made?</label>
+                    </div>
+                    <div id="advanceLimitConfig" class="hidden" style="margin-top:10px;">
+                        <label>Max Open Days in Advance</label>
+                        <input type="number" id="editAdvanceLimitDays" min="0" step="1" value="1" style="width:80px;">
+                        <small style="color:#666; display:block; margin-top:4px;">0 = same day only. 1 = today + next open day. 2 = today + next 2 open days, etc. Closed days and holidays are skipped when counting.</small>
+                        <div class="flex gap" style="margin-top:8px; padding-top:8px; border-top:1px solid #f9e79f;">
+                            <input type="checkbox" id="editAdvanceLimitAdminBypass" style="width:auto;">
+                            <label for="editAdvanceLimitAdminBypass" style="margin:0; cursor:pointer;">Allow admin account to bypass this limit?</label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Closure Dates Section -->
                 <div class="form-group" style="background: #fce4ec; padding: 10px; border-radius: 4px; border: 1px solid #f8bbd9;">
                     <label style="font-weight:bold; color:#c2185b; margin-bottom:10px; display:block;">📅 Closure Dates (Holidays/Closures)</label>
@@ -1606,6 +1623,9 @@ const firebaseConfig = {
                                 }
                                 let adjustedSlotId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${adjustedTime}`;
                                 if (col.subIndex !== null) adjustedSlotId += `_${col.subIndex}`;
+
+                                const advCheck = checkAdvanceLimit(res, activeWeekKey, col.dayIndex);
+                                if (!advCheck.allowed) { showToast(advCheck.message, "error"); return; }
                                 openBookingModal(adjustedSlotId, null, col.subIndex);
                             };
 
@@ -2238,6 +2258,12 @@ const firebaseConfig = {
         if (closureReason) {
             return { valid: false, reason: `Closed: ${closureReason}` };
         }
+
+        // Check advance booking limit
+        const advCheck = checkAdvanceLimit(res, targetWeekKey, targetDay);
+        if (!advCheck.allowed) {
+            return { valid: false, reason: advCheck.message };
+        }
         
         // Get operating hours for target day
         const dayStart = res.hours[targetDay * 2];
@@ -2343,6 +2369,10 @@ const firebaseConfig = {
         if (dragState.isSaving || dragState.isDragging || resizeState.active || selectionState.active) return;
         if (resizeJustEnded) return;
         if (rescheduleMode.active) return;
+
+        // Check advance booking limit
+        const advCheck = checkAdvanceLimit(res, activeWeekKey, col.dayIndex);
+        if (!advCheck.allowed) { showToast(advCheck.message, "error"); return; }
 
         e.preventDefault();
 
@@ -3067,6 +3097,13 @@ const firebaseConfig = {
             return true;
         }
 
+        // Check advance booking limit
+        const advCheck = checkAdvanceLimit(res, targetWeekKey, targetDayIdx);
+        if (!advCheck.allowed) {
+            showToast(advCheck.message, "error");
+            return true;
+        }
+
         // Calculate max available
         const dayEnd = res.hours[(targetDayIdx * 2) + 1];
         let maxAvail = dayEnd - targetTime;
@@ -3310,6 +3347,14 @@ const firebaseConfig = {
         const dayIdx = parseInt(parts[1]);
 
         const subIdx = parts[3] ? parseInt(parts[3]) : null;
+        const weekKey = parts[0];
+
+        // Safety net: check advance booking limit (new bookings only)
+        const isNewBooking = !allBookings[slotId];
+        if (isNewBooking) {
+            const advCheck = checkAdvanceLimit(res, weekKey, dayIdx);
+            if (!advCheck.allowed) return showToast(advCheck.message, "error");
+        }
         const dayEnd = res.hours[(dayIdx * 2) + 1];
         
         if (start + duration > dayEnd) return showToast("Exceeds closing time.", "error");
@@ -3391,6 +3436,12 @@ const firebaseConfig = {
         document.getElementById('editSidebarText').value = r.sidebarText || '';
         toggleSidebarConfig();
 
+        // Load Advance Booking Limit Settings
+        document.getElementById('editAdvanceLimitEnabled').checked = r.advanceLimitEnabled || false;
+        document.getElementById('editAdvanceLimitDays').value = r.advanceLimitDays !== undefined ? r.advanceLimitDays : 1;
+        document.getElementById('editAdvanceLimitAdminBypass').checked = r.advanceLimitAdminBypass || false;
+        toggleAdvanceLimitConfig();
+
         toggleSubRoomInput();
         const container = document.getElementById('daysConfigContainer');
         container.innerHTML = '';
@@ -3410,6 +3461,13 @@ const firebaseConfig = {
     function toggleSidebarConfig() {
         const isEnabled = document.getElementById('editEnableSidebar').checked;
         const container = document.getElementById('sidebarTextConfig');
+        if (isEnabled) container.classList.remove('hidden');
+        else container.classList.add('hidden');
+    }
+
+    function toggleAdvanceLimitConfig() {
+        const isEnabled = document.getElementById('editAdvanceLimitEnabled').checked;
+        const container = document.getElementById('advanceLimitConfig');
         if (isEnabled) container.classList.remove('hidden');
         else container.classList.add('hidden');
     }
@@ -3636,7 +3694,10 @@ const firebaseConfig = {
                 maxDuration: 2,
                 hours: [...DEFAULT_HOURS],
                 closureDates: [],
-                useQuarterHour: false
+                useQuarterHour: false,
+                advanceLimitEnabled: false,
+                advanceLimitDays: 1,
+                advanceLimitAdminBypass: false
             };
             
             // Populate closure dates dropdown
@@ -3675,7 +3736,10 @@ const firebaseConfig = {
                 maxDuration: 2,
                 hours: [...DEFAULT_HOURS],
                 closureDates: [],
-                useQuarterHour: false
+                useQuarterHour: false,
+                advanceLimitEnabled: false,
+                advanceLimitDays: 1,
+                advanceLimitAdminBypass: false
             };
             try { 
                 await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); 
@@ -3761,6 +3825,11 @@ const firebaseConfig = {
         // Save Sidebar Settings
         target.enableSidebar = document.getElementById('editEnableSidebar').checked;
         target.sidebarText = document.getElementById('editSidebarText').value;
+
+        // Save Advance Booking Limit Settings
+        target.advanceLimitEnabled = document.getElementById('editAdvanceLimitEnabled').checked;
+        target.advanceLimitDays = parseInt(document.getElementById('editAdvanceLimitDays').value) || 0;
+        target.advanceLimitAdminBypass = document.getElementById('editAdvanceLimitAdminBypass').checked;
         
         // Preserve closure dates from the in-memory resource (already updated by add/remove)
         target.closureDates = r.closureDates || [];
@@ -3874,6 +3943,41 @@ const firebaseConfig = {
     function showLoading(show) { document.getElementById('loading').className = show ? 'loading-overlay' : 'loading-overlay hidden'; }
     function toggleStaffInput() { const isChecked = document.getElementById('bookHasStaff').checked; document.getElementById('staffInputContainer').classList.toggle('hidden', !isChecked); }
     function handleBookingEnter(e) { if (e.key === 'Enter' && !document.getElementById('btnSaveBooking').classList.contains('hidden')) saveBooking(); }
+    function checkAdvanceLimit(res, weekKey, dayIdx) {
+        if (!res.advanceLimitEnabled) return { allowed: true };
+        if (res.advanceLimitAdminBypass && currentUserRole === 'admin') return { allowed: true };
+        const targetDate = new Date(weekKey + 'T00:00:00');
+        targetDate.setDate(targetDate.getDate() + parseInt(dayIdx));
+        targetDate.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (targetDate <= today) return { allowed: true };
+        const daysLimit = res.advanceLimitDays || 0;
+        if (daysLimit === 0) {
+            return { allowed: false, message: "Bookings for this resource can only be made for today." };
+        }
+        let openDaysCounted = 0;
+        let maxDate = new Date(today);
+        const scanDate = new Date(today);
+        for (let i = 0; i < 365; i++) {
+            scanDate.setDate(scanDate.getDate() + 1);
+            const dow = scanDate.getDay();
+            const dayStart = res.hours[dow * 2];
+            const dayEnd = res.hours[(dow * 2) + 1];
+            if (dayStart === dayEnd) continue;
+            if (getClosureReason(res, scanDate)) continue;
+            openDaysCounted++;
+            maxDate = new Date(scanDate);
+            if (openDaysCounted >= daysLimit) break;
+        }
+        if (targetDate > maxDate) {
+            const cutoff = maxDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+            const message = `Bookings for this resource can only be made through ${cutoff}.`;
+            return { allowed: false, message };
+        }
+        return { allowed: true };
+    }
+
     function getWeekKey(d) {
         const d2 = new Date(d);
         const day = d2.getDay();
