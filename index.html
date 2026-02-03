@@ -672,7 +672,7 @@
             color: white;
         }
         .stats-chart-container {
-            padding: 20px 10px;
+            padding: 30px 10px 20px 10px;
             background: #fafafa;
             border-radius: 4px;
             border: 1px solid #eee;
@@ -681,7 +681,7 @@
             display: flex;
             align-items: flex-end;
             justify-content: space-around;
-            height: 280px;
+            height: 300px;
             padding: 0 10px;
         }
         .stats-bar-col {
@@ -697,21 +697,35 @@
             color: #333;
             margin-bottom: 4px;
         }
-        .stats-bar {
+        .stats-bar-track {
             width: 70%;
-            min-height: 2px;
-            background: linear-gradient(180deg, #7b1fa2, #9c27b0);
-            border-radius: 3px 3px 0 0;
-            transition: height 0.3s ease;
+            background: #e3f2fd;
+            border-radius: 3px;
             position: relative;
+            border: 1px solid #bbdefb;
         }
-        .stats-bar:hover {
+        .stats-bar-fill {
+            width: 100%;
+            background: linear-gradient(180deg, #1976d2, #42a5f5);
+            border-radius: 0 0 2px 2px;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            transition: height 0.3s ease;
+        }
+        .stats-bar-track:hover .stats-bar-fill {
             opacity: 0.85;
         }
         .stats-bar-label {
             font-size: 0.85em;
             margin-top: 8px;
             color: #555;
+            font-weight: bold;
+        }
+        .stats-bar-hours {
+            font-size: 0.75em;
+            color: #1976d2;
+            margin-top: 2px;
             font-weight: bold;
         }
         .stats-bar-util {
@@ -1123,7 +1137,6 @@
             <div><strong>Busiest Month:</strong> <span id="statsBusiestMonth">-</span></div>
             <div><strong>Avg Hours/Day:</strong> <span id="statsAvgHours">0</span></div>
             <div><strong>Days Open:</strong> <span id="statsDaysOpen">0</span></div>
-            <div style="border-left: 2px solid #ccc; padding-left: 20px;"><strong>All Resources Total:</strong> <span id="statsAllResourcesTotal">...</span></div>
         </div>
 
         <div style="margin-bottom: 10px;">
@@ -1151,6 +1164,20 @@
     </div>
 </div>
 
+<!-- Admin Password Modal -->
+<div id="adminPassModal" class="modal">
+    <div class="modal-content" style="max-width: 360px;">
+        <div class="modal-header">🔒 Admin Access</div>
+        <div class="form-group">
+            <label>Enter Admin Password:</label>
+            <input type="password" id="adminPassInput" placeholder="Password" onkeydown="if(event.key==='Enter') submitAdminPass()" autofocus>
+        </div>
+        <div class="flex gap">
+            <button class="btn-success" onclick="submitAdminPass()">Unlock</button>
+            <button onclick="closeModal('adminPassModal')">Cancel</button>
+        </div>
+    </div>
+</div>
 <div id="toast-container"></div>
 
 <script>
@@ -2451,9 +2478,9 @@ const firebaseConfig = {
         if (resizeJustEnded) return;
         if (rescheduleMode.active) return;
 
-        // Check advance booking limit
+        // Check advance booking limit (no toast here; onclick handler shows it)
         const advCheck = checkAdvanceLimit(res, activeWeekKey, col.dayIndex);
-        if (!advCheck.allowed) { showToast(advCheck.message, "error"); return; }
+        if (!advCheck.allowed) { return; }
 
         e.preventDefault();
 
@@ -2776,7 +2803,6 @@ const firebaseConfig = {
         document.getElementById('bookStaffName').disabled = !canEdit;
         
         modal.style.display = 'flex';
-        toggleStatsView('chart');
         document.getElementById('bookName').focus();
     }
 
@@ -3405,7 +3431,6 @@ const firebaseConfig = {
         document.getElementById('bookStaffName').disabled = !canEdit;
 
         modal.style.display = 'flex';
-        toggleStatsView('chart');
     }
 
     async function saveBooking() {
@@ -3494,7 +3519,14 @@ const firebaseConfig = {
     }
 
     function openAdminPanel() { 
-        const pass = prompt("Enter Admin Password:");
+        document.getElementById('adminPassInput').value = '';
+        document.getElementById('adminPassModal').style.display = 'flex';
+        setTimeout(() => document.getElementById('adminPassInput').focus(), 100);
+    }
+
+    function submitAdminPass() {
+        const pass = document.getElementById('adminPassInput').value;
+        closeModal('adminPassModal');
         if (pass !== ADMIN_PASS) return pass ? showToast("Incorrect Password.", "error") : null;
         document.getElementById('settingsOverlay').style.display = 'flex'; 
         document.getElementById('settingResSelect').value = currentResId; 
@@ -4323,7 +4355,6 @@ const firebaseConfig = {
             });
             
             renderStatsGrid(dailyStats, year, res);
-            loadAllResourcesTotal(year);
             
         } catch (err) {
             showToast('Error loading stats: ' + err.message, 'error');
@@ -4354,22 +4385,27 @@ const firebaseConfig = {
     function renderStatsChart(monthlyTotals, monthlyAvailable) {
         const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const container = document.getElementById('statsChart');
-        const maxHours = Math.max(...monthlyTotals, 1);
+        const maxAvailable = Math.max(...monthlyAvailable, 1);
         
         let html = '';
         for (let i = 0; i < 12; i++) {
             const hours = monthlyTotals[i];
             const available = monthlyAvailable[i];
-            const barHeight = Math.max(2, (hours / maxHours) * 250);
             const displayHours = hours > 0 ? parseFloat(hours.toFixed(1)) : 0;
+            const displayAvail = available > 0 ? parseFloat(available.toFixed(1)) : 0;
             const utilPct = available > 0 ? Math.round((hours / available) * 100) : 0;
             const utilText = available > 0 ? utilPct + '%' : 'N/A';
-            const barTitle = `${MONTHS[i]}: ${displayHours}h booked / ${parseFloat(available.toFixed(1))}h available (${utilText})`;
+            const fillPct = available > 0 ? Math.min(100, (hours / available) * 100) : 0;
+            const trackHeight = Math.max(20, (available / maxAvailable) * 260);
+            const barTitle = `${MONTHS[i]}: ${displayHours}h booked / ${displayAvail}h available (${utilText})`;
             
             html += `<div class="stats-bar-col">`;
             html += `  <div class="stats-bar-value">${displayHours > 0 ? displayHours + 'h' : ''}</div>`;
-            html += `  <div class="stats-bar" style="height: ${barHeight}px;" title="${barTitle}"></div>`;
+            html += `  <div class="stats-bar-track" style="height: ${trackHeight}px;" title="${barTitle}">`;
+            html += `    <div class="stats-bar-fill" style="height: ${fillPct}%;"></div>`;
+            html += `  </div>`;
             html += `  <div class="stats-bar-label">${MONTHS[i]}</div>`;
+            html += `  <div class="stats-bar-hours">${displayHours > 0 ? displayHours + 'h' : '0h'}</div>`;
             html += `  <div class="stats-bar-util">${utilText}</div>`;
             html += `</div>`;
         }
@@ -4507,58 +4543,6 @@ const firebaseConfig = {
         statsData = { dailyStats, year, res, monthlyTotals, monthlyAvailable, grandTotal, totalAvailable };
     }
 
-    async function loadAllResourcesTotal(year) {
-        const el = document.getElementById('statsAllResourcesTotal');
-        el.innerText = 'Loading...';
-        
-        try {
-            const startDate = new Date(year, 0, 1);
-            const endDate = new Date(year, 11, 31);
-            
-            const weekKeys = new Set();
-            let d = new Date(startDate);
-            while (d <= endDate) {
-                const weekStart = getWeekStart(d);
-                weekKeys.add(getWeekKey(weekStart));
-                d.setDate(d.getDate() + 7);
-            }
-            
-            let allTotal = 0;
-            const promises = [];
-            
-            resources.forEach(res => {
-                weekKeys.forEach(weekKey => {
-                    const prefix = `${res.id}_${weekKey}`;
-                    const promise = db.collection('appointments')
-                        .where('__name__', '>=', prefix)
-                        .where('__name__', '<', prefix + '\uffff')
-                        .get()
-                        .then(snapshot => {
-                            snapshot.forEach(doc => {
-                                const data = doc.data();
-                                const suffix = doc.id.substring(res.id.length + 1);
-                                const parts = suffix.split('_');
-                                const wk = parts[0];
-                                const dayIndex = parseInt(parts[1]);
-                                const [wy, wm, wd] = wk.split('-').map(Number);
-                                const weekStart = new Date(wy, wm - 1, wd);
-                                const bookingDate = new Date(weekStart);
-                                bookingDate.setDate(bookingDate.getDate() + dayIndex);
-                                if (bookingDate.getFullYear() === year) {
-                                    allTotal += data.duration || 0;
-                                }
-                            });
-                        });
-                    promises.push(promise);
-                });
-            });
-            
-            await Promise.all(promises);
-            el.innerText = parseFloat(allTotal.toFixed(2)) + ' hours';
-        } catch (err) {
-            el.innerText = 'Error';
-        }
-    }
     
     function exportStatsCSV() {
         if (!statsData.dailyStats) {
