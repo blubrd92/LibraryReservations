@@ -330,6 +330,18 @@
         .day-box strong { display: block; margin-bottom: 4px; color: var(--accent); }
         .settings-row-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 15px; }
         .settings-row-grid input, .settings-row-grid select { width: 100%; box-sizing: border-box; }
+        .settings-section { border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 12px; overflow: hidden; }
+        .settings-section-header { display: flex; align-items: center; gap: 8px; padding: 12px 15px; background: #f5f7fa; cursor: pointer; user-select: none; border-bottom: 1px solid #e0e0e0; }
+        .settings-section-header:hover { background: #edf0f5; }
+        .settings-section-header .section-arrow { transition: transform 0.2s; font-size: 0.7em; color: #888; }
+        .settings-section-header.collapsed .section-arrow { transform: rotate(-90deg); }
+        .settings-section-header .section-title { font-weight: bold; font-size: 0.95em; color: #333; }
+        .settings-section-body { padding: 15px; }
+        .settings-section-body.collapsed { display: none; }
+        .settings-option { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+        .settings-option + .settings-option { border-top: 1px solid #f0f0f0; }
+        .settings-option label { margin: 0; cursor: pointer; }
+        .settings-sub-config { margin: 8px 0 0 26px; padding: 10px; background: #fafafa; border-radius: 4px; border: 1px solid #eee; }
 
         .loading-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.8); z-index: 2000; display:flex; justify-content:center; align-items:center; font-size: 2rem; color: var(--primary); font-weight:bold; }
 
@@ -997,109 +1009,132 @@
                 </div>
             </div>
 
-            <div style="border-top: 1px solid #eee; padding-top: 15px;">
-                <div class="settings-row-grid">
+            <!-- SECTION: General Settings -->
+            <div class="settings-section">
+                <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+                    <span class="section-arrow">&#9660;</span>
+                    <span class="section-title">General Settings</span>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-row-grid">
+                        <div>
+                            <label>Resource Name</label>
+                            <input type="text" id="editResName">
+                        </div>
+                        <div>
+                            <label>Max Hours</label>
+                            <input type="number" id="editMaxDuration" step="0.5">
+                        </div>
+                    </div>
                     <div>
-                        <label>Resource Name</label>
-                        <input type="text" id="editResName">
-                    </div>
-                    <div>
-                        <label>Max Hours</label>
-                        <input type="number" id="editMaxDuration" step="0.5">
-                    </div>
-                </div>
-
-                <div class="form-group" style="background: #e3f2fd; padding: 10px; border-radius: 4px; border: 1px solid #bbdefb;">
-                    <label>View Mode</label>
-                    <select id="editViewMode" onchange="toggleSubRoomInput()">
-                        <option value="week">Weekly Grid (Standard)</option>
-                        <option value="day">Day View (Multi-Room)</option>
-                    </select>
-                    
-                    <div id="subRoomConfig" class="hidden" style="margin-top:10px;">
-                        <label>Sub-Rooms / Columns (Comma Separated)</label>
-                        <input type="text" id="editSubRooms" placeholder="e.g. Pod A, Pod B, Pod C">
-                        <small style="color:#666">These will appear as columns in Day View.</small>
-                    </div>
-                </div>
-
-                <div class="form-group" style="background: #fdf2e9; padding: 10px; border-radius: 4px; border: 1px solid #fae5d3;">
-                    <div class="flex gap">
-                        <input type="checkbox" id="editEnableSidebar" onchange="toggleSidebarConfig()" style="width:auto;">
-                        <label for="editEnableSidebar" style="margin:0; cursor:pointer; font-weight:bold; color:#d35400;">Enable Sidebar Information?</label>
-                    </div>
-                    <div id="sidebarTextConfig" class="hidden" style="margin-top:10px;">
-                        <label>Sidebar Text (Policies/Rules)</label>
-                        <textarea id="editSidebarText" rows="4" placeholder="Enter policies here..."></textarea>
-                    </div>
-                </div>
-                
-                <div class="form-group" style="background: #f0f8ff; padding: 10px; border-radius: 4px; border: 1px solid #d0e1f5;">
-                    <div class="flex gap">
-                        <input type="checkbox" id="editResOrientation" style="width:auto;">
-                        <label for="editResOrientation" style="margin:0; cursor:pointer;">Enable "Staff Assistance" Fields?</label>
-                    </div>
-                    <div class="flex gap" style="margin-top:8px; padding-top:8px; border-top:1px solid #d0e1f5;">
-                        <input type="checkbox" id="editDefaultShowNotes" style="width:auto;">
-                        <label for="editDefaultShowNotes" style="margin:0; cursor:pointer;">Default "Show Notes" to Checked?</label>
-                    </div>
-                    <div class="flex gap" style="margin-top:8px; padding-top:8px; border-top:1px solid #d0e1f5;">
-                        <input type="checkbox" id="editAdminOnly" style="width:auto;">
-                        <label for="editAdminOnly" style="margin:0; cursor:pointer;">🔒 Admin Only (restrict editing to admin account)</label>
-                    </div>
-                    <div class="flex gap" style="margin-top:8px; padding-top:8px; border-top:1px solid #d0e1f5;">
-                        <input type="checkbox" id="editUseQuarterHour" style="width:auto;">
-                        <label for="editUseQuarterHour" style="margin:0; cursor:pointer;">Enable 15-Minute Scheduling?</label>
-                    </div>
-                </div>
-
-                <!-- Advance Booking Limit Section -->
-                <div class="form-group" style="background: #fef9e7; padding: 10px; border-radius: 4px; border: 1px solid #f9e79f;">
-                    <div class="flex gap">
-                        <input type="checkbox" id="editAdvanceLimitEnabled" onchange="toggleAdvanceLimitConfig()" style="width:auto;">
-                        <label for="editAdvanceLimitEnabled" style="margin:0; cursor:pointer; font-weight:bold; color:#7d6608;">📆 Limit How Far in Advance Bookings Can Be Made?</label>
-                    </div>
-                    <div id="advanceLimitConfig" class="hidden" style="margin-top:10px;">
-                        <label>Max Open Days in Advance</label>
-                        <input type="number" id="editAdvanceLimitDays" min="0" step="1" value="1" style="width:80px;">
-                        <small style="color:#666; display:block; margin-top:4px;">0 = same day only. 1 = today + next open day. 2 = today + next 2 open days, etc. Closed days and holidays are skipped when counting.</small>
-                        <div class="flex gap" style="margin-top:8px; padding-top:8px; border-top:1px solid #f9e79f;">
-                            <input type="checkbox" id="editAdvanceLimitAdminBypass" style="width:auto;">
-                            <label for="editAdvanceLimitAdminBypass" style="margin:0; cursor:pointer;">Allow admin account to bypass this limit?</label>
+                        <label>View Mode</label>
+                        <select id="editViewMode" onchange="toggleSubRoomInput()" style="width:100%; margin-top:4px;">
+                            <option value="week">Weekly Grid (Standard)</option>
+                            <option value="day">Day View (Multi-Room)</option>
+                        </select>
+                        <div id="subRoomConfig" class="hidden settings-sub-config" style="margin-left:0; margin-top:10px;">
+                            <label>Sub-Rooms / Columns (Comma Separated)</label>
+                            <input type="text" id="editSubRooms" placeholder="e.g. Pod A, Pod B, Pod C">
+                            <small style="color:#666">These will appear as columns in Day View.</small>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Closure Dates Section -->
-                <div class="form-group" style="background: #fce4ec; padding: 10px; border-radius: 4px; border: 1px solid #f8bbd9;">
-                    <label style="font-weight:bold; color:#c2185b; margin-bottom:10px; display:block;">📅 Closure Dates (Holidays/Closures)</label>
-                    
-                    <div class="closure-add-row">
-                        <input type="date" id="newClosureDate" title="Start Date">
-                        <span style="align-self: center; color: #666;">to</span>
-                        <input type="date" id="newClosureEndDate" title="End Date (optional, leave blank for single day)">
-                        <input type="text" id="newClosureReason" placeholder="Reason (e.g. Holiday)">
-                        <button class="btn-success" onclick="addClosureDate()">Add</button>
-                    </div>
-                    
-                    <div id="closureList" class="closure-list">
-                        <div class="closure-empty">No closure dates set</div>
-                    </div>
-                    
-                    <div class="closure-actions">
-                        <button onclick="applyClosuresToAllResources()" style="font-size:0.85em;">Apply to All Resources</button>
-                    </div>
+            <!-- SECTION: Booking Rules -->
+            <div class="settings-section">
+                <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+                    <span class="section-arrow">&#9660;</span>
+                    <span class="section-title">Booking Rules</span>
                 </div>
-
-                <div class="form-group">
-                    <h4 style="margin: 15px 0 5px 0; border-bottom: 2px solid #eee; padding-bottom:5px;">Operating Hours (24h Format)</h4>
-                    <div class="day-config-grid" id="daysConfigContainer"></div>
-                    <div class="closure-actions" style="margin-top: 10px;">
-                        <button onclick="applyHoursToAllResources()" style="font-size:0.85em;">Apply to All Resources</button>
+                <div class="settings-section-body">
+                    <div class="settings-option">
+                        <input type="checkbox" id="editUseQuarterHour" style="width:auto;">
+                        <label for="editUseQuarterHour">Enable 15-Minute Scheduling</label>
+                    </div>
+                    <div class="settings-option">
+                        <input type="checkbox" id="editResOrientation" style="width:auto;">
+                        <label for="editResOrientation">Enable "Staff Assistance" Fields</label>
+                    </div>
+                    <div class="settings-option">
+                        <input type="checkbox" id="editDefaultShowNotes" style="width:auto;">
+                        <label for="editDefaultShowNotes">Default "Show Notes" to Checked</label>
+                    </div>
+                    <div class="settings-option" style="flex-direction:column; align-items:flex-start;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="checkbox" id="editAdvanceLimitEnabled" onchange="toggleAdvanceLimitConfig()" style="width:auto;">
+                            <label for="editAdvanceLimitEnabled">Limit How Far in Advance Bookings Can Be Made</label>
+                        </div>
+                        <div id="advanceLimitConfig" class="hidden settings-sub-config" style="width:100%; box-sizing:border-box;">
+                            <label>Max Open Days in Advance</label>
+                            <input type="number" id="editAdvanceLimitDays" min="0" step="1" value="1" style="width:80px;">
+                            <small style="color:#666; display:block; margin-top:4px;">0 = same day only. 1 = today + next open day. 2 = today + next 2 open days, etc. Closed days and holidays are skipped when counting.</small>
+                            <div class="settings-option" style="margin-top:8px; padding-top:8px; border-top:1px solid #eee;">
+                                <input type="checkbox" id="editAdvanceLimitAdminBypass" style="width:auto;">
+                                <label for="editAdvanceLimitAdminBypass">Allow admin account to bypass this limit</label>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            
+
+            <!-- SECTION: Access & Display -->
+            <div class="settings-section">
+                <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+                    <span class="section-arrow">&#9660;</span>
+                    <span class="section-title">Access &amp; Display</span>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-option">
+                        <input type="checkbox" id="editAdminOnly" style="width:auto;">
+                        <label for="editAdminOnly">&#128274; Admin Only (restrict editing to admin account)</label>
+                    </div>
+                    <div class="settings-option" style="flex-direction:column; align-items:flex-start;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="checkbox" id="editEnableSidebar" onchange="toggleSidebarConfig()" style="width:auto;">
+                            <label for="editEnableSidebar">Enable Sidebar Information</label>
+                        </div>
+                        <div id="sidebarTextConfig" class="hidden settings-sub-config" style="width:100%; box-sizing:border-box;">
+                            <label>Sidebar Text (Policies/Rules)</label>
+                            <textarea id="editSidebarText" rows="4" placeholder="Enter policies here..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: Schedule -->
+            <div class="settings-section">
+                <div class="settings-section-header" onclick="toggleSettingsSection(this)">
+                    <span class="section-arrow">&#9660;</span>
+                    <span class="section-title">Schedule</span>
+                </div>
+                <div class="settings-section-body">
+                    <div>
+                        <label style="font-weight:bold; display:block; margin-bottom:5px;">Operating Hours (24h Format)</label>
+                        <div class="day-config-grid" id="daysConfigContainer"></div>
+                        <div class="closure-actions" style="margin-top: 10px;">
+                            <button onclick="applyHoursToAllResources()" style="font-size:0.85em;">Apply to All Resources</button>
+                        </div>
+                    </div>
+                    <div style="border-top: 1px solid #eee; margin-top: 15px; padding-top: 15px;">
+                        <label style="font-weight:bold; display:block; margin-bottom:10px;">Closure Dates (Holidays/Closures)</label>
+                        <div class="closure-add-row">
+                            <input type="date" id="newClosureDate" title="Start Date">
+                            <span style="align-self: center; color: #666;">to</span>
+                            <input type="date" id="newClosureEndDate" title="End Date (optional, leave blank for single day)">
+                            <input type="text" id="newClosureReason" placeholder="Reason (e.g. Holiday)">
+                            <button class="btn-success" onclick="addClosureDate()">Add</button>
+                        </div>
+                        <div id="closureList" class="closure-list">
+                            <div class="closure-empty">No closure dates set</div>
+                        </div>
+                        <div class="closure-actions">
+                            <button onclick="applyClosuresToAllResources()" style="font-size:0.85em;">Apply to All Resources</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div style="display: flex; justify-content: space-between; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
                 <button class="btn-success" onclick="saveAllSettings()">Save Changes</button>
                 <button onclick="closeModal('settingsOverlay')">Cancel</button>
@@ -3568,6 +3603,12 @@ const firebaseConfig = {
         renderClosureList(r);
     }
     
+    function toggleSettingsSection(headerEl) {
+        headerEl.classList.toggle("collapsed");
+        const body = headerEl.nextElementSibling;
+        body.classList.toggle("collapsed");
+    }
+
     function toggleSubRoomInput() { const mode = document.getElementById('editViewMode').value; const container = document.getElementById('subRoomConfig'); if (mode === 'day') { container.classList.remove('hidden'); } else { container.classList.add('hidden'); } }
 
     function toggleSidebarConfig() {
