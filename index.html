@@ -691,13 +691,7 @@
             flex-direction: column;
             align-items: center;
             flex: 1;
-            max-width: 70px;
-        }
-        .stats-bar-value {
-            font-size: 0.8em;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 4px;
+            max-width: 85px;
         }
         .stats-bar-track {
             width: 70%;
@@ -720,19 +714,19 @@
             opacity: 0.85;
         }
         .stats-bar-label {
-            font-size: 0.85em;
+            font-size: 1em;
             margin-top: 8px;
             color: #555;
             font-weight: bold;
         }
         .stats-bar-hours {
-            font-size: 0.75em;
+            font-size: 0.9em;
             color: #1976d2;
             margin-top: 2px;
             font-weight: bold;
         }
         .stats-bar-util {
-            font-size: 0.75em;
+            font-size: 0.9em;
             color: #888;
             margin-top: 2px;
         }
@@ -1139,7 +1133,7 @@
             <div><strong>Utilization:</strong> <span id="statsUtilization">0%</span></div>
             <div><strong>Busiest Month:</strong> <span id="statsBusiestMonth">-</span></div>
             <div><strong>Avg Hours/Day:</strong> <span id="statsAvgHours">0</span></div>
-            <div><strong>Days Open:</strong> <span id="statsDaysOpen">0</span></div>
+            <div><strong>Bookable Days:</strong> <span id="statsDaysOpen">0</span></div>
         </div>
 
         <div style="margin-bottom: 10px;">
@@ -4396,17 +4390,17 @@ const firebaseConfig = {
             const displayHours = hours > 0 ? parseFloat(hours.toFixed(1)) : 0;
             const displayAvail = available > 0 ? parseFloat(available.toFixed(1)) : 0;
             const utilPct = available > 0 ? Math.round((hours / available) * 100) : 0;
-            const utilText = available > 0 ? utilPct + '%' : 'N/A';
+            const utilText = available > 0 ? utilPct + '%' : '-';
             const fillPct = available > 0 ? Math.min(100, (hours / available) * 100) : 0;
             const barTitle = `${MONTHS[i]}: ${displayHours}h booked / ${displayAvail}h available (${utilText})`;
+            const hoursLabel = available > 0 ? `${displayHours} / ${displayAvail}h` : `${displayHours}h`;
             
             html += `<div class="stats-bar-col">`;
-            html += `  <div class="stats-bar-value">${displayHours > 0 ? displayHours + 'h' : ''}</div>`;
             html += `  <div class="stats-bar-track" title="${barTitle}">`;
             html += `    <div class="stats-bar-fill" style="height: ${fillPct}%;"></div>`;
             html += `  </div>`;
             html += `  <div class="stats-bar-label">${MONTHS[i]}</div>`;
-            html += `  <div class="stats-bar-hours">${displayHours > 0 ? displayHours + 'h' : '0h'}</div>`;
+            html += `  <div class="stats-bar-hours">${hoursLabel}</div>`;
             html += `  <div class="stats-bar-util">${utilText}</div>`;
             html += `</div>`;
         }
@@ -4455,6 +4449,7 @@ const firebaseConfig = {
         let grandTotal = 0;
         let totalAvailable = 0;
         let totalDaysOpen = 0;
+        let totalDaysBookable = 0;
         
         for (let day = 1; day <= 31; day++) {
             let rowHtml = `<tr>`;
@@ -4484,6 +4479,7 @@ const firebaseConfig = {
                         rowHtml += `<td class="stats-closed" title="${closedTooltip}">${shortReason || 'C'}</td>`;
                     } else {
                         // Calculate available hours for this open day
+                        totalDaysBookable++;
                         const dayOfWeek = date.getDay();
                         const dayStart = res.hours[dayOfWeek * 2];
                         const dayEnd = res.hours[dayOfWeek * 2 + 1];
@@ -4516,7 +4512,7 @@ const firebaseConfig = {
         let footHtml = '<tr><td>Total</td>';
         monthlyTotals.forEach((t, i) => {
             const displayTotal = t > 0 ? parseFloat(t.toFixed(2)) : '-';
-            footHtml += `<td><div style="font-size:0.8em;color:#1565c0;">${MONTHS[i]}</div>${displayTotal}</td>`;
+            footHtml += `<td><div style="color:#1565c0;font-weight:bold;">${MONTHS[i]}</div>${displayTotal}</td>`;
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
@@ -4546,7 +4542,7 @@ const firebaseConfig = {
         // Average hours per open day
         const avgHours = totalDaysOpen > 0 ? (grandTotal / totalDaysOpen).toFixed(1) : 0;
         document.getElementById('statsAvgHours').innerText = avgHours;
-        document.getElementById('statsDaysOpen').innerText = totalDaysOpen;
+        document.getElementById('statsDaysOpen').innerText = totalDaysBookable;
         
         // Store for CSV export
         statsData = { dailyStats, year, res, monthlyTotals, monthlyAvailable, grandTotal, totalAvailable };
