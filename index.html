@@ -651,6 +651,74 @@
         .stats-heat-6 { background: #2196f3; color: white; }
         .stats-heat-7 { background: #1e88e5; color: white; }
         .stats-heat-8 { background: #1976d2; color: white; }
+
+        /* Stats Chart Styles */
+        .stats-view-toggle {
+            display: inline-flex;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .stats-view-toggle button {
+            padding: 6px 16px;
+            border: none;
+            background: #f5f5f5;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: #555;
+        }
+        .stats-view-toggle button.active {
+            background: #7b1fa2;
+            color: white;
+        }
+        .stats-chart-container {
+            padding: 20px 10px;
+            background: #fafafa;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+        .stats-chart {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 280px;
+            padding: 0 10px;
+        }
+        .stats-bar-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            max-width: 70px;
+        }
+        .stats-bar-value {
+            font-size: 0.8em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .stats-bar {
+            width: 70%;
+            min-height: 2px;
+            background: linear-gradient(180deg, #7b1fa2, #9c27b0);
+            border-radius: 3px 3px 0 0;
+            transition: height 0.3s ease;
+            position: relative;
+        }
+        .stats-bar:hover {
+            opacity: 0.85;
+        }
+        .stats-bar-label {
+            font-size: 0.85em;
+            margin-top: 8px;
+            color: #555;
+            font-weight: bold;
+        }
+        .stats-bar-util {
+            font-size: 0.75em;
+            color: #888;
+            margin-top: 2px;
+        }
     </style>
 </head>
 <body>
@@ -1049,14 +1117,27 @@
             <button class="btn-success" onclick="exportStatsCSV()">📥 Export CSV</button>
         </div>
         
-        <div id="statsSummary" style="display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px; flex-wrap: wrap;">
-            <div><strong>Total Hours:</strong> <span id="statsTotalHours">0</span></div>
+        <div id="statsSummary" style="display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px; flex-wrap: wrap; align-items: center;">
+            <div><strong><span id="statsTotalLabel">Total Hours</span>:</strong> <span id="statsTotalHours">0</span></div>
+            <div><strong>Utilization:</strong> <span id="statsUtilization">0%</span></div>
             <div><strong>Busiest Month:</strong> <span id="statsBusiestMonth">-</span></div>
             <div><strong>Avg Hours/Day:</strong> <span id="statsAvgHours">0</span></div>
             <div><strong>Days Open:</strong> <span id="statsDaysOpen">0</span></div>
+            <div style="border-left: 2px solid #ccc; padding-left: 20px;"><strong>All Resources Total:</strong> <span id="statsAllResourcesTotal">...</span></div>
+        </div>
+
+        <div style="margin-bottom: 10px;">
+            <div class="stats-view-toggle">
+                <button id="statsViewChart" class="active" onclick="toggleStatsView('chart')">📊 Chart</button>
+                <button id="statsViewGrid" onclick="toggleStatsView('grid')">📋 Grid</button>
+            </div>
+        </div>
+
+        <div id="statsChartContainer" class="stats-chart-container">
+            <div id="statsChart" class="stats-chart"></div>
         </div>
         
-        <div id="statsGridContainer" style="overflow-x: auto; max-height: 60vh; overflow-y: auto;">
+        <div id="statsGridContainer" style="overflow-x: auto; max-height: 60vh; overflow-y: auto; display: none;">
             <table id="statsGrid" class="stats-table">
                 <thead id="statsGridHead"></thead>
                 <tbody id="statsGridBody"></tbody>
@@ -2695,6 +2776,7 @@ const firebaseConfig = {
         document.getElementById('bookStaffName').disabled = !canEdit;
         
         modal.style.display = 'flex';
+        toggleStatsView('chart');
         document.getElementById('bookName').focus();
     }
 
@@ -3323,6 +3405,7 @@ const firebaseConfig = {
         document.getElementById('bookStaffName').disabled = !canEdit;
 
         modal.style.display = 'flex';
+        toggleStatsView('chart');
     }
 
     async function saveBooking() {
@@ -4069,6 +4152,7 @@ const firebaseConfig = {
         });
         
         modal.style.display = 'flex';
+        toggleStatsView('chart');
         await populateYearDropdown();
         loadStatsData();
     }
@@ -4232,6 +4316,7 @@ const firebaseConfig = {
             });
             
             renderStatsGrid(dailyStats, year, res);
+            loadAllResourcesTotal(year);
             
         } catch (err) {
             showToast('Error loading stats: ' + err.message, 'error');
@@ -4240,18 +4325,67 @@ const firebaseConfig = {
         showLoading(false);
     }
     
+    function toggleStatsView(view) {
+        const chartBtn = document.getElementById('statsViewChart');
+        const gridBtn = document.getElementById('statsViewGrid');
+        const chartContainer = document.getElementById('statsChartContainer');
+        const gridContainer = document.getElementById('statsGridContainer');
+        
+        if (view === 'chart') {
+            chartBtn.classList.add('active');
+            gridBtn.classList.remove('active');
+            chartContainer.style.display = '';
+            gridContainer.style.display = 'none';
+        } else {
+            gridBtn.classList.add('active');
+            chartBtn.classList.remove('active');
+            gridContainer.style.display = '';
+            chartContainer.style.display = 'none';
+        }
+    }
+
+    function renderStatsChart(monthlyTotals, monthlyAvailable) {
+        const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const container = document.getElementById('statsChart');
+        const maxHours = Math.max(...monthlyTotals, 1);
+        
+        let html = '';
+        for (let i = 0; i < 12; i++) {
+            const hours = monthlyTotals[i];
+            const available = monthlyAvailable[i];
+            const barHeight = Math.max(2, (hours / maxHours) * 250);
+            const displayHours = hours > 0 ? parseFloat(hours.toFixed(1)) : 0;
+            const utilPct = available > 0 ? Math.round((hours / available) * 100) : 0;
+            const utilText = available > 0 ? utilPct + '%' : 'N/A';
+            const barTitle = `${MONTHS[i]}: ${displayHours}h booked / ${parseFloat(available.toFixed(1))}h available (${utilText})`;
+            
+            html += `<div class="stats-bar-col">`;
+            html += `  <div class="stats-bar-value">${displayHours > 0 ? displayHours + 'h' : ''}</div>`;
+            html += `  <div class="stats-bar" style="height: ${barHeight}px;" title="${barTitle}"></div>`;
+            html += `  <div class="stats-bar-label">${MONTHS[i]}</div>`;
+            html += `  <div class="stats-bar-util">${utilText}</div>`;
+            html += `</div>`;
+        }
+        
+        container.innerHTML = html;
+    }
+
     function renderStatsGrid(dailyStats, year, res) {
         const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const thead = document.getElementById('statsGridHead');
         const tbody = document.getElementById('statsGridBody');
         const tfoot = document.getElementById('statsGridFoot');
         
+        // Determine sub-room count for utilization
+        const subRooms = res.subRooms ? res.subRooms.split(',').map(s => s.trim()).filter(s => s) : [];
+        const roomMultiplier = subRooms.length > 0 ? subRooms.length : 1;
+        
         // Find max hours for heat map scaling
         let maxHours = 0;
         Object.values(dailyStats).forEach(d => {
             if (d.hours > maxHours) maxHours = d.hours;
         });
-        if (maxHours === 0) maxHours = 1; // Avoid division by zero
+        if (maxHours === 0) maxHours = 1;
         
         // Build header
         thead.innerHTML = '<tr><th>Day</th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr>';
@@ -4269,14 +4403,12 @@ const firebaseConfig = {
         // Build rows (days 1-31)
         let html = '';
         const monthlyTotals = new Array(12).fill(0);
-        const monthlyClosedDays = new Array(12).fill(0);
+        const monthlyAvailable = new Array(12).fill(0);
         let grandTotal = 0;
+        let totalAvailable = 0;
         let totalDaysOpen = 0;
         
         for (let day = 1; day <= 31; day++) {
-            let rowTotal = 0;
-            let isWeekendRow = false;
-            
             let rowHtml = `<tr>`;
             rowHtml += `<td>${day}</td>`;
             
@@ -4284,30 +4416,35 @@ const firebaseConfig = {
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 
                 if (day > daysInMonth) {
-                    // Day doesn't exist in this month - show as gray
                     rowHtml += `<td class="stats-closed"></td>`;
                 } else {
                     const date = new Date(year, month, day);
                     const dateStr = formatDateISO(date);
                     const stat = dailyStats[dateStr];
                     const dateTooltip = formatDateWithOrdinal(month, day, year);
+                    const hours = stat.hours;
                     
-                    if (stat.dayOfWeek === 0 || stat.dayOfWeek === 6) {
-                        isWeekendRow = true;
-                    }
+                    // Always count hours in totals (fix: closed days with bookings still count)
+                    monthlyTotals[month] += hours;
+                    grandTotal += hours;
                     
                     if (stat.closed) {
-                        const shortReason = stat.reason.length > 8 ? stat.reason.substring(0, 7) + '…' : stat.reason;
-                        const closedTooltip = `${dateTooltip} - ${stat.reason}`;
+                        const shortReason = stat.reason.length > 8 ? stat.reason.substring(0, 7) + '\u2026' : stat.reason;
+                        const closedTooltip = hours > 0 
+                            ? `${dateTooltip} - ${stat.reason} (${parseFloat(hours.toFixed(2))}h booked)`
+                            : `${dateTooltip} - ${stat.reason}`;
                         rowHtml += `<td class="stats-closed" title="${closedTooltip}">${shortReason || 'C'}</td>`;
-                        monthlyClosedDays[month]++;
                     } else {
-                        const hours = stat.hours;
-                        monthlyTotals[month] += hours;
-                        rowTotal += hours;
-                        grandTotal += hours;
                         totalDaysOpen++;
-
+                        
+                        // Calculate available hours for this open day
+                        const dayOfWeek = date.getDay();
+                        const dayStart = res.hours[dayOfWeek * 2];
+                        const dayEnd = res.hours[dayOfWeek * 2 + 1];
+                        const dayAvailable = (dayEnd - dayStart) * roomMultiplier;
+                        monthlyAvailable[month] += dayAvailable;
+                        totalAvailable += dayAvailable;
+                        
                         // Calculate heat map level (0-8)
                         const heatLevel = hours === 0 ? 0 : Math.min(8, Math.ceil((hours / maxHours) * 8));
                         const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : '';
@@ -4332,8 +4469,16 @@ const firebaseConfig = {
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
 
+        // Render bar chart
+        renderStatsChart(monthlyTotals, monthlyAvailable);
+
         // Update summary
         document.getElementById('statsTotalHours').innerText = parseFloat(grandTotal.toFixed(2)) + ' hours';
+        document.getElementById('statsTotalLabel').innerText = `Total Hours (${res.name})`;
+        
+        // Utilization
+        const utilPct = totalAvailable > 0 ? ((grandTotal / totalAvailable) * 100).toFixed(1) : 0;
+        document.getElementById('statsUtilization').innerText = totalAvailable > 0 ? utilPct + '%' : 'N/A';
         
         // Find busiest month
         let busiestIdx = 0;
@@ -4352,7 +4497,60 @@ const firebaseConfig = {
         document.getElementById('statsDaysOpen').innerText = totalDaysOpen;
         
         // Store for CSV export
-        statsData = { dailyStats, year, res, monthlyTotals, grandTotal };
+        statsData = { dailyStats, year, res, monthlyTotals, monthlyAvailable, grandTotal, totalAvailable };
+    }
+
+    async function loadAllResourcesTotal(year) {
+        const el = document.getElementById('statsAllResourcesTotal');
+        el.innerText = 'Loading...';
+        
+        try {
+            const startDate = new Date(year, 0, 1);
+            const endDate = new Date(year, 11, 31);
+            
+            const weekKeys = new Set();
+            let d = new Date(startDate);
+            while (d <= endDate) {
+                const weekStart = getWeekStart(d);
+                weekKeys.add(getWeekKey(weekStart));
+                d.setDate(d.getDate() + 7);
+            }
+            
+            let allTotal = 0;
+            const promises = [];
+            
+            resources.forEach(res => {
+                weekKeys.forEach(weekKey => {
+                    const prefix = `${res.id}_${weekKey}`;
+                    const promise = db.collection('appointments')
+                        .where('__name__', '>=', prefix)
+                        .where('__name__', '<', prefix + '\uffff')
+                        .get()
+                        .then(snapshot => {
+                            snapshot.forEach(doc => {
+                                const data = doc.data();
+                                const suffix = doc.id.substring(res.id.length + 1);
+                                const parts = suffix.split('_');
+                                const wk = parts[0];
+                                const dayIndex = parseInt(parts[1]);
+                                const [wy, wm, wd] = wk.split('-').map(Number);
+                                const weekStart = new Date(wy, wm - 1, wd);
+                                const bookingDate = new Date(weekStart);
+                                bookingDate.setDate(bookingDate.getDate() + dayIndex);
+                                if (bookingDate.getFullYear() === year) {
+                                    allTotal += data.duration || 0;
+                                }
+                            });
+                        });
+                    promises.push(promise);
+                });
+            });
+            
+            await Promise.all(promises);
+            el.innerText = parseFloat(allTotal.toFixed(2)) + ' hours';
+        } catch (err) {
+            el.innerText = 'Error';
+        }
     }
     
     function exportStatsCSV() {
