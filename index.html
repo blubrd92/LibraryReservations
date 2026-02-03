@@ -588,7 +588,8 @@
         /* Stats Table Styles */
         .stats-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             font-size: 0.85em;
         }
         .stats-table th, .stats-table td {
@@ -625,6 +626,7 @@
             bottom: 0;
             z-index: 2;
             box-shadow: 0 -2px 4px rgba(0,0,0,0.15);
+            border-top: 2px solid #90caf9;
         }
         .stats-table tfoot td:first-child {
             position: sticky;
@@ -668,7 +670,7 @@
             color: #555;
         }
         .stats-view-toggle button.active {
-            background: #7b1fa2;
+            background: #2196F3;
             color: white;
         }
         .stats-chart-container {
@@ -701,6 +703,7 @@
             width: 70%;
             background: #e3f2fd;
             border-radius: 3px;
+            height: 220px;
             position: relative;
             border: 1px solid #bbdefb;
         }
@@ -4385,7 +4388,6 @@ const firebaseConfig = {
     function renderStatsChart(monthlyTotals, monthlyAvailable) {
         const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const container = document.getElementById('statsChart');
-        const maxAvailable = Math.max(...monthlyAvailable, 1);
         
         let html = '';
         for (let i = 0; i < 12; i++) {
@@ -4396,12 +4398,11 @@ const firebaseConfig = {
             const utilPct = available > 0 ? Math.round((hours / available) * 100) : 0;
             const utilText = available > 0 ? utilPct + '%' : 'N/A';
             const fillPct = available > 0 ? Math.min(100, (hours / available) * 100) : 0;
-            const trackHeight = Math.max(20, (available / maxAvailable) * 260);
             const barTitle = `${MONTHS[i]}: ${displayHours}h booked / ${displayAvail}h available (${utilText})`;
             
             html += `<div class="stats-bar-col">`;
             html += `  <div class="stats-bar-value">${displayHours > 0 ? displayHours + 'h' : ''}</div>`;
-            html += `  <div class="stats-bar-track" style="height: ${trackHeight}px;" title="${barTitle}">`;
+            html += `  <div class="stats-bar-track" title="${barTitle}">`;
             html += `    <div class="stats-bar-fill" style="height: ${fillPct}%;"></div>`;
             html += `  </div>`;
             html += `  <div class="stats-bar-label">${MONTHS[i]}</div>`;
@@ -4443,6 +4444,10 @@ const firebaseConfig = {
             return `${monthNames[month]} ${day}${suffix}, ${year}`;
         }
         
+        // For current year, only count available hours up to today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isCurrentYear = year === today.getFullYear();
         // Build rows (days 1-31)
         let html = '';
         const monthlyTotals = new Array(12).fill(0);
@@ -4478,15 +4483,19 @@ const firebaseConfig = {
                             : `${dateTooltip} - ${stat.reason}`;
                         rowHtml += `<td class="stats-closed" title="${closedTooltip}">${shortReason || 'C'}</td>`;
                     } else {
-                        totalDaysOpen++;
-                        
                         // Calculate available hours for this open day
                         const dayOfWeek = date.getDay();
                         const dayStart = res.hours[dayOfWeek * 2];
                         const dayEnd = res.hours[dayOfWeek * 2 + 1];
                         const dayAvailable = (dayEnd - dayStart) * roomMultiplier;
-                        monthlyAvailable[month] += dayAvailable;
-                        totalAvailable += dayAvailable;
+                        
+                        // Only count toward utilization for days up to today (current year)
+                        const isElapsed = !isCurrentYear || date <= today;
+                        if (isElapsed) {
+                            totalDaysOpen++;
+                            monthlyAvailable[month] += dayAvailable;
+                            totalAvailable += dayAvailable;
+                        }
                         
                         // Calculate heat map level (0-8)
                         const heatLevel = hours === 0 ? 0 : Math.min(8, Math.ceil((hours / maxHours) * 8));
@@ -4503,11 +4512,11 @@ const firebaseConfig = {
         
         tbody.innerHTML = html;
         
-        // Build footer (monthly totals)
+        // Build footer (monthly totals with month names)
         let footHtml = '<tr><td>Total</td>';
-        monthlyTotals.forEach(t => {
+        monthlyTotals.forEach((t, i) => {
             const displayTotal = t > 0 ? parseFloat(t.toFixed(2)) : '-';
-            footHtml += `<td>${displayTotal}</td>`;
+            footHtml += `<td><div style="font-size:0.8em;color:#1565c0;">${MONTHS[i]}</div>${displayTotal}</td>`;
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
