@@ -1138,16 +1138,16 @@
 
         <div style="margin-bottom: 10px;">
             <div class="stats-view-toggle">
-                <button id="statsViewChart" class="active" onclick="toggleStatsView('chart')">📊 Chart</button>
-                <button id="statsViewGrid" onclick="toggleStatsView('grid')">📋 Grid</button>
+                <button id="statsViewChart" onclick="toggleStatsView('chart')">📊 Chart</button>
+                <button id="statsViewGrid" class="active" onclick="toggleStatsView('grid')">📋 Grid</button>
             </div>
         </div>
 
-        <div id="statsChartContainer" class="stats-chart-container">
+        <div id="statsChartContainer" class="stats-chart-container" style="display: none;">
             <div id="statsChart" class="stats-chart"></div>
         </div>
         
-        <div id="statsGridContainer" style="overflow-x: auto; max-height: 60vh; overflow-y: auto; display: none;">
+        <div id="statsGridContainer" style="overflow-x: auto; max-height: 60vh; overflow-y: auto;">
             <table id="statsGrid" class="stats-table">
                 <thead id="statsGridHead"></thead>
                 <tbody id="statsGridBody"></tbody>
@@ -4188,7 +4188,7 @@ const firebaseConfig = {
         });
         
         modal.style.display = 'flex';
-        toggleStatsView('chart');
+        toggleStatsView('grid');
         await populateYearDropdown();
         loadStatsData();
     }
@@ -4393,7 +4393,7 @@ const firebaseConfig = {
             const utilText = available > 0 ? utilPct + '%' : '-';
             const fillPct = available > 0 ? Math.min(100, (hours / available) * 100) : 0;
             const barTitle = `${MONTHS[i]}: ${displayHours}h booked / ${displayAvail}h available (${utilText})`;
-            const hoursLabel = available > 0 ? `${displayHours} / ${displayAvail}h` : `${displayHours}h`;
+            const hoursLabel = available > 0 ? `${displayHours}h / ${displayAvail}h` : `${displayHours}h`;
             
             html += `<div class="stats-bar-col">`;
             html += `  <div class="stats-bar-track" title="${barTitle}">`;
@@ -4438,17 +4438,12 @@ const firebaseConfig = {
             return `${monthNames[month]} ${day}${suffix}, ${year}`;
         }
         
-        // For current year, only count available hours up to today
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const isCurrentYear = year === today.getFullYear();
         // Build rows (days 1-31)
         let html = '';
         const monthlyTotals = new Array(12).fill(0);
         const monthlyAvailable = new Array(12).fill(0);
         let grandTotal = 0;
         let totalAvailable = 0;
-        let totalDaysOpen = 0;
         let totalDaysBookable = 0;
         
         for (let day = 1; day <= 31; day++) {
@@ -4484,14 +4479,8 @@ const firebaseConfig = {
                         const dayStart = res.hours[dayOfWeek * 2];
                         const dayEnd = res.hours[dayOfWeek * 2 + 1];
                         const dayAvailable = (dayEnd - dayStart) * roomMultiplier;
-                        
-                        // Only count toward utilization for days up to today (current year)
-                        const isElapsed = !isCurrentYear || date <= today;
-                        if (isElapsed) {
-                            totalDaysOpen++;
-                            monthlyAvailable[month] += dayAvailable;
-                            totalAvailable += dayAvailable;
-                        }
+                        monthlyAvailable[month] += dayAvailable;
+                        totalAvailable += dayAvailable;
                         
                         // Calculate heat map level (0-8)
                         const heatLevel = hours === 0 ? 0 : Math.min(8, Math.ceil((hours / maxHours) * 8));
@@ -4540,7 +4529,7 @@ const firebaseConfig = {
         document.getElementById('statsBusiestMonth').innerText = busiestVal > 0 ? `${MONTHS[busiestIdx]} (${parseFloat(busiestVal.toFixed(2))}h)` : '-';
         
         // Average hours per open day
-        const avgHours = totalDaysOpen > 0 ? (grandTotal / totalDaysOpen).toFixed(1) : 0;
+        const avgHours = totalDaysBookable > 0 ? (grandTotal / totalDaysBookable).toFixed(1) : 0;
         document.getElementById('statsAvgHours').innerText = avgHours;
         document.getElementById('statsDaysOpen').innerText = totalDaysBookable;
         
