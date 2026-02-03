@@ -3899,7 +3899,14 @@ const firebaseConfig = {
         target.name = document.getElementById('editResName').value;
         target.maxDuration = parseFloat(document.getElementById('editMaxDuration').value) || 2;
         target.hasStaffField = document.getElementById('editResOrientation').checked;
-        target.viewMode = document.getElementById('editViewMode').value;
+        const newViewMode = document.getElementById('editViewMode').value;
+        if (newViewMode !== (r.viewMode || 'week')) {
+            const modeLabel = newViewMode === 'day' ? 'Day View' : 'Week View';
+            if (!confirm(`⚠️ Changing the view mode to "${modeLabel}" will cause existing bookings to stop displaying correctly. They will not be lost, and switching back will restore them.\n\nOnly proceed if this resource has no bookings yet, or if you understand the consequences.\n\nContinue?`)) {
+                return;
+            }
+        }
+        target.viewMode = newViewMode;
         target.subRooms = document.getElementById('editSubRooms').value;
         target.defaultShowNotes = document.getElementById('editDefaultShowNotes').checked;
         target.adminOnly = document.getElementById('editAdminOnly').checked;
