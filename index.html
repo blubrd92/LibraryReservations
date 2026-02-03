@@ -203,7 +203,7 @@
             position: absolute;
             bottom: 2px;
             right: 2px;
-            font-size: 0.7em;
+            font-size: 0.8em;
             font-weight: 600;
             background: rgba(0,0,0,0.7);
             color: white;
@@ -333,7 +333,7 @@
         .settings-section { border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 12px; }
         .settings-section-header { display: flex; border-radius: 6px 6px 0 0; align-items: center; gap: 8px; padding: 12px 15px; background: #f5f7fa; cursor: pointer; user-select: none; border-bottom: 1px solid #e0e0e0; }
         .settings-section-header:hover { background: #edf0f5; }
-        .settings-section-header .section-arrow { transition: transform 0.2s; font-size: 0.7em; color: #888; }
+        .settings-section-header .section-arrow { transition: transform 0.2s; font-size: 0.8em; color: #888; }
         .settings-section-header.collapsed .section-arrow { transform: rotate(-90deg); }
         .settings-section-header .section-title { font-weight: bold; font-size: 0.95em; color: #333; }
         .settings-section-body { padding: 15px; }
@@ -566,6 +566,7 @@
             min-width: 150px;
         }
         .closure-actions {
+            flex-wrap: wrap;
             display: flex;
             gap: 8px;
             margin-top: 10px;
@@ -744,7 +745,7 @@
             color: #1976d2;
         }
         .stats-bar-outof {
-            font-size: 0.7em;
+            font-size: 0.8em;
             color: #999;
         }
         .stats-bar-avail {
@@ -1047,9 +1048,9 @@
                             <option value="day">Day View (Multi-Room)</option>
                         </select>
                         <div id="subRoomConfig" class="hidden settings-sub-config" style="margin-left:0; margin-top:10px;">
-                            <label>Sub-Rooms / Columns (Comma Separated)</label>
-                            <input type="text" id="editSubRooms" placeholder="e.g. Pod A, Pod B, Pod C">
-                            <small style="color:#666">These will appear as columns in Day View.</small>
+                            <label style="display:block; margin-bottom:4px;">Sub-Rooms / Columns</label>
+                            <input type="text" id="editSubRooms" placeholder="e.g. Pod A, Pod B, Pod C" style="width:100%; box-sizing:border-box;">
+                            <small style="color:#666; display:block; margin-top:4px;">Comma separated. These will appear as columns in Day View.</small>
                         </div>
                     </div>
                 </div>
@@ -1143,6 +1144,8 @@
                         </div>
                         <div class="closure-actions">
                             <button onclick="applyClosuresToAllResources()" style="font-size:0.85em;">Apply to All Resources</button>
+                            <button class="btn-danger" onclick="clearAllClosures()" style="font-size:0.85em;">Clear All Closures</button>
+                            <button onclick="clearPastClosuresAllResources()" style="font-size:0.85em;">Clear Past Closures (All Resources)</button>
                         </div>
                     </div>
                 </div>
@@ -3811,6 +3814,72 @@ const firebaseConfig = {
         }
         showLoading(false);
     }
+
+    function clearAllClosures() {
+        const editId = document.getElementById('settingResSelect').value;
+        const res = resources.find(x => x.id === editId);
+        if (!res) return;
+        
+        const count = (res.closureDates || []).length;
+        if (count === 0) {
+            showToast("No closure dates to clear.", "error");
+            return;
+        }
+        
+        if (!confirm('Remove all ' + count + ' closure date(s) from this resource? This won\'t be saved until you click Save Changes.')) {
+            return;
+        }
+        
+        res.closureDates = [];
+        renderClosureList(res);
+        showToast('All closure dates cleared. Click Save Changes to apply.', 'success');
+    }
+
+    async function clearPastClosuresAllResources() {
+        const today = formatDateISO(new Date());
+        
+        let totalPast = 0;
+        resources.forEach(r => {
+            if (!r.closureDates) return;
+            r.closureDates.forEach(c => {
+                const endDate = c.endDate || c.date;
+                if (endDate < today) totalPast++;
+            });
+        });
+        
+        if (totalPast === 0) {
+            showToast("No past closure dates found across any resources.", "error");
+            return;
+        }
+        
+        if (!confirm('Remove ' + totalPast + ' past closure(s) across all ' + resources.length + ' resource(s)? This will save immediately.')) {
+            return;
+        }
+        
+        showLoading(true);
+        try {
+            resources.forEach(r => {
+                if (!r.closureDates) return;
+                r.closureDates = r.closureDates.filter(c => {
+                    const endDate = c.endDate || c.date;
+                    return endDate >= today;
+                });
+            });
+            
+            await db.collection('system').doc('resources').set({ list: resources });
+            
+            const editId = document.getElementById('settingResSelect').value;
+            const currentRes = resources.find(x => x.id === editId);
+            if (currentRes) renderClosureList(currentRes);
+            
+            showToast(totalPast + ' past closure(s) removed from all resources!', 'success');
+        } catch (e) {
+            showToast('Error: ' + e.message, 'error');
+        }
+        showLoading(false);
+    }
+
+
 
     async function applyHoursToAllResources() {
         const editId = document.getElementById('settingResSelect').value;
