@@ -2968,8 +2968,8 @@ const firebaseConfig = {
         overlay.className = 'resize-overlay';
         overlay.style.left = rect.left + 'px';
         overlay.style.top = rect.top + 'px';
-        overlay.style.width = (rect.width - padding * 2 - 1) + 'px';
-        overlay.style.height = Math.max(overlayHeight, 20) + 'px';
+        overlay.style.width = rect.width + 'px';
+        overlay.style.height = rect.height + 'px';
         document.body.appendChild(overlay);
         resizeState.overlayElement = overlay;
         
