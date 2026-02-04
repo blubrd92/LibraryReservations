@@ -477,7 +477,7 @@
         .resize-overlay {
             position: fixed;
             background: rgba(39, 174, 96, 0.4);
-            border: 2px dashed var(--success);
+            border: 2px solid var(--success);
             border-radius: 4px;
             pointer-events: none;
             z-index: 100;
@@ -2966,9 +2966,9 @@ const firebaseConfig = {
 
         const overlay = document.createElement('div');
         overlay.className = 'resize-overlay';
-        overlay.style.left = rect.left + 'px';
+        overlay.style.left = (rect.left + padding) + 'px';
         overlay.style.top = rect.top + 'px';
-        overlay.style.width = rect.width + 'px';
+        overlay.style.width = (rect.width - padding * 2 - 1) + 'px';
         overlay.style.height = Math.max(overlayHeight, 20) + 'px';
         document.body.appendChild(overlay);
         resizeState.overlayElement = overlay;
@@ -2977,9 +2977,9 @@ const firebaseConfig = {
         const tooltip = document.createElement('div');
         tooltip.className = 'resize-tooltip';
         tooltip.innerText = `${formatTime(booking.start)} - ${formatTime(booking.start + booking.data.duration)} (${booking.data.duration}h)`;
-        tooltip.style.left = (rect.right + 10) + 'px';
         tooltip.style.top = rect.top + 'px';
         document.body.appendChild(tooltip);
+        positionSelectionTooltip(tooltip, rect);
         resizeState.tooltipElement = tooltip;
         
         document.addEventListener('mousemove', doResize);
@@ -3017,6 +3017,7 @@ const firebaseConfig = {
         if (resizeState.tooltipElement) {
             const newEndTime = resizeState.bookingStart + newDuration;
             resizeState.tooltipElement.innerText = `${formatTime(resizeState.bookingStart)} - ${formatTime(newEndTime)} (${newDuration}h)`;
+            positionSelectionTooltip(resizeState.tooltipElement, resizeState.originalRect);
         }
     }
     
