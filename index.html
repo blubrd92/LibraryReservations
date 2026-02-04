@@ -2519,6 +2519,15 @@ const firebaseConfig = {
     }
 
     // --- DRAG-TO-CREATE HANDLERS ---
+    function positionSelectionTooltip(tooltip, rect) {
+        const tooltipWidth = tooltip.offsetWidth;
+        if (rect.right + 10 + tooltipWidth > window.innerWidth) {
+            tooltip.style.left = (rect.left - tooltipWidth - 10) + 'px';
+        } else {
+            tooltip.style.left = (rect.right + 10) + 'px';
+        }
+    }
+
     function startSelection(e, slotId, timeVal, col, res, activeWeekKey, slotElement) {
         // Only start on left click, not during other operations
         if (e.button !== 0) return;
@@ -2649,10 +2658,11 @@ const firebaseConfig = {
         const tooltip = document.createElement('div');
         tooltip.className = 'selection-tooltip';
         tooltip.innerText = `${formatTime(adjustedTimeVal)} - ${formatTime(adjustedTimeVal + minDuration)} (${minDuration}h)`;
-        tooltip.style.left = (rect.right + 10) + 'px';
         tooltip.style.top = rect.top + 'px';
         document.body.appendChild(tooltip);
+        positionSelectionTooltip(tooltip, rect);
         selectionState.tooltipElement = tooltip;
+
 
         document.addEventListener('mousemove', doSelection);
         document.addEventListener('mouseup', endSelection);
@@ -2723,6 +2733,7 @@ const firebaseConfig = {
         if (selectionState.tooltipElement) {
             const endTime = selectionState.startTime + newDuration;
             selectionState.tooltipElement.innerText = `${formatTime(selectionState.startTime)} - ${formatTime(endTime)} (${newDuration}h)`;
+            positionSelectionTooltip(selectionState.tooltipElement, selectionState.startSlotRect);
         }
     }
     
