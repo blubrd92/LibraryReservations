@@ -83,7 +83,7 @@
             font-weight: bold; 
             position: sticky; 
             top: 0; 
-            z-index: 10; 
+            z-index: 20; 
             border-right: 1px solid rgba(255,255,255,0.2);
             
             /* NEW: Match Time Column Size & Flex Centering */
@@ -1080,7 +1080,7 @@
                             <input type="checkbox" id="editAdvanceLimitEnabled" onchange="toggleAdvanceLimitConfig()" style="width:auto;">
                             <label for="editAdvanceLimitEnabled">Limit How Far in Advance Bookings Can Be Made</label>
                         </div>
-                        <div id="advanceLimitConfig" class="hidden settings-sub-config" style="width:100%; box-sizing:border-box;">
+                        <div id="advanceLimitConfig" class="hidden settings-sub-config" style="width:100%; box-sizing:border-box; margin-left:0;">
                             <label>Max Open Days in Advance</label>
                             <input type="number" id="editAdvanceLimitDays" min="0" step="1" value="1" style="width:80px;">
                             <small style="color:#666; display:block; margin-top:4px;">0 = same day only. 1 = today + next open day. 2 = today + next 2 open days, etc. Closed days and holidays are skipped when counting.</small>
@@ -4514,8 +4514,8 @@ const firebaseConfig = {
         for (let i = 0; i < 12; i++) {
             const hours = monthlyTotals[i];
             const available = monthlyAvailable[i];
-            const displayHours = hours > 0 ? parseFloat(hours.toFixed(1)) : 0;
-            const displayAvail = available > 0 ? parseFloat(available.toFixed(1)) : 0;
+            const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : 0;
+            const displayAvail = available > 0 ? parseFloat(available.toFixed(2)) : 0;
             const utilPct = available > 0 ? Math.round((hours / available) * 100) : 0;
             const utilText = available > 0 ? utilPct + '%' : '-';
             const fillPct = available > 0 ? Math.min(100, (hours / available) * 100) : 0;
@@ -4632,7 +4632,7 @@ const firebaseConfig = {
         // Build footer (monthly totals with month names)
         let footHtml = '<tr><td>Total</td>';
         monthlyTotals.forEach((t, i) => {
-            const displayTotal = t > 0 ? parseFloat(t.toFixed(2)) : '-';
+            const displayTotal = t > 0 ? parseFloat(t.toFixed(2)) + 'h' : '-';
             footHtml += `<td><div style="color:#1565c0;font-weight:bold;">${MONTHS[i]}</div>${displayTotal}</td>`;
         });
         footHtml += '</tr>';
