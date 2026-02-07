@@ -1981,6 +1981,8 @@ const firebaseConfig = {
         
         // Add dragging class after a small delay to not affect the drag image
         const dragEl = e.currentTarget;
+        dragEl.classList.remove('booking-hover-effect');
+        unhighlightBooking(bookingId);
         setTimeout(() => {
             dragEl.classList.add('dragging');
         }, 0);
