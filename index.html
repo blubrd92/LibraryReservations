@@ -30,14 +30,15 @@
         .gap { gap: 10px; }
 
         /* Status Bar */
-        #status-bar { font-size: 0.8rem; padding: 5px; text-align: right; color: #999; margin-bottom: 10px;}
+        #status-bar { font-size: 0.8rem; padding: 2px 5px; text-align: right; color: #999; margin-bottom: 5px;}
         .online { color: var(--success); font-weight: bold; }
         .offline { color: var(--danger); font-weight: bold; }
 
         /* Header */
         header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 0px; }
+        .header-title { display: flex; align-items: baseline; }
         .header-title h2 { margin: 0; font-size: 1.8rem; color: var(--primary); }
-        .header-title small { font-size: 1rem; color: #666; font-weight: normal; margin-left: 10px; }
+        .header-title small { font-size: 1.4rem; color: #666; font-weight: normal; margin-left: 10px; }
         
         /* Controls */
         button { cursor: pointer; padding: 8px 14px; border: 1px solid #ccc; border-radius: 4px; background: var(--light); transition: 0.2s; font-weight: 600; }
@@ -1554,7 +1555,16 @@ const firebaseConfig = {
         } else {
             const endWeek = new Date(currentWeekStart);
             endWeek.setDate(endWeek.getDate() + 6);
-            document.getElementById('rangeDisplay').innerText = `${formatDateShort(currentWeekStart)} - ${formatDateShort(endWeek)}`;
+            const sameMonth = currentWeekStart.getMonth() === endWeek.getMonth();
+            const sameYear = currentWeekStart.getFullYear() === endWeek.getFullYear();
+            const mo = { month: 'short' };
+            if (sameMonth && sameYear) {
+                document.getElementById('rangeDisplay').innerText = `${currentWeekStart.toLocaleDateString('en-US', mo)} ${currentWeekStart.getDate()} - ${endWeek.getDate()}, ${endWeek.getFullYear()}`;
+            } else if (sameYear) {
+                document.getElementById('rangeDisplay').innerText = `${currentWeekStart.toLocaleDateString('en-US', mo)} ${currentWeekStart.getDate()} - ${endWeek.toLocaleDateString('en-US', mo)} ${endWeek.getDate()}, ${endWeek.getFullYear()}`;
+            } else {
+                document.getElementById('rangeDisplay').innerText = `${currentWeekStart.toLocaleDateString('en-US', mo)} ${currentWeekStart.getDate()}, ${currentWeekStart.getFullYear()} - ${endWeek.toLocaleDateString('en-US', mo)} ${endWeek.getDate()}, ${endWeek.getFullYear()}`;
+            }
             const y = currentWeekStart.getFullYear();
             const m = String(currentWeekStart.getMonth() + 1).padStart(2, '0');
             const d = String(currentWeekStart.getDate()).padStart(2, '0');
@@ -4749,4 +4759,3 @@ const firebaseConfig = {
 </body>
 
 </html>
-
