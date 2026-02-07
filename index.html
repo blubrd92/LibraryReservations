@@ -1979,14 +1979,15 @@ const firebaseConfig = {
         e.dataTransfer.effectAllowed = 'move';
         
         // Add dragging class after a small delay to not affect the drag image
+        const dragEl = e.currentTarget;
         setTimeout(() => {
-            e.target.classList.add('dragging');
+            dragEl.classList.add('dragging');
         }, 0);
     }
 
     function handleDragEnd(e) {
         dragState.isDragging = false;
-        e.target.classList.remove('dragging');
+        e.currentTarget.classList.remove('dragging');
         
         // Show toast if user released on invalid target with a reason
         if (dragState.lastInvalidReason && !dragState.wasOverValidTarget) {
