@@ -366,7 +366,6 @@
         .booking-float { cursor: grab; }
         .booking-float:active { cursor: grabbing; }
         .slot.dragging { opacity: 0.5; cursor: grabbing; }
-        .booking-float.dragging { opacity: 0.3; cursor: grabbing; }
 
         /* Reschedule Mode - Source Booking Highlight */
         .booking-float.reschedule-source {
@@ -1979,13 +1978,17 @@ const firebaseConfig = {
         e.dataTransfer.setData('text/plain', bookingId);
         e.dataTransfer.effectAllowed = 'move';
         
-        // Add dragging class after a small delay to not affect the drag image
+        // Create a faded clone as the drag image so the ghost is consistently transparent
         const dragEl = e.currentTarget;
-        dragEl.classList.remove('booking-hover-effect');
-        unhighlightBooking(bookingId);
-        setTimeout(() => {
-            dragEl.classList.add('dragging');
-        }, 0);
+        const clone = dragEl.cloneNode(true);
+        clone.style.opacity = '0.4';
+        clone.style.position = 'absolute';
+        clone.style.top = '-9999px';
+        clone.style.width = dragEl.offsetWidth + 'px';
+        clone.style.height = dragEl.offsetHeight + 'px';
+        document.body.appendChild(clone);
+        e.dataTransfer.setDragImage(clone, e.offsetX, e.offsetY);
+        setTimeout(() => document.body.removeChild(clone), 0);
     }
 
     function handleDragEnd(e) {
