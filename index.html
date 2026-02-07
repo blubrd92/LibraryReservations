@@ -35,8 +35,8 @@
         .offline { color: var(--danger); font-weight: bold; }
 
         /* Header */
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 0px; flex-wrap: nowrap; flex-shrink: 0; }
-        .header-title { display: flex; align-items: baseline; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 0px; flex-shrink: 0; flex-wrap: wrap; }
+        .header-title { display: flex; align-items: baseline; flex-shrink: 1; min-width: 0; flex-wrap: wrap; }
         .header-title h2 { margin: 0; font-size: 1.8rem; color: var(--primary); }
         .header-title span { font-size: 1.6rem; color: #666; font-weight: normal; margin-left: 20px; padding-left: 20px; border-left: 2px solid #ccc; }
         
@@ -785,7 +785,7 @@
         <span id="rangeDisplay"></span>
     </div>
 
-    <div class="flex gap" style="flex-shrink: 0;">
+    <div class="flex gap">
         <select id="resourceSelect" onchange="handleResourceChange()"></select>
         
         <button class="btn-nav" onclick="navigateTime(-1)">&#8592;</button>
