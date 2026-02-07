@@ -1978,22 +1978,15 @@ const firebaseConfig = {
         e.dataTransfer.setData('text/plain', bookingId);
         e.dataTransfer.effectAllowed = 'move';
         
-        // Create a faded clone as the drag image so the ghost is consistently transparent
-        const dragEl = e.currentTarget;
-        const clone = dragEl.cloneNode(true);
-        clone.style.opacity = '0.4';
-        clone.style.position = 'absolute';
-        clone.style.top = '-9999px';
-        clone.style.width = dragEl.offsetWidth + 'px';
-        clone.style.height = dragEl.offsetHeight + 'px';
-        document.body.appendChild(clone);
-        e.dataTransfer.setDragImage(clone, e.offsetX, e.offsetY);
-        setTimeout(() => document.body.removeChild(clone), 0);
+        // Add dragging class after a small delay to not affect the drag image
+        setTimeout(() => {
+            e.target.classList.add('dragging');
+        }, 0);
     }
 
     function handleDragEnd(e) {
         dragState.isDragging = false;
-        e.currentTarget.classList.remove('dragging');
+        e.target.classList.remove('dragging');
         
         // Show toast if user released on invalid target with a reason
         if (dragState.lastInvalidReason && !dragState.wasOverValidTarget) {
