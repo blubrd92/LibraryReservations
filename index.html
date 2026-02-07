@@ -67,7 +67,7 @@
             border: 1px solid var(--border);
             border-radius: 4px;
             padding: 0px 15px;
-            overflow-y: auto;
+            overflow-y: overlay;
             white-space: normal;
             box-sizing: border-box;
             font-size: 0.95rem;
@@ -78,7 +78,7 @@
 
         /* Grid */
         /* Updated height to 100% to fill the layout-wrapper */
-        .grid-container { display: grid; grid-template-columns: 85px repeat(7, 1fr); grid-auto-rows: 1fr; border: 1px solid var(--border); height: 100%; overflow-y: auto; position: relative; background: #fff; flex-grow: 1; }
+        .grid-container { display: grid; grid-template-columns: 85px repeat(7, 1fr); grid-auto-rows: 1fr; border: 1px solid var(--border); height: 100%; overflow-y: auto; overflow-x: hidden; position: relative; background: #fff; flex-grow: 1; }
         .header-cell { 
             background: var(--primary); 
             color: white; 
