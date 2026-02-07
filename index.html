@@ -35,8 +35,8 @@
         .offline { color: var(--danger); font-weight: bold; }
 
         /* Header */
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 0px; }
-        .header-title { display: flex; align-items: baseline; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 0px; flex-wrap: nowrap; flex-shrink: 0; }
+        .header-title { display: flex; align-items: baseline; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
         .header-title h2 { margin: 0; font-size: 1.8rem; color: var(--primary); }
         .header-title span { font-size: 1.6rem; color: #666; font-weight: normal; margin-left: 20px; padding-left: 20px; border-left: 2px solid #ccc; }
         
@@ -785,7 +785,7 @@
         <span id="rangeDisplay"></span>
     </div>
 
-    <div class="flex gap">
+    <div class="flex gap" style="flex-shrink: 0;">
         <select id="resourceSelect" onchange="handleResourceChange()"></select>
         
         <button class="btn-nav" onclick="navigateTime(-1)">&#8592;</button>
@@ -4752,6 +4752,12 @@ const firebaseConfig = {
         resizeTimeout = setTimeout(() => {
             if (currentResId) {
                 renderGrid();
+            }
+            // Force sidebar scrollbar recalculation
+            const sidebar = document.getElementById('infoSidebar');
+            if (sidebar && !sidebar.classList.contains('hidden')) {
+                sidebar.style.overflow = 'hidden';
+                requestAnimationFrame(() => { sidebar.style.overflow = ''; });
             }
         }, 150);
     });
