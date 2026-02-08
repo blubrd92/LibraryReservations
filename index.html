@@ -1558,6 +1558,7 @@ const firebaseConfig = {
     let navDebounceTimeout = null;
     
     function navigateTime(dir) {
+        hideBookingPopover();
         const res = resources.find(r => r.id === currentResId);
         const isDayView = res && res.viewMode === 'day';
         
@@ -1584,6 +1585,7 @@ const firebaseConfig = {
     }
 
     function handleDatePick() {
+        hideBookingPopover();
         const raw = document.getElementById('datePicker').value;
         if(!raw) return;
         const rawDate = new Date(raw + 'T00:00');
@@ -4323,6 +4325,7 @@ const firebaseConfig = {
     }
     
     function handleResourceChange() {
+        hideBookingPopover();
         currentResId = document.getElementById('resourceSelect').value;
 
         if (rescheduleMode.active && rescheduleMode.sourceResourceId !== currentResId) {
