@@ -1191,9 +1191,8 @@
 <!-- Stats Modal -->
 <div id="statsModal" class="modal">
     <div class="modal-content" style="max-width: 1200px; width: 95%;">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="modal-header">
             <span>📊 Usage Statistics</span>
-            <button onclick="closeModal('statsModal')" style="background:transparent; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
         </div>
         
         <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
@@ -1551,6 +1550,7 @@ const firebaseConfig = {
         if (pendingOpenSettings) {
             pendingOpenSettings = false;
             document.getElementById('settingsOverlay').style.display = 'flex';
+            document.querySelector('.settings-box').scrollTop = 0;
             loadSettingsForEditor();
         }
     }
@@ -3673,6 +3673,7 @@ const firebaseConfig = {
         closeModal('adminPassModal');
         if (pass !== ADMIN_PASS) return pass ? showToast("Incorrect Password.", "error") : null;
         document.getElementById('settingsOverlay').style.display = 'flex'; 
+        document.querySelector('.settings-box').scrollTop = 0;
         document.getElementById('settingResSelect').value = currentResId; 
         loadSettingsForEditor(); 
     }
@@ -4199,6 +4200,7 @@ const firebaseConfig = {
         cloneSourceId = null;
         closeModal('importClosuresModal');
         document.getElementById('settingsOverlay').style.display = 'flex';
+        document.querySelector('.settings-box').scrollTop = 0;
     }
     
     async function deleteResource() {
