@@ -21,7 +21,7 @@
             /* Two-Tone Alternating Palette */
             --app-color-1: #5c6bc0; /* Soft Indigo */
             --app-color-2: #26a69a; /* Calm Teal */
-            --app-color-3: #f1c40f; /* Staff Stripe */
+            --app-color-3: #E5B829; /* Staff Stripe */
         }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: #fff; color: #333; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
         
@@ -1140,7 +1140,7 @@
                             <span id="palettePreview" style="display:inline-flex; gap:3px;">
                                 <span style="width:28px; height:28px; border-radius:4px; background:#5c6bc0;"></span>
                                 <span style="width:28px; height:28px; border-radius:4px; background:#26a69a;"></span>
-                                <span style="width:28px; height:28px; border-radius:4px; background:#f1c40f;" title="Staff stripe"></span>
+                                <span style="width:28px; height:28px; border-radius:4px; background:#E5B829;" title="Staff stripe"></span>
                             </span>
                         </div>
                     </div>
@@ -1299,10 +1299,10 @@ const firebaseConfig = {
     const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const DEFAULT_HOURS = [0,0, 10,18, 10,20, 10,18, 10,18, 10,17, 10,17]; 
     const COLOR_PALETTES = {
-        default: ['#5c6bc0', '#26a69a', '#f1c40f'],
+        default: ['#5c6bc0', '#26a69a', '#E5B829'],
         warm:    ['#b5502f', '#4a7a5e', '#FFB300'],
-        slate:   ['#546e7a', '#8b3a4a', '#69F0AE'],
-        ocean:   ['#2e6ea6', '#b55470', '#00E5FF'],
+        slate:   ['#546e7a', '#8b3a4a', '#D4A843'],
+        ocean:   ['#2e6ea6', '#b55470', '#E6C24A'],
         accessible: ['#0077BB', '#B35000', '#FFEE58']
     };
 
@@ -1333,6 +1333,7 @@ const firebaseConfig = {
     // Pending new resource data (for import closures flow)
     let pendingNewResource = null;
     let cloneSourceId = null;
+    let pendingOpenSettings = false;
 
     // DRAG-AND-DROP STATE
     let dragState = {
@@ -1530,6 +1531,9 @@ const firebaseConfig = {
         };
 
         if (!currentResId && resources.length > 0) currentResId = resources[0].id;
+        if (pendingSelectionId && resources.find(r => r.id === pendingSelectionId)) {
+            currentResId = pendingSelectionId;
+        }
         populate(mainSel, currentResId);
 
         let adminVal = adminSel.value;
@@ -1540,6 +1544,12 @@ const firebaseConfig = {
         updateUIControls();
         loadBookingsForCurrentView();
         if(document.getElementById('settingsOverlay').style.display !== 'none') loadSettingsForEditor();
+        
+        if (pendingOpenSettings) {
+            pendingOpenSettings = false;
+            document.getElementById('settingsOverlay').style.display = 'flex';
+            loadSettingsForEditor();
+        }
     }
 
     let navDebounceTimeout = null;
@@ -4090,7 +4100,8 @@ const firebaseConfig = {
             };
             try { 
                 await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); 
-                pendingSelectionId = newRes.id; 
+                pendingSelectionId = newRes.id;
+                pendingOpenSettings = true;
             } 
             catch (e) { showToast("Error: " + e.message, "error"); }
             showLoading(false);
@@ -4153,6 +4164,7 @@ const firebaseConfig = {
         try { 
             await db.collection('system').doc('resources').set({ list: [...resources, pendingNewResource] }); 
             pendingSelectionId = pendingNewResource.id;
+            pendingOpenSettings = true;
             const importedItems = [];
             if (cloneAll && cloneSourceId) {
                 const source = resources.find(r => r.id === cloneSourceId);
@@ -4202,8 +4214,17 @@ const firebaseConfig = {
         const delId = document.getElementById('settingResSelect').value;
         if (!delId) return;
         closeModal('deleteResourceModal');
+        closeModal('settingsOverlay');
         showLoading(true);
-        try { await db.collection('system').doc('resources').set({ list: resources.filter(r => r.id !== delId) }); } 
+        try {
+            const remaining = resources.filter(r => r.id !== delId);
+            await db.collection('system').doc('resources').set({ list: remaining });
+            if (currentResId === delId) {
+                currentResId = remaining.length > 0 ? remaining[0].id : null;
+            }
+            const deleted = resources.find(r => r.id === delId);
+            showToast(`"${deleted ? deleted.name : 'Resource'}" deleted.`, "success");
+        } 
         catch (e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
     }
