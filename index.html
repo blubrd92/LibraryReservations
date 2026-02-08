@@ -3305,6 +3305,13 @@ const firebaseConfig = {
             `Moving <strong>${escapeHtml(booking.name)}</strong>'s booking (${booking.duration}h) - Click any empty slot to reschedule`;
         document.getElementById('rescheduleBanner').classList.remove('hidden');
 
+        // Recalculate sidebar scrollbar after banner height change
+        const sidebar = document.getElementById('infoSidebar');
+        if (sidebar && !sidebar.classList.contains('hidden')) {
+            sidebar.style.overflow = 'hidden';
+            requestAnimationFrame(() => { sidebar.style.overflow = ''; });
+        }
+
         closeModal('bookingModal');
         loadBookingsForCurrentView();
     }
@@ -3321,7 +3328,13 @@ const firebaseConfig = {
 
         document.getElementById('rescheduleBanner').classList.add('hidden');
         loadBookingsForCurrentView();
-    }
+        
+        // Recalculate sidebar scrollbar after banner height change
+        const sidebar = document.getElementById('infoSidebar');
+        if (sidebar && !sidebar.classList.contains('hidden')) {
+            sidebar.style.overflow = 'hidden';
+            requestAnimationFrame(() => { sidebar.style.overflow = ''; });
+        }
 
     function handleRescheduleSlotClick(slotId, subIdx) {
         if (!rescheduleMode.active) return false;
