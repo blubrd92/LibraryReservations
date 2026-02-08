@@ -804,12 +804,12 @@
 </header>
 
 <!-- Reschedule Mode Banner -->
-<div id="rescheduleBanner" class="hidden" style="background: linear-gradient(135deg, #ff9800, #f57c00); color: white; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+<div id="rescheduleBanner" class="hidden" style="background: linear-gradient(135deg, #546E7A, #455A64); color: white; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
     <div>
         <strong>📅 Reschedule Mode:</strong>
-        <span id="rescheduleBannerText">Select a new time slot for this booking</span>
+        <span id="rescheduleBannerText">Use the arrows to navigate to a different day or week if needed, then click any empty slot to place the booking.</span>
     </div>
-    <button onclick="cancelRescheduleMode()" style="background: white; color: #f57c00; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">✕ Cancel</button>
+    <button onclick="cancelRescheduleMode()" style="background: white; color: #455A64; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">✕ Cancel</button>
 </div>
 
 <div class="layout-wrapper">
@@ -3302,7 +3302,7 @@ const firebaseConfig = {
         rescheduleMode.sourceResourceId = currentResId;
 
         document.getElementById('rescheduleBannerText').innerHTML =
-            `Moving <strong>${escapeHtml(booking.name)}</strong>'s booking (${booking.duration}h) - Click any empty slot to reschedule`;
+            `Moving <strong>${escapeHtml(booking.name)}</strong>'s booking (${booking.duration}h). Use the arrows to navigate to a different day or week if needed, then click any empty slot to place it.`;
         document.getElementById('rescheduleBanner').classList.remove('hidden');
 
         // Recalculate sidebar scrollbar after banner height change
