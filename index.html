@@ -3316,7 +3316,11 @@ const firebaseConfig = {
         loadBookingsForCurrentView();
     }
 
-    function cancelRescheduleMode(navigateToToday = true) {
+    function cancelRescheduleMode(navigateToSource = true) {
+        // Capture source location before clearing
+        const sourceWeekKey = rescheduleMode.sourceWeekKey;
+        const sourceDayIdx = rescheduleMode.sourceDayIdx;
+        
         rescheduleMode.active = false;
         rescheduleMode.sourceId = null;
         rescheduleMode.sourceData = null;
@@ -3328,17 +3332,17 @@ const firebaseConfig = {
 
         document.getElementById('rescheduleBanner').classList.add('hidden');
         
-        if (navigateToToday) {
-            // Navigate back to today on cancel
-            const d = new Date();
-            const day = d.getDay();
-            const diff = d.getDate() - day;
-            const weekStart = new Date(d);
-            weekStart.setDate(diff);
+        if (navigateToSource && sourceWeekKey) {
+            // Navigate back to the booking's original week/day
+            const [y, m, d] = sourceWeekKey.split('-').map(Number);
+            const weekStart = new Date(y, m - 1, d);
             weekStart.setHours(0,0,0,0);
             currentWeekStart = weekStart;
-            currentDayDate = new Date();
-            currentDayDate.setHours(0,0,0,0);
+            if (sourceDayIdx !== null && sourceDayIdx !== undefined) {
+                const dayDate = new Date(weekStart);
+                dayDate.setDate(dayDate.getDate() + sourceDayIdx);
+                currentDayDate = dayDate;
+            }
             updateUIControls();
         }
         
