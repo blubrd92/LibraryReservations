@@ -991,17 +991,26 @@
         <p style="margin-bottom: 15px;">Would you like to import settings from an existing resource?</p>
         
         <div class="form-group">
-            <label>Import Closure Dates From:</label>
-            <select id="importClosuresSource">
-                <option value="">-- No, start fresh --</option>
-            </select>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="importCloneAll" onchange="toggleCloneAll()">
+                <span id="importCloneAllLabel">Clone all settings from source resource</span>
+            </label>
         </div>
-        
-        <div class="form-group">
-            <label>Import Operating Hours From:</label>
-            <select id="importHoursSource">
-                <option value="">-- Use default hours --</option>
-            </select>
+
+        <div id="importIndividualOptions">
+            <div class="form-group">
+                <label>Import Closure Dates From:</label>
+                <select id="importClosuresSource">
+                    <option value="">-- No, start fresh --</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Import Operating Hours From:</label>
+                <select id="importHoursSource">
+                    <option value="">-- Use default hours --</option>
+                </select>
+            </div>
         </div>
         
         <div style="display: flex; justify-content: space-between; margin-top: 20px;">
@@ -1117,10 +1126,53 @@
                             <textarea id="editSidebarText" rows="8" style="width:100%; box-sizing:border-box;" placeholder="Enter policies, rules, or instructions here..."></textarea>
                         </div>
                     </div>
+                    <div class="settings-option" style="flex-direction:column; align-items:flex-start;">
+                        <label style="margin-bottom:8px;">Booking Color Palette</label>
+                        <div id="colorPaletteOptions" style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                                <input type="radio" name="editColorPalette" value="default" style="width:auto;">
+                                <span style="display:inline-flex; gap:2px;">
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#5c6bc0;"></span>
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#26a69a;"></span>
+                                </span>
+                                <span style="font-size:0.85em;">Indigo &amp; Teal</span>
+                            </label>
+                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                                <input type="radio" name="editColorPalette" value="warm" style="width:auto;">
+                                <span style="display:inline-flex; gap:2px;">
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#c75b39;"></span>
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#5a8a6e;"></span>
+                                </span>
+                                <span style="font-size:0.85em;">Terracotta &amp; Sage</span>
+                            </label>
+                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                                <input type="radio" name="editColorPalette" value="berry" style="width:auto;">
+                                <span style="display:inline-flex; gap:2px;">
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#7b2d8e;"></span>
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#b8860b;"></span>
+                                </span>
+                                <span style="font-size:0.85em;">Plum &amp; Gold</span>
+                            </label>
+                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                                <input type="radio" name="editColorPalette" value="ocean" style="width:auto;">
+                                <span style="display:inline-flex; gap:2px;">
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#2e6ea6;"></span>
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#b55470;"></span>
+                                </span>
+                                <span style="font-size:0.85em;">Ocean &amp; Rose</span>
+                            </label>
+                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                                <input type="radio" name="editColorPalette" value="accessible" style="width:auto;">
+                                <span style="display:inline-flex; gap:2px;">
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#0077BB;"></span>
+                                    <span style="width:24px; height:24px; border-radius:4px; background:#EE7733;"></span>
+                                </span>
+                                <span style="font-size:0.85em;">Blue &amp; Orange (Colorblind)</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <!-- SECTION: Schedule -->
             <div class="settings-section">
                 <div class="settings-section-header" onclick="toggleSettingsSection(this)">
                     <span class="section-arrow">&#9660;</span>
@@ -1230,6 +1282,24 @@
         </div>
     </div>
 </div>
+
+<div id="deleteResourceModal" class="modal">
+    <div class="modal-content" style="max-width: 420px;">
+        <div class="modal-header" style="background: var(--danger); color: white;">⚠️ Delete Resource</div>
+        <div style="padding: 15px 0;">
+            <p style="margin: 0 0 10px 0; font-weight: 600;" id="deleteResourceName"></p>
+            <p style="margin: 0 0 15px 0; color: #b71c1c; font-weight: 600;">This action cannot be undone. All bookings associated with this resource will become orphaned.</p>
+            <div class="form-group">
+                <label>Enter admin password to confirm:</label>
+                <input type="password" id="deleteResourcePassInput" placeholder="Password" onkeydown="if(event.key==='Enter') confirmDeleteResource()">
+            </div>
+        </div>
+        <div class="flex gap">
+            <button class="btn-danger" onclick="confirmDeleteResource()" style="background: var(--danger); color: white;">Delete Permanently</button>
+            <button onclick="closeModal('deleteResourceModal')">Cancel</button>
+        </div>
+    </div>
+</div>
 <div id="toast-container"></div>
 
 <script>
@@ -1255,6 +1325,13 @@ const firebaseConfig = {
 
     const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const DEFAULT_HOURS = [0,0, 10,18, 10,20, 10,18, 10,18, 10,17, 10,17]; 
+    const COLOR_PALETTES = {
+        default: ['#5c6bc0', '#26a69a'],
+        warm:    ['#c75b39', '#5a8a6e'],
+        berry:   ['#7b2d8e', '#b8860b'],
+        ocean:   ['#2e6ea6', '#b55470'],
+        accessible: ['#0077BB', '#EE7733']
+    };
 
     function showToast(message, type = 'success') {
         const container = document.getElementById('toast-container');
@@ -1282,6 +1359,7 @@ const firebaseConfig = {
 
     // Pending new resource data (for import closures flow)
     let pendingNewResource = null;
+    let cloneSourceId = null;
 
     // DRAG-AND-DROP STATE
     let dragState = {
@@ -1609,6 +1687,12 @@ const firebaseConfig = {
         container.innerHTML = '';
         const res = resources.find(r => r.id === currentResId);
         if(!res) return;
+        
+        // Apply color palette
+        const palette = COLOR_PALETTES[res.colorPalette] || COLOR_PALETTES.default;
+        document.documentElement.style.setProperty('--app-color-1', palette[0]);
+        document.documentElement.style.setProperty('--app-color-2', palette[1]);
+        
         const isDayView = res.viewMode === 'day';
         
         let columns = []; 
@@ -3630,6 +3714,12 @@ const firebaseConfig = {
         document.getElementById('editAdvanceLimitAdminBypass').checked = r.advanceLimitAdminBypass || false;
         toggleAdvanceLimitConfig();
 
+        // Load Color Palette
+        const palette = r.colorPalette || 'default';
+        document.querySelectorAll('input[name="editColorPalette"]').forEach(radio => {
+            radio.checked = radio.value === palette;
+        });
+
         toggleSubRoomInput();
         const container = document.getElementById('daysConfigContainer');
         container.innerHTML = '';
@@ -3985,6 +4075,17 @@ const firebaseConfig = {
                 hoursSelect.appendChild(opt);
             });
             
+            closeModal('settingsOverlay');
+            
+            // Track the resource being viewed as clone source
+            cloneSourceId = document.getElementById('settingResSelect').value;
+            const cloneSource = resources.find(r => r.id === cloneSourceId);
+            const cloneLabel = document.getElementById('importCloneAllLabel');
+            cloneLabel.textContent = cloneSource ? `Clone all settings from "${cloneSource.name}"` : 'Clone all settings from source resource';
+            document.getElementById('importCloneAll').checked = false;
+            document.getElementById('importIndividualOptions').style.opacity = '1';
+            document.getElementById('importIndividualOptions').style.pointerEvents = 'auto';
+
             document.getElementById('importClosuresModal').style.display = 'flex';
         } else {
             // No existing resources, create directly with defaults
@@ -4014,23 +4115,53 @@ const firebaseConfig = {
         }
     }
 
+    function toggleCloneAll() {
+        const checked = document.getElementById('importCloneAll').checked;
+        const opts = document.getElementById('importIndividualOptions');
+        opts.style.opacity = checked ? '0.4' : '1';
+        opts.style.pointerEvents = checked ? 'none' : 'auto';
+    }
+
     async function confirmImportSettings() {
         if (!pendingNewResource) return;
         
-        const importClosuresFromId = document.getElementById('importClosuresSource').value;
-        const importHoursFromId = document.getElementById('importHoursSource').value;
+        const cloneAll = document.getElementById('importCloneAll').checked;
         
-        if (importClosuresFromId) {
-            const sourceRes = resources.find(r => r.id === importClosuresFromId);
-            if (sourceRes && sourceRes.closureDates) {
-                pendingNewResource.closureDates = [...sourceRes.closureDates];
+        if (cloneAll && cloneSourceId) {
+            const source = resources.find(r => r.id === cloneSourceId);
+            if (source) {
+                pendingNewResource.viewMode = source.viewMode || 'week';
+                pendingNewResource.hasStaffField = source.hasStaffField || false;
+                pendingNewResource.defaultShowNotes = source.defaultShowNotes || false;
+                pendingNewResource.enableSidebar = source.enableSidebar || false;
+                pendingNewResource.sidebarText = '';
+                pendingNewResource.maxDuration = source.maxDuration || 2;
+                pendingNewResource.hours = [...(source.hours || DEFAULT_HOURS)];
+                pendingNewResource.closureDates = [...(source.closureDates || [])];
+                pendingNewResource.useQuarterHour = source.useQuarterHour || false;
+                pendingNewResource.advanceLimitEnabled = source.advanceLimitEnabled || false;
+                pendingNewResource.advanceLimitDays = source.advanceLimitDays || 1;
+                pendingNewResource.advanceLimitAdminBypass = source.advanceLimitAdminBypass || false;
+                pendingNewResource.subRooms = source.subRooms || '';
+                pendingNewResource.adminOnly = source.adminOnly || false;
+                pendingNewResource.colorPalette = source.colorPalette || 'default';
             }
-        }
-        
-        if (importHoursFromId) {
-            const sourceRes = resources.find(r => r.id === importHoursFromId);
-            if (sourceRes && sourceRes.hours) {
-                pendingNewResource.hours = [...sourceRes.hours];
+        } else {
+            const importClosuresFromId = document.getElementById('importClosuresSource').value;
+            const importHoursFromId = document.getElementById('importHoursSource').value;
+            
+            if (importClosuresFromId) {
+                const sourceRes = resources.find(r => r.id === importClosuresFromId);
+                if (sourceRes && sourceRes.closureDates) {
+                    pendingNewResource.closureDates = [...sourceRes.closureDates];
+                }
+            }
+            
+            if (importHoursFromId) {
+                const sourceRes = resources.find(r => r.id === importHoursFromId);
+                if (sourceRes && sourceRes.hours) {
+                    pendingNewResource.hours = [...sourceRes.hours];
+                }
             }
         }
         
@@ -4041,11 +4172,16 @@ const firebaseConfig = {
             await db.collection('system').doc('resources').set({ list: [...resources, pendingNewResource] }); 
             pendingSelectionId = pendingNewResource.id;
             const importedItems = [];
-            if (pendingNewResource.closureDates.length > 0) {
-                importedItems.push(`${pendingNewResource.closureDates.length} closure date(s)`);
-            }
-            if (importHoursFromId) {
-                importedItems.push('operating hours');
+            if (cloneAll && cloneSourceId) {
+                const source = resources.find(r => r.id === cloneSourceId);
+                importedItems.push(`all settings from "${source ? source.name : 'source'}"`);
+            } else {
+                if (pendingNewResource.closureDates.length > 0) {
+                    importedItems.push(`${pendingNewResource.closureDates.length} closure date(s)`);
+                }
+                if (document.getElementById('importHoursSource').value) {
+                    importedItems.push('operating hours');
+                }
             }
             if (importedItems.length > 0) {
                 showToast(`Resource created with imported ${importedItems.join(' and ')}!`, "success");
@@ -4054,17 +4190,36 @@ const firebaseConfig = {
         catch (e) { showToast("Error: " + e.message, "error"); }
         
         pendingNewResource = null;
+        cloneSourceId = null;
         showLoading(false);
     }
 
     function cancelImportSettings() {
         pendingNewResource = null;
+        cloneSourceId = null;
         closeModal('importClosuresModal');
+        document.getElementById('settingsOverlay').style.display = 'flex';
     }
     
     async function deleteResource() {
         const delId = document.getElementById('settingResSelect').value;
-        if(!delId || !confirm("Delete this resource?")) return;
+        if (!delId) return;
+        const res = resources.find(r => r.id === delId);
+        if (!res) return;
+        document.getElementById('deleteResourceName').textContent = `You are about to delete "${res.name}".`;
+        document.getElementById('deleteResourcePassInput').value = '';
+        document.getElementById('deleteResourceModal').style.display = 'flex';
+        setTimeout(() => document.getElementById('deleteResourcePassInput').focus(), 100);
+    }
+
+    async function confirmDeleteResource() {
+        const pass = document.getElementById('deleteResourcePassInput').value;
+        if (pass !== ADMIN_PASS) {
+            return pass ? showToast("Incorrect password.", "error") : null;
+        }
+        const delId = document.getElementById('settingResSelect').value;
+        if (!delId) return;
+        closeModal('deleteResourceModal');
         showLoading(true);
         try { await db.collection('system').doc('resources').set({ list: resources.filter(r => r.id !== delId) }); } 
         catch (e) { showToast("Error: " + e.message, "error"); }
@@ -4102,6 +4257,10 @@ const firebaseConfig = {
         target.advanceLimitDays = parseInt(document.getElementById('editAdvanceLimitDays').value) || 0;
         target.advanceLimitAdminBypass = document.getElementById('editAdvanceLimitAdminBypass').checked;
         
+        // Save Color Palette
+        const selectedPalette = document.querySelector('input[name="editColorPalette"]:checked');
+        target.colorPalette = selectedPalette ? selectedPalette.value : 'default';
+
         // Preserve closure dates from the in-memory resource (already updated by add/remove)
         target.closureDates = r.closureDates || [];
 
