@@ -20,7 +20,7 @@
             
             /* Two-Tone Alternating Palette */
             --app-color-1: #5c6bc0; /* Soft Indigo */
-            --app-color-2: #18806e; /* Deep Teal */
+            --app-color-2: #26a69a; /* Calm Teal */
             --app-color-3: #f1c40f; /* Staff Stripe */
         }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: #fff; color: #333; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
@@ -1139,8 +1139,8 @@
                             </select>
                             <span id="palettePreview" style="display:inline-flex; gap:3px;">
                                 <span style="width:28px; height:28px; border-radius:4px; background:#5c6bc0;"></span>
-                                <span style="width:28px; height:28px; border-radius:4px; background:#18806e;"></span>
-                                <span style="width:10px; height:28px; border-radius:3px; background:#f1c40f;" title="Staff stripe"></span>
+                                <span style="width:28px; height:28px; border-radius:4px; background:#26a69a;"></span>
+                                <span style="width:28px; height:28px; border-radius:4px; background:#f1c40f;" title="Staff stripe"></span>
                             </span>
                         </div>
                     </div>
@@ -1299,7 +1299,7 @@ const firebaseConfig = {
     const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const DEFAULT_HOURS = [0,0, 10,18, 10,20, 10,18, 10,18, 10,17, 10,17]; 
     const COLOR_PALETTES = {
-        default: ['#5c6bc0', '#18806e', '#f1c40f'],
+        default: ['#5c6bc0', '#26a69a', '#f1c40f'],
         warm:    ['#b5502f', '#4a7a5e', '#FFB300'],
         slate:   ['#546e7a', '#8b3a4a', '#69F0AE'],
         ocean:   ['#2e6ea6', '#b55470', '#00E5FF'],
@@ -3670,7 +3670,7 @@ const firebaseConfig = {
         document.getElementById('palettePreview').innerHTML = 
             `<span style="width:28px; height:28px; border-radius:4px; background:${p[0]};"></span>` +
             `<span style="width:28px; height:28px; border-radius:4px; background:${p[1]};"></span>` +
-            `<span style="width:10px; height:28px; border-radius:3px; background:${p[2]};" title="Staff stripe"></span>`;
+            `<span style="width:28px; height:28px; border-radius:4px; background:${p[2]};" title="Staff stripe"></span>`;
     }
 
     function loadSettingsForEditor() {
