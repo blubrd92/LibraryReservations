@@ -1531,6 +1531,9 @@ const firebaseConfig = {
         };
 
         if (!currentResId && resources.length > 0) currentResId = resources[0].id;
+        if (currentResId && !resources.find(r => r.id === currentResId) && resources.length > 0) {
+            currentResId = resources[0].id;
+        }
         if (pendingSelectionId && resources.find(r => r.id === pendingSelectionId)) {
             currentResId = pendingSelectionId;
         }
@@ -4099,9 +4102,9 @@ const firebaseConfig = {
                 advanceLimitAdminBypass: false
             };
             try { 
-                await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); 
                 pendingSelectionId = newRes.id;
                 pendingOpenSettings = true;
+                await db.collection('system').doc('resources').set({ list: [...resources, newRes] }); 
             } 
             catch (e) { showToast("Error: " + e.message, "error"); }
             showLoading(false);
@@ -4161,22 +4164,25 @@ const firebaseConfig = {
         showLoading(true);
         closeModal('importClosuresModal');
         
+        // Set flags BEFORE Firebase write since onSnapshot fires during await
+        pendingSelectionId = pendingNewResource.id;
+        pendingOpenSettings = true;
+        
+        const importedItems = [];
+        if (cloneAll && cloneSourceId) {
+            const source = resources.find(r => r.id === cloneSourceId);
+            importedItems.push(`all settings from "${source ? source.name : 'source'}"`);
+        } else {
+            if (pendingNewResource.closureDates.length > 0) {
+                importedItems.push(`${pendingNewResource.closureDates.length} closure date(s)`);
+            }
+            if (document.getElementById('importHoursSource').value) {
+                importedItems.push('operating hours');
+            }
+        }
+        
         try { 
             await db.collection('system').doc('resources').set({ list: [...resources, pendingNewResource] }); 
-            pendingSelectionId = pendingNewResource.id;
-            pendingOpenSettings = true;
-            const importedItems = [];
-            if (cloneAll && cloneSourceId) {
-                const source = resources.find(r => r.id === cloneSourceId);
-                importedItems.push(`all settings from "${source ? source.name : 'source'}"`);
-            } else {
-                if (pendingNewResource.closureDates.length > 0) {
-                    importedItems.push(`${pendingNewResource.closureDates.length} closure date(s)`);
-                }
-                if (document.getElementById('importHoursSource').value) {
-                    importedItems.push('operating hours');
-                }
-            }
             if (importedItems.length > 0) {
                 showToast(`Resource created with imported ${importedItems.join(' and ')}!`, "success");
             }
@@ -4216,13 +4222,17 @@ const firebaseConfig = {
         closeModal('deleteResourceModal');
         closeModal('settingsOverlay');
         showLoading(true);
+        
+        const deleted = resources.find(r => r.id === delId);
+        const remaining = resources.filter(r => r.id !== delId);
+        
+        // Set currentResId BEFORE Firebase write since onSnapshot fires during await
+        if (currentResId === delId) {
+            currentResId = remaining.length > 0 ? remaining[0].id : null;
+        }
+        
         try {
-            const remaining = resources.filter(r => r.id !== delId);
             await db.collection('system').doc('resources').set({ list: remaining });
-            if (currentResId === delId) {
-                currentResId = remaining.length > 0 ? remaining[0].id : null;
-            }
-            const deleted = resources.find(r => r.id === delId);
             showToast(`"${deleted ? deleted.name : 'Resource'}" deleted.`, "success");
         } 
         catch (e) { showToast("Error: " + e.message, "error"); }
