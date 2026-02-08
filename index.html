@@ -20,7 +20,8 @@
             
             /* Two-Tone Alternating Palette */
             --app-color-1: #5c6bc0; /* Soft Indigo */
-            --app-color-2: #26a69a; /* Calm Teal */
+            --app-color-2: #18806e; /* Deep Teal */
+            --app-color-3: #f1c40f; /* Staff Stripe */
         }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: #fff; color: #333; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
         
@@ -182,7 +183,7 @@
             box-sizing: border-box;
         }
         
-        .booking-float.with-staff { border-left: 5px solid #f1c40f; }
+        .booking-float.with-staff { border-left: 5px solid var(--app-color-3); }
         
         .booking-float .slot-name,
         .booking-float .slot-staff,
@@ -990,10 +991,10 @@
         <div class="modal-header">Import Settings for New Resource</div>
         <p style="margin-bottom: 15px;">Would you like to import settings from an existing resource?</p>
         
-        <div class="form-group">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                <input type="checkbox" id="importCloneAll" onchange="toggleCloneAll()">
-                <span id="importCloneAllLabel">Clone all settings from source resource</span>
+        <div class="form-group" style="background: #f5f5f5; padding: 12px; border-radius: 6px; border: 1px solid #ddd;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="importCloneAll" onchange="toggleCloneAll()" style="width: auto; margin: 0;">
+                <span id="importCloneAllLabel" style="font-weight: 600;">Clone all settings from source resource</span>
             </label>
         </div>
 
@@ -1128,47 +1129,19 @@
                     </div>
                     <div class="settings-option" style="flex-direction:column; align-items:flex-start;">
                         <label style="margin-bottom:8px;">Booking Color Palette</label>
-                        <div id="colorPaletteOptions" style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
-                                <input type="radio" name="editColorPalette" value="default" style="width:auto;">
-                                <span style="display:inline-flex; gap:2px;">
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#5c6bc0;"></span>
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#26a69a;"></span>
-                                </span>
-                                <span style="font-size:0.85em;">Indigo &amp; Teal</span>
-                            </label>
-                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
-                                <input type="radio" name="editColorPalette" value="warm" style="width:auto;">
-                                <span style="display:inline-flex; gap:2px;">
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#c75b39;"></span>
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#5a8a6e;"></span>
-                                </span>
-                                <span style="font-size:0.85em;">Terracotta &amp; Sage</span>
-                            </label>
-                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
-                                <input type="radio" name="editColorPalette" value="berry" style="width:auto;">
-                                <span style="display:inline-flex; gap:2px;">
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#7b2d8e;"></span>
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#b8860b;"></span>
-                                </span>
-                                <span style="font-size:0.85em;">Plum &amp; Gold</span>
-                            </label>
-                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
-                                <input type="radio" name="editColorPalette" value="ocean" style="width:auto;">
-                                <span style="display:inline-flex; gap:2px;">
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#2e6ea6;"></span>
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#b55470;"></span>
-                                </span>
-                                <span style="font-size:0.85em;">Ocean &amp; Rose</span>
-                            </label>
-                            <label class="color-palette-option" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
-                                <input type="radio" name="editColorPalette" value="accessible" style="width:auto;">
-                                <span style="display:inline-flex; gap:2px;">
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#0077BB;"></span>
-                                    <span style="width:24px; height:24px; border-radius:4px; background:#EE7733;"></span>
-                                </span>
-                                <span style="font-size:0.85em;">Blue &amp; Orange (Colorblind)</span>
-                            </label>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <select id="editColorPalette" onchange="updatePalettePreview()" style="flex:1;">
+                                <option value="default">Indigo &amp; Teal</option>
+                                <option value="warm">Terracotta &amp; Sage</option>
+                                <option value="slate">Slate &amp; Burgundy</option>
+                                <option value="ocean">Ocean &amp; Rose</option>
+                                <option value="accessible">Blue &amp; Orange (Colorblind)</option>
+                            </select>
+                            <span id="palettePreview" style="display:inline-flex; gap:3px;">
+                                <span style="width:28px; height:28px; border-radius:4px; background:#5c6bc0;"></span>
+                                <span style="width:28px; height:28px; border-radius:4px; background:#18806e;"></span>
+                                <span style="width:10px; height:28px; border-radius:3px; background:#f1c40f;" title="Staff stripe"></span>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -1326,11 +1299,11 @@ const firebaseConfig = {
     const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const DEFAULT_HOURS = [0,0, 10,18, 10,20, 10,18, 10,18, 10,17, 10,17]; 
     const COLOR_PALETTES = {
-        default: ['#5c6bc0', '#26a69a'],
-        warm:    ['#c75b39', '#5a8a6e'],
-        berry:   ['#7b2d8e', '#b8860b'],
-        ocean:   ['#2e6ea6', '#b55470'],
-        accessible: ['#0077BB', '#EE7733']
+        default: ['#5c6bc0', '#18806e', '#f1c40f'],
+        warm:    ['#b5502f', '#4a7a5e', '#FFB300'],
+        slate:   ['#546e7a', '#8b3a4a', '#69F0AE'],
+        ocean:   ['#2e6ea6', '#b55470', '#00E5FF'],
+        accessible: ['#0077BB', '#B35000', '#FFEE58']
     };
 
     function showToast(message, type = 'success') {
@@ -1692,6 +1665,7 @@ const firebaseConfig = {
         const palette = COLOR_PALETTES[res.colorPalette] || COLOR_PALETTES.default;
         document.documentElement.style.setProperty('--app-color-1', palette[0]);
         document.documentElement.style.setProperty('--app-color-2', palette[1]);
+        document.documentElement.style.setProperty('--app-color-3', palette[2]);
         
         const isDayView = res.viewMode === 'day';
         
@@ -3690,6 +3664,15 @@ const firebaseConfig = {
         loadSettingsForEditor(); 
     }
     
+    function updatePalettePreview() {
+        const val = document.getElementById('editColorPalette').value;
+        const p = COLOR_PALETTES[val] || COLOR_PALETTES.default;
+        document.getElementById('palettePreview').innerHTML = 
+            `<span style="width:28px; height:28px; border-radius:4px; background:${p[0]};"></span>` +
+            `<span style="width:28px; height:28px; border-radius:4px; background:${p[1]};"></span>` +
+            `<span style="width:10px; height:28px; border-radius:3px; background:${p[2]};" title="Staff stripe"></span>`;
+    }
+
     function loadSettingsForEditor() {
         const editId = document.getElementById('settingResSelect').value;
         const r = resources.find(x => x.id === editId);
@@ -3716,9 +3699,8 @@ const firebaseConfig = {
 
         // Load Color Palette
         const palette = r.colorPalette || 'default';
-        document.querySelectorAll('input[name="editColorPalette"]').forEach(radio => {
-            radio.checked = radio.value === palette;
-        });
+        document.getElementById('editColorPalette').value = palette;
+        updatePalettePreview();
 
         toggleSubRoomInput();
         const container = document.getElementById('daysConfigContainer');
@@ -4258,8 +4240,7 @@ const firebaseConfig = {
         target.advanceLimitAdminBypass = document.getElementById('editAdvanceLimitAdminBypass').checked;
         
         // Save Color Palette
-        const selectedPalette = document.querySelector('input[name="editColorPalette"]:checked');
-        target.colorPalette = selectedPalette ? selectedPalette.value : 'default';
+        target.colorPalette = document.getElementById('editColorPalette').value || 'default';
 
         // Preserve closure dates from the in-memory resource (already updated by add/remove)
         target.closureDates = r.closureDates || [];
