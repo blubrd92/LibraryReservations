@@ -490,8 +490,7 @@
                             <div class="closure-empty">No closure dates set</div>
                         </div>
                         <div class="closure-actions">
-                            <button onclick="applyClosuresToAllResources()" style="font-size:0.85em;">Apply Year to All Resources</button>
-                            <button class="btn-danger" onclick="clearAllClosures()" style="font-size:0.85em;">Clear Year's Closures</button>
+                            <button onclick="openApplyClosuresModal()" style="font-size:0.85em;">Apply Year to Other Resources...</button>
                         </div>
                     </div>
                 </div>
@@ -595,6 +594,17 @@
         <div class="flex gap">
             <button class="btn-danger" onclick="confirmDeleteResource()" style="background: var(--danger); color: white;">Delete Permanently</button>
             <button onclick="closeModal('deleteResourceModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+<div id="applyClosuresModal" class="modal">
+    <div class="modal-content" style="max-width: 420px;">
+        <div class="modal-header">Apply Closures to Resources</div>
+        <p id="applyClosuresDesc" style="margin: 10px 0; font-size: 0.9em; color: #555;"></p>
+        <div id="applyClosuresCheckboxes" style="margin: 12px 0; max-height: 300px; overflow-y: auto;"></div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 15px;">
+            <button onclick="closeModal('applyClosuresModal')">Cancel</button>
+            <button class="btn-success" onclick="confirmApplyClosures()">Apply</button>
         </div>
     </div>
 </div>

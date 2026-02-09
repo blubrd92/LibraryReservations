@@ -3369,7 +3369,7 @@ const firebaseConfig = {
         showToast("Closure date removed. Remember to save changes.", "success");
     }
 
-    async function applyClosuresToAllResources() {
+    function openApplyClosuresModal() {
         const editId = document.getElementById('settingResSelect').value;
         const sourceRes = resources.find(x => x.id === editId);
         if (!sourceRes) return;
@@ -3381,13 +3381,45 @@ const firebaseConfig = {
             return;
         }
         
-        if (!confirm(`Apply ${closures.length} closure date(s) for ${selectedYear} to ALL other resources? This will merge with their existing closures.`)) {
+        const otherResources = resources.filter(r => r.id !== editId);
+        if (otherResources.length === 0) {
+            showToast("No other resources to apply to.", "error");
             return;
         }
         
+        document.getElementById('applyClosuresDesc').textContent = 
+            `Apply ${closures.length} closure date(s) for ${selectedYear} from "${sourceRes.name}" to:`;
+        
+        const container = document.getElementById('applyClosuresCheckboxes');
+        container.innerHTML = otherResources.map(r => {
+            const existing = getClosuresForYear(r, selectedYear).length;
+            const note = existing > 0 ? ` (${existing} existing)` : '';
+            return `<label style="display:flex; align-items:center; gap:8px; padding:6px 4px; cursor:pointer;">
+                <input type="checkbox" value="${r.id}" checked style="width:auto;">
+                <span>${escapeHtml(r.name)}${note}</span>
+            </label>`;
+        }).join('');
+        
+        document.getElementById('applyClosuresModal').style.display = 'flex';
+    }
+    
+    async function confirmApplyClosures() {
+        const editId = document.getElementById('settingResSelect').value;
+        const sourceRes = resources.find(x => x.id === editId);
+        const selectedYear = document.getElementById('closureYearSelect').value;
+        const closures = getClosuresForYear(sourceRes, selectedYear);
+        
+        const checkboxes = document.querySelectorAll('#applyClosuresCheckboxes input[type="checkbox"]:checked');
+        const targetIds = [...checkboxes].map(cb => cb.value);
+        
+        if (targetIds.length === 0) {
+            showToast("No resources selected.", "error");
+            return;
+        }
+        
+        let applied = 0;
         resources.forEach(r => {
-            if (r.id === editId) return;
-            
+            if (!targetIds.includes(r.id)) return;
             if (!r.closuresByYear) r.closuresByYear = {};
             if (!r.closuresByYear[selectedYear]) r.closuresByYear[selectedYear] = [];
             
@@ -3396,41 +3428,19 @@ const firebaseConfig = {
                     r.closuresByYear[selectedYear].push({ ...c });
                 }
             });
+            applied++;
         });
         
+        closeModal('applyClosuresModal');
         showLoading(true);
         try {
             await db.collection('system').doc('resources').set({ list: resources });
-            showToast(`${selectedYear} closure dates applied to ${resources.length - 1} other resource(s)!`, "success");
+            showToast(`${selectedYear} closures applied to ${applied} resource(s).`, "success");
         } catch (e) {
             showToast("Error: " + e.message, "error");
         }
         showLoading(false);
     }
-
-    function clearAllClosures() {
-        const editId = document.getElementById('settingResSelect').value;
-        const res = resources.find(x => x.id === editId);
-        if (!res) return;
-        
-        const selectedYear = document.getElementById('closureYearSelect').value;
-        const count = getClosuresForYear(res, selectedYear).length;
-        if (count === 0) {
-            showToast(`No closure dates for ${selectedYear} to clear.`, "error");
-            return;
-        }
-        
-        if (!confirm(`Remove all ${count} closure date(s) for ${selectedYear} from this resource? This won't be saved until you click Save Changes.`)) {
-            return;
-        }
-        
-        if (res.closuresByYear) delete res.closuresByYear[selectedYear];
-        renderClosureList(res);
-        showToast(`All ${selectedYear} closure dates cleared. Click Save Changes to apply.`, 'success');
-    }
-
-
-
 
     async function applyHoursToAllResources() {
         const editId = document.getElementById('settingResSelect').value;
