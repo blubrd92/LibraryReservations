@@ -71,6 +71,10 @@
         <input type="hidden" id="slotId">
         <input type="hidden" id="subRoomIndex">
         
+        <div id="seriesInfo" class="hidden" style="background: #e3f2fd; padding: 8px 12px; border-radius: 4px; border: 1px solid #90caf9; margin-bottom: 10px; font-size: 0.9em; display: flex; align-items: center; gap: 6px;">
+            🔁 Part of a recurring series
+        </div>
+
         <div class="form-group">
             <label>Duration <span class="required-asterisk">*</span></label>
             <select id="bookDuration"></select>
@@ -98,6 +102,62 @@
             <div style="margin-top: 5px; display:flex; align-items:center; gap:5px;">
                 <input type="checkbox" id="bookShowNotes" style="width:auto;">
                 <label for="bookShowNotes" style="margin:0; font-size:0.9em; font-weight:normal; cursor:pointer;">Show on Grid?</label>
+            </div>
+        </div>
+
+        <div id="recurringSection" style="display:none;">
+            <div class="form-group" style="background: #e8f5e9; padding: 10px; border-radius: 4px; border: 1px solid #a5d6a7;">
+                <div style="display:flex; align-items:center; gap:5px;">
+                    <input type="checkbox" id="bookRecurring" onchange="toggleRecurringOptions()" style="width:auto;">
+                    <label for="bookRecurring" style="margin:0; font-weight:bold; cursor:pointer;">🔁 Repeat this booking</label>
+                </div>
+                <div id="recurringOptions" class="hidden" style="margin-top: 10px;">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+                        <div>
+                            <label style="font-size:0.8em; color:#666;">Pattern</label>
+                            <select id="recurPattern" onchange="onRecurPatternChange()">
+                                <option value="7">Weekly</option>
+                                <option value="14">Every 2 Weeks</option>
+                                <option value="28">Every 4 Weeks</option>
+                                <option value="monthly-date">Monthly (same date)</option>
+                                <option value="monthly-weekday" id="recurMonthlyWeekdayOpt">Monthly (Nth weekday)</option>
+                                <option value="monthly-last-weekday" id="recurMonthlyLastOpt">Monthly (last weekday)</option>
+                                <option value="custom-days">Custom interval (every X days)</option>
+                                <option value="manual">Pick dates manually</option>
+                            </select>
+                        </div>
+                        <div id="customDaysGroup" class="hidden">
+                            <label style="font-size:0.8em; color:#666;">Every how many days?</label>
+                            <input type="number" id="recurCustomDays" value="10" min="2" max="365" style="width: 80px;">
+                        </div>
+                    </div>
+                    <div id="recurEndControls" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-top: 8px;">
+                        <div>
+                            <label style="font-size:0.8em; color:#666;">End After</label>
+                            <select id="recurEndType" onchange="toggleRecurEndDate()">
+                                <option value="count">Number of occurrences</option>
+                                <option value="date">Specific date</option>
+                            </select>
+                        </div>
+                        <div id="recurCountGroup">
+                            <label style="font-size:0.8em; color:#666;">Occurrences (including this one)</label>
+                            <input type="number" id="recurCount" value="4" min="2" max="52" style="width: 80px;">
+                        </div>
+                        <div id="recurDateGroup" class="hidden">
+                            <label style="font-size:0.8em; color:#666;">Until Date</label>
+                            <input type="date" id="recurEndDate">
+                        </div>
+                    </div>
+                    <div id="manualDatesGroup" class="hidden" style="margin-top: 8px;">
+                        <label style="font-size:0.8em; color:#666;">Add dates to series</label>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <input type="date" id="manualDateInput">
+                            <button type="button" onclick="addManualDate()" class="btn-success" style="padding: 6px 12px; font-size: 0.85em;">Add</button>
+                        </div>
+                        <div id="manualDatesList" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;"></div>
+                        <div style="font-size: 0.75em; color: #666; margin-top: 4px;">The first booking date is already included. Add additional dates here.</div>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -310,8 +370,9 @@
                         </select>
                         <div id="subRoomConfig" class="hidden settings-sub-config" style="margin-left:0; margin-top:10px;">
                             <label style="display:block; margin-bottom:4px;">Sub-Rooms / Columns</label>
-                            <input type="text" id="editSubRooms" placeholder="e.g. Pod A, Pod B, Pod C" style="width:100%; box-sizing:border-box;">
-                            <small style="color:#666; display:block; margin-top:4px;">Comma separated. These will appear as columns in Day View.</small>
+                            <div id="subRoomCardList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;"></div>
+                            <button type="button" onclick="addSubRoom()" class="btn-success" style="padding: 6px 14px; font-size: 0.85em;">+ Add Sub-Room</button>
+                            <small style="color:#666; display:block; margin-top:6px;">Each sub-room appears as a column in Day View. Deactivating a room hides it from the grid but preserves all existing bookings.</small>
                         </div>
                     </div>
                 </div>
@@ -349,6 +410,12 @@
                                 <input type="checkbox" id="editAdvanceLimitAdminBypass" style="width:auto;">
                                 <label for="editAdvanceLimitAdminBypass">Allow admin account to bypass this limit</label>
                             </div>
+                        </div>
+                    </div>
+                    <div class="settings-option" style="flex-direction:column; align-items:flex-start;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="checkbox" id="editAllowRecurring" style="width:auto;">
+                            <label for="editAllowRecurring">🔁 Allow Recurring Bookings (staff can create repeating series)</label>
                         </div>
                     </div>
                 </div>
@@ -538,6 +605,17 @@
         <div class="flex gap">
             <button class="btn-danger" onclick="confirmDeleteResource()" style="background: var(--danger); color: white;">Delete Permanently</button>
             <button onclick="closeModal('deleteResourceModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+<div id="seriesDeleteModal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">Delete Recurring Booking</div>
+        <p style="margin: 15px 0;">This booking is part of a recurring series. What would you like to do?</p>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button class="btn-danger" onclick="confirmSeriesDelete('one')">Delete Just This One</button>
+            <button class="btn-danger" onclick="confirmSeriesDelete('all')" style="background: #b71c1c;">Delete Entire Series</button>
+            <button onclick="closeModal('seriesDeleteModal')">Cancel</button>
         </div>
     </div>
 </div>

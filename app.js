@@ -187,6 +187,7 @@ const firebaseConfig = {
                 // Migrate legacy closureDates to closuresByYear
                 let needsSave = false;
                 resources.forEach(r => { if (migrateClosureDates(r)) needsSave = true; });
+                resources.forEach(r => { if (migrateSubRooms(r)) needsSave = true; });
                 if (needsSave) db.collection('system').doc('resources').set({ list: resources });
             } else {
                 resources = [{ id: 'res-default', name: 'General Area', viewMode: 'week', hours: DEFAULT_HOURS, closuresByYear: {} }];
@@ -439,6 +440,41 @@ const firebaseConfig = {
         return all;
     }
 
+    // Migrate legacy comma-separated subRooms string to array of objects
+    function migrateSubRooms(res) {
+        if (typeof res.subRooms === 'string' && res.subRooms.trim()) {
+            const names = res.subRooms.split(',').map(s => s.trim()).filter(s => s);
+            res.subRooms = names.map((name, idx) => ({
+                id: 'sr-' + Date.now().toString(36) + idx,
+                name: name,
+                active: true,
+                displayOrder: idx
+            }));
+            return true;
+        }
+        // If it's already an array or empty, no migration needed
+        if (!res.subRooms || res.subRooms === '') {
+            res.subRooms = [];
+        }
+        return false;
+    }
+
+    // Get active sub-rooms sorted by displayOrder
+    function getActiveSubRooms(res) {
+        if (!Array.isArray(res.subRooms) || res.subRooms.length === 0) return [];
+        return res.subRooms
+            .map((sr, idx) => ({ ...sr, _arrayIndex: idx }))
+            .filter(sr => sr.active !== false)
+            .sort((a, b) => (a.displayOrder ?? a._arrayIndex) - (b.displayOrder ?? b._arrayIndex));
+    }
+
+    // Get sub-room name by array index (for resolving booking slot IDs)
+    function getSubRoomName(res, arrayIndex) {
+        if (!Array.isArray(res.subRooms)) return 'Room ' + (arrayIndex + 1);
+        const sr = res.subRooms[arrayIndex];
+        return sr ? sr.name : 'Room ' + (arrayIndex + 1);
+    }
+
     // Format date as YYYY-MM-DD for comparison
     function formatDateISO(d) {
         const year = d.getFullYear();
@@ -465,10 +501,11 @@ const firebaseConfig = {
         let columns = []; 
         if (isDayView) {
             const dayIdx = currentDayDate.getDay(); 
-            const subRooms = res.subRooms ? res.subRooms.split(',').map(s => s.trim()).filter(s => s) : ['Main'];
-            container.style.gridTemplateColumns = `85px repeat(${subRooms.length}, 1fr)`;
-            subRooms.forEach((name, idx) => {
-                columns.push({ header: name, date: currentDayDate, dayIndex: dayIdx, subIndex: idx });
+            const subRooms = getActiveSubRooms(res);
+            const subRoomList = subRooms.length > 0 ? subRooms : [{ name: 'Main', _arrayIndex: 0 }];
+            container.style.gridTemplateColumns = `85px repeat(${subRoomList.length}, 1fr)`;
+            subRoomList.forEach(sr => {
+                columns.push({ header: sr.name, date: currentDayDate, dayIndex: dayIdx, subIndex: sr._arrayIndex });
             });
         } else {
             container.style.gridTemplateColumns = `85px repeat(7, 1fr)`;
@@ -721,7 +758,8 @@ const firebaseConfig = {
                 const anon = isBookingAnonymized(activeWeekKey, booking.dayIndex, res);
                 booking.anonymized = anon;
                 const displayName = anon ? 'Past Booking' : escapeHtml(booking.data.name);
-                bookingEl.innerHTML = `<span class="slot-name">${displayName}</span>`;
+                const seriesIcon = booking.data.seriesId ? '<span class="series-indicator" title="Recurring series">🔁</span> ' : '';
+                bookingEl.innerHTML = `<span class="slot-name">${seriesIcon}${displayName}</span>`;
                 bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatTime(booking.end)} (${booking.data.duration}h)</span>`;
                 
                 if (booking.data.hasStaff) {
@@ -1732,6 +1770,42 @@ const firebaseConfig = {
         document.getElementById('bookHasStaff').disabled = !canEdit;
         document.getElementById('bookStaffName').disabled = !canEdit;
         
+        // Reset series info (not applicable for new bookings)
+        document.getElementById('seriesInfo').classList.add('hidden');
+        document.getElementById('seriesInfo').style.display = 'none';
+        
+        // Show recurring options if resource allows it and user can edit
+        const recurSection = document.getElementById('recurringSection');
+        if (canEdit && res.allowRecurring) {
+            recurSection.style.display = '';
+            document.getElementById('bookRecurring').checked = false;
+            document.getElementById('recurringOptions').classList.add('hidden');
+            document.getElementById('recurPattern').value = '7';
+            document.getElementById('customDaysGroup').classList.add('hidden');
+            document.getElementById('manualDatesGroup').classList.add('hidden');
+            document.getElementById('recurEndControls').style.display = '';
+            document.getElementById('recurEndType').value = 'count';
+            document.getElementById('recurCount').value = '4';
+            document.getElementById('recurCountGroup').classList.remove('hidden');
+            document.getElementById('recurDateGroup').classList.add('hidden');
+            manualSeriesDates = [];
+            renderManualDates();
+            
+            // Set dynamic labels for monthly weekday options
+            const slotDate = new Date(parts[0] + 'T00:00:00');
+            slotDate.setDate(slotDate.getDate() + dayIdx);
+            const weekdayName = slotDate.toLocaleDateString('en-US', { weekday: 'long' });
+            const dayOfMonth = slotDate.getDate();
+            const ordinal = Math.ceil(dayOfMonth / 7);
+            const ordinalNames = ['', '1st', '2nd', '3rd', '4th', '5th'];
+            document.getElementById('recurMonthlyWeekdayOpt').textContent = 
+                `Monthly (${ordinalNames[ordinal]} ${weekdayName})`;
+            document.getElementById('recurMonthlyLastOpt').textContent = 
+                `Monthly (last ${weekdayName})`;
+        } else {
+            recurSection.style.display = 'none';
+        }
+        
         modal.style.display = 'flex';
         document.getElementById('bookName').focus();
     }
@@ -2211,9 +2285,8 @@ const firebaseConfig = {
         const targetDateStr = targetDayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
         // Get room names if applicable
-        const subRooms = res.subRooms ? res.subRooms.split(',').map(s => s.trim()).filter(s => s) : [];
-        const sourceRoomName = subRooms.length > 0 && rescheduleMode.sourceSubIdx !== '' ? subRooms[parseInt(rescheduleMode.sourceSubIdx)] || '' : '';
-        const targetRoomName = subRooms.length > 0 && targetSubIdx !== '' ? subRooms[parseInt(targetSubIdx)] || '' : '';
+        const sourceRoomName = rescheduleMode.sourceSubIdx !== '' ? getSubRoomName(res, parseInt(rescheduleMode.sourceSubIdx)) : '';
+        const targetRoomName = targetSubIdx !== '' ? getSubRoomName(res, parseInt(targetSubIdx)) : '';
         const showRoomChange = sourceRoomName && targetRoomName && sourceRoomName !== targetRoomName;
 
         // Populate confirmation modal
@@ -2396,6 +2469,19 @@ const firebaseConfig = {
         document.getElementById('bookHasStaff').disabled = !canEdit || anon;
         document.getElementById('bookStaffName').disabled = !canEdit || anon;
 
+        // Show series info for recurring bookings
+        const seriesEl = document.getElementById('seriesInfo');
+        if (data && data.seriesId) {
+            seriesEl.classList.remove('hidden');
+            seriesEl.style.display = '';
+        } else {
+            seriesEl.classList.add('hidden');
+            seriesEl.style.display = 'none';
+        }
+        
+        // Hide recurring options for existing bookings
+        document.getElementById('recurringSection').style.display = 'none';
+
         modal.style.display = 'flex';
     }
 
@@ -2474,6 +2560,15 @@ const firebaseConfig = {
             showNotes: showNotes 
         };
 
+        // Check if this is a recurring booking creation
+        const isRecurring = document.getElementById('recurringSection').style.display !== 'none'
+            && document.getElementById('bookRecurring').checked;
+
+        if (isRecurring && isNewBooking) {
+            await saveRecurringBooking(data, slotId, res, start, dayIdx, weekKey, subIdx);
+            return;
+        }
+
         showLoading(true);
         try { 
             await db.collection('appointments').doc(slotId).set(data); 
@@ -2482,6 +2577,254 @@ const firebaseConfig = {
         } 
         catch(e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
+    }
+
+    async function saveRecurringBooking(bookingData, baseSlotId, res, startTime, baseDayIdx, baseWeekKey, subIdx) {
+        const pattern = document.getElementById('recurPattern').value;
+        const endType = document.getElementById('recurEndType').value;
+        
+        // Calculate base date
+        const [wy, wm, wd] = baseWeekKey.split('-').map(Number);
+        const baseDate = new Date(wy, wm - 1, wd);
+        baseDate.setDate(baseDate.getDate() + baseDayIdx);
+        
+        // Generate occurrence dates based on pattern
+        let dates = [new Date(baseDate)];
+        
+        if (pattern === 'manual') {
+            // Manual mode: base date + manually picked dates
+            manualSeriesDates.forEach(ds => {
+                const d = new Date(ds + 'T00:00:00');
+                if (d.getTime() !== baseDate.getTime()) dates.push(d);
+            });
+            if (dates.length < 2) return showToast('Add at least one additional date for a series.', 'error');
+        } else {
+            // Pattern-based: generate dates using end condition
+            const maxOccurrences = 52;
+            let targetCount, endDate;
+            
+            if (endType === 'count') {
+                targetCount = Math.min(parseInt(document.getElementById('recurCount').value) || 4, maxOccurrences);
+            } else {
+                const endDateVal = document.getElementById('recurEndDate').value;
+                if (!endDateVal) return showToast('Please select an end date.', 'error');
+                endDate = new Date(endDateVal + 'T00:00:00');
+                if (endDate <= baseDate) return showToast('End date must be after the first booking date.', 'error');
+                targetCount = maxOccurrences; // will be capped by endDate
+            }
+            
+            if (pattern === 'monthly-date') {
+                // Same date each month (e.g., the 15th)
+                const targetDay = baseDate.getDate();
+                let monthOffset = 1;
+                while (dates.length < targetCount) {
+                    // Always compute from baseDate to avoid drift
+                    const year = baseDate.getFullYear();
+                    const month = baseDate.getMonth() + monthOffset;
+                    // Try target day; if month is too short, use last day of month
+                    const daysInMonth = new Date(year, month + 1, 0).getDate();
+                    const useDay = Math.min(targetDay, daysInMonth);
+                    const next = new Date(year, month, useDay);
+                    monthOffset++;
+                    if (endDate && next > endDate) break;
+                    if (monthOffset > 60) break; // safety
+                    dates.push(next);
+                }
+            } else if (pattern === 'monthly-weekday') {
+                // Nth weekday of month (e.g., 3rd Wednesday)
+                const targetWeekday = baseDate.getDay();
+                const targetOrdinal = Math.ceil(baseDate.getDate() / 7);
+                let monthOffset = 1;
+                while (dates.length < targetCount) {
+                    const year = baseDate.getFullYear();
+                    const month = baseDate.getMonth() + monthOffset;
+                    const next = getNthWeekdayOfMonth(
+                        new Date(year, month, 1).getFullYear(),
+                        new Date(year, month, 1).getMonth(),
+                        targetWeekday, targetOrdinal
+                    );
+                    monthOffset++;
+                    if (monthOffset > 60) break;
+                    if (!next) continue; // 5th occurrence doesn't exist this month
+                    if (endDate && next > endDate) break;
+                    dates.push(next);
+                }
+            } else if (pattern === 'monthly-last-weekday') {
+                // Last weekday of month (e.g., last Tuesday)
+                const targetWeekday = baseDate.getDay();
+                let monthOffset = 1;
+                while (dates.length < targetCount) {
+                    const year = baseDate.getFullYear();
+                    const month = baseDate.getMonth() + monthOffset;
+                    const refDate = new Date(year, month, 1);
+                    const next = getLastWeekdayOfMonth(refDate.getFullYear(), refDate.getMonth(), targetWeekday);
+                    monthOffset++;
+                    if (monthOffset > 60) break;
+                    if (endDate && next > endDate) break;
+                    dates.push(next);
+                }
+            } else {
+                // Day-interval patterns (weekly=7, biweekly=14, 4-weekly=28, custom)
+                let intervalDays;
+                if (pattern === 'custom-days') {
+                    intervalDays = parseInt(document.getElementById('recurCustomDays').value) || 10;
+                    if (intervalDays < 2) intervalDays = 2;
+                } else {
+                    intervalDays = parseInt(pattern);
+                }
+                for (let i = 1; dates.length < targetCount; i++) {
+                    const next = new Date(baseDate);
+                    next.setDate(next.getDate() + (intervalDays * i));
+                    if (endDate && next > endDate) break;
+                    if (i > 365) break; // safety
+                    dates.push(next);
+                }
+            }
+            
+            if (dates.length < 2) return showToast('A recurring series needs at least 2 occurrences.', 'error');
+        }
+        
+        // Collect unique week keys to query for conflicts
+        const weekKeysNeeded = new Set();
+        dates.forEach(d => weekKeysNeeded.add(getWeekKey(d)));
+        
+        showLoading(true);
+        
+        // Query all needed weeks' bookings in parallel
+        const weekBookings = {};
+        try {
+            const queries = [...weekKeysNeeded].map(wk => {
+                const qPrefix = `${res.id}_${wk}`;
+                return db.collection('appointments')
+                    .where(firebase.firestore.FieldPath.documentId(), '>=', qPrefix)
+                    .where(firebase.firestore.FieldPath.documentId(), '<', qPrefix + '\uf8ff')
+                    .get()
+                    .then(snapshot => {
+                        snapshot.forEach(doc => { weekBookings[doc.id] = doc.data(); });
+                    });
+            });
+            await Promise.all(queries);
+        } catch (e) {
+            showLoading(false);
+            return showToast('Error checking conflicts: ' + e.message, 'error');
+        }
+        
+        showLoading(false);
+        
+        // Check each date for closures, operating hours, and conflicts
+        const skipped = [];
+        const toCreate = [];
+        const seriesId = 'ser-' + Date.now();
+        const prefix = res.id + '_';
+        
+        for (const date of dates) {
+            const weekKey = getWeekKey(date);
+            const dayIdx = date.getDay();
+            const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            
+            // Check closure
+            if (getClosureReason(res, date)) {
+                skipped.push(dateStr + ' (closed)');
+                continue;
+            }
+            
+            // Check if day is open
+            const dayStart = res.hours[dayIdx * 2];
+            const dayEnd = res.hours[dayIdx * 2 + 1];
+            if (dayStart === dayEnd) {
+                skipped.push(dateStr + ' (not open)');
+                continue;
+            }
+            
+            // Check if booking fits within operating hours
+            if (startTime + bookingData.duration > dayEnd) {
+                skipped.push(dateStr + ' (exceeds closing time)');
+                continue;
+            }
+            
+            // Build slot ID
+            let slotId = `${res.id}_${weekKey}_${dayIdx}_${startTime}`;
+            if (subIdx) slotId += `_${subIdx}`;
+            
+            // Check for time conflicts
+            const end = startTime + bookingData.duration;
+            let hasConflict = false;
+            Object.keys(weekBookings).forEach(key => {
+                if (key === slotId) return;
+                const kSuffix = key.substring(prefix.length);
+                const kParts = kSuffix.split('_');
+                const kDay = parseInt(kParts[1]);
+                const kSub = kParts[3] || null;
+                const checkSub = subIdx ? String(subIdx) : null;
+                if (kDay !== dayIdx) return;
+                if (kSub != checkSub) return;
+                const bStart = parseFloat(kParts[2]);
+                const bEnd = bStart + weekBookings[key].duration;
+                if (startTime < bEnd && end > bStart) hasConflict = true;
+            });
+            
+            if (hasConflict) {
+                skipped.push(dateStr + ' (time conflict)');
+                continue;
+            }
+            
+            toCreate.push({ slotId, date });
+        }
+        
+        if (toCreate.length === 0) {
+            return showToast('No valid dates found for this series. All dates had conflicts or closures.', 'error');
+        }
+        
+        // Show summary and confirm
+        let msg = `Creating ${toCreate.length} booking(s) for "${bookingData.name}."`;
+        if (skipped.length > 0) {
+            const displaySkipped = skipped.length <= 8 
+                ? skipped.join('\n') 
+                : skipped.slice(0, 8).join('\n') + '\n...and ' + (skipped.length - 8) + ' more.';
+            msg += `\n\nSkipping ${skipped.length} date(s):\n${displaySkipped}`;
+        }
+        msg += '\n\nContinue?';
+        
+        if (!confirm(msg)) return;
+        
+        // Batch create all bookings
+        showLoading(true);
+        try {
+            const batch = db.batch();
+            toCreate.forEach(({ slotId }) => {
+                const ref = db.collection('appointments').doc(slotId);
+                batch.set(ref, { ...bookingData, seriesId });
+            });
+            await batch.commit();
+            
+            if (toCreate.length > 0) updateStatsYearMeta(res.id, toCreate[0].slotId);
+            closeModal('bookingModal');
+            showToast(`${toCreate.length} recurring booking(s) created.`, 'success');
+        } catch (e) {
+            showToast('Error creating series: ' + e.message, 'error');
+        }
+        showLoading(false);
+    }
+    
+    // Helper: get Nth occurrence of a weekday in a month (0-indexed month)
+    function getNthWeekdayOfMonth(year, month, weekday, n) {
+        const first = new Date(year, month, 1);
+        let dayOffset = weekday - first.getDay();
+        if (dayOffset < 0) dayOffset += 7;
+        const firstOccurrence = 1 + dayOffset;
+        const target = firstOccurrence + (n - 1) * 7;
+        // Check if target day is still in this month
+        const result = new Date(year, month, target);
+        if (result.getMonth() !== month) return null; // e.g., 5th Wednesday doesn't exist
+        return result;
+    }
+    
+    // Helper: get last occurrence of a weekday in a month
+    function getLastWeekdayOfMonth(year, month, weekday) {
+        const lastDay = new Date(year, month + 1, 0); // last day of month
+        let dayOffset = lastDay.getDay() - weekday;
+        if (dayOffset < 0) dayOffset += 7;
+        return new Date(year, month, lastDay.getDate() - dayOffset);
     }
 
     function openAdminPanel() { 
@@ -2517,9 +2860,10 @@ const firebaseConfig = {
         document.getElementById('editMaxDuration').value = r.maxDuration;
         document.getElementById('editResOrientation').checked = r.hasStaffField || false;
         document.getElementById('editViewMode').value = r.viewMode || 'week';
-        document.getElementById('editSubRooms').value = r.subRooms || '';
+        renderSubRoomCards(r);
         document.getElementById('editDefaultShowNotes').checked = r.defaultShowNotes || false;
         document.getElementById('editAdminOnly').checked = r.adminOnly || false;
+        document.getElementById('editAllowRecurring').checked = r.allowRecurring || false;
         document.getElementById('editUseQuarterHour').checked = r.useQuarterHour || false;
 
         // Load Sidebar Settings
@@ -2562,7 +2906,195 @@ const firebaseConfig = {
         }
     }
 
-    function toggleSubRoomInput() { const mode = document.getElementById('editViewMode').value; const container = document.getElementById('subRoomConfig'); if (mode === 'day') { container.classList.remove('hidden'); } else { container.classList.add('hidden'); } }
+    function toggleSubRoomInput() { 
+        const mode = document.getElementById('editViewMode').value; 
+        const container = document.getElementById('subRoomConfig'); 
+        if (mode === 'day') { container.classList.remove('hidden'); } 
+        else { container.classList.add('hidden'); } 
+    }
+
+    // Temporary working copy of sub-rooms for settings editing
+    let editingSubRooms = [];
+
+    function renderSubRoomCards(res) {
+        editingSubRooms = Array.isArray(res.subRooms) 
+            ? res.subRooms.map(sr => ({ ...sr })) 
+            : [];
+        drawSubRoomCards();
+    }
+
+    function drawSubRoomCards() {
+        const container = document.getElementById('subRoomCardList');
+        if (!container) return;
+        if (editingSubRooms.length === 0) {
+            container.innerHTML = '<div style="font-size:0.85em; color:#999; padding: 8px;">No sub-rooms yet. Click "Add Sub-Room" to create one.</div>';
+            return;
+        }
+        // Separate active and inactive
+        const sorted = editingSubRooms
+            .map((sr, idx) => ({ ...sr, _idx: idx }))
+            .sort((a, b) => (a.displayOrder ?? a._idx) - (b.displayOrder ?? b._idx));
+        
+        const active = sorted.filter(sr => sr.active !== false);
+        const inactive = sorted.filter(sr => sr.active === false);
+
+        // Render active cards
+        let html = active.map(sr => {
+            return `<div class="subroom-card" data-idx="${sr._idx}" draggable="true">
+                <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                    <span class="subroom-drag-handle" title="Drag to reorder">☰</span>
+                    <input type="text" class="subroom-name-input" value="${escapeHtml(sr.name)}" 
+                        onchange="updateSubRoomName(${sr._idx}, this.value)" 
+                        placeholder="Room name">
+                </div>
+                <div style="display:flex; align-items:center; gap:4px;">
+                    <button type="button" onclick="deactivateSubRoom(${sr._idx})" class="btn-danger" style="padding:4px 8px; font-size:0.8em;">Deactivate</button>
+                </div>
+            </div>`;
+        }).join('');
+
+        // Render collapsed inactive section
+        if (inactive.length > 0) {
+            html += `<div class="subroom-inactive-section">
+                <div class="subroom-inactive-toggle" onclick="toggleInactiveSubRooms()">
+                    <span id="inactiveSubRoomArrow" class="section-arrow" style="font-size:0.7em;">&#9654;</span>
+                    <span style="font-size:0.85em; color:#888;">${inactive.length} inactive room${inactive.length > 1 ? 's' : ''}</span>
+                </div>
+                <div id="inactiveSubRoomList" class="hidden" style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+                    ${inactive.map(sr => `<div class="subroom-card subroom-inactive" data-idx="${sr._idx}">
+                        <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                            <span style="color:#ccc; font-size:1.1em;">☰</span>
+                            <input type="text" class="subroom-name-input" value="${escapeHtml(sr.name)}" disabled>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span class="subroom-badge-inactive">Inactive</span>
+                            <button type="button" onclick="reactivateSubRoom(${sr._idx})" class="btn-success" style="padding:4px 8px; font-size:0.8em;">Reactivate</button>
+                        </div>
+                    </div>`).join('')}
+                </div>
+            </div>`;
+        }
+
+        container.innerHTML = html;
+
+        // Attach drag event listeners to active cards only
+        const cards = container.querySelectorAll('.subroom-card:not(.subroom-inactive)');
+        cards.forEach(card => {
+            card.addEventListener('dragstart', onSubRoomDragStart);
+            card.addEventListener('dragover', onSubRoomDragOver);
+            card.addEventListener('dragenter', onSubRoomDragEnter);
+            card.addEventListener('dragleave', onSubRoomDragLeave);
+            card.addEventListener('drop', onSubRoomDrop);
+            card.addEventListener('dragend', onSubRoomDragEnd);
+        });
+    }
+
+    function toggleInactiveSubRooms() {
+        const list = document.getElementById('inactiveSubRoomList');
+        const arrow = document.getElementById('inactiveSubRoomArrow');
+        if (!list) return;
+        const hidden = list.classList.toggle('hidden');
+        arrow.innerHTML = hidden ? '&#9654;' : '&#9660;';
+    }
+
+    let subRoomDragIdx = null;
+
+    function onSubRoomDragStart(e) {
+        subRoomDragIdx = this.dataset.idx;
+        this.classList.add('subroom-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function onSubRoomDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    }
+
+    function onSubRoomDragEnter(e) {
+        e.preventDefault();
+        this.classList.add('subroom-drop-target');
+    }
+
+    function onSubRoomDragLeave() {
+        this.classList.remove('subroom-drop-target');
+    }
+
+    function onSubRoomDrop(e) {
+        e.preventDefault();
+        this.classList.remove('subroom-drop-target');
+        const dropIdx = this.dataset.idx;
+        if (subRoomDragIdx === null || subRoomDragIdx === dropIdx) return;
+
+        // Get current visual order
+        const container = document.getElementById('subRoomCardList');
+        const cards = [...container.querySelectorAll('.subroom-card')];
+        const visualOrder = cards.map(c => parseInt(c.dataset.idx));
+
+        // Remove dragged item and insert at drop position
+        const dragPos = visualOrder.indexOf(parseInt(subRoomDragIdx));
+        const dropPos = visualOrder.indexOf(parseInt(dropIdx));
+        const [moved] = visualOrder.splice(dragPos, 1);
+        visualOrder.splice(dropPos, 0, moved);
+
+        // Reassign displayOrder based on new visual position
+        visualOrder.forEach((arrIdx, newOrder) => {
+            editingSubRooms[arrIdx].displayOrder = newOrder;
+        });
+
+        drawSubRoomCards();
+    }
+
+    function onSubRoomDragEnd() {
+        subRoomDragIdx = null;
+        document.querySelectorAll('.subroom-dragging, .subroom-drop-target').forEach(el => {
+            el.classList.remove('subroom-dragging', 'subroom-drop-target');
+        });
+    }
+
+    function addSubRoom() {
+        const nextOrder = editingSubRooms.length > 0 
+            ? Math.max(...editingSubRooms.map(sr => sr.displayOrder ?? 0)) + 1 
+            : 0;
+        editingSubRooms.push({
+            id: 'sr-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+            name: 'Room ' + (editingSubRooms.length + 1),
+            active: true,
+            displayOrder: nextOrder
+        });
+        drawSubRoomCards();
+        // Focus the new input
+        setTimeout(() => {
+            const inputs = document.querySelectorAll('.subroom-name-input');
+            if (inputs.length > 0) inputs[inputs.length - 1].focus();
+        }, 50);
+    }
+
+    function updateSubRoomName(idx, newName) {
+        if (editingSubRooms[idx]) editingSubRooms[idx].name = newName.trim() || 'Unnamed';
+    }
+
+    function deactivateSubRoom(idx) {
+        if (!editingSubRooms[idx]) return;
+        if (!confirm(`Deactivate "${editingSubRooms[idx].name}"?\n\nExisting bookings will be preserved but this column will no longer appear on the grid. You can reactivate it later.`)) return;
+        editingSubRooms[idx].active = false;
+        drawSubRoomCards();
+    }
+
+    function reactivateSubRoom(idx) {
+        if (!editingSubRooms[idx]) return;
+        editingSubRooms[idx].active = true;
+        drawSubRoomCards();
+    }
+
+    function readSubRoomCards(target) {
+        // Return the working copy as the new subRooms value
+        return editingSubRooms.map(sr => ({
+            id: sr.id,
+            name: sr.name,
+            active: sr.active !== false,
+            displayOrder: sr.displayOrder ?? 0
+        }));
+    }
 
     function toggleSidebarConfig() {
         const isEnabled = document.getElementById('editEnableSidebar').checked;
@@ -2644,7 +3176,7 @@ const firebaseConfig = {
         }).join('');
     }
 
-    function addClosureDate() {
+    async function addClosureDate() {
         const dateInput = document.getElementById('newClosureDate');
         const endDateInput = document.getElementById('newClosureEndDate');
         const reasonInput = document.getElementById('newClosureReason');
@@ -2685,6 +3217,46 @@ const firebaseConfig = {
         if (hasOverlap) {
             showToast("This date range overlaps with an existing closure.", "error");
             return;
+        }
+        
+        // Check for existing bookings on the affected dates
+        const affectedDates = [];
+        let scanDate = new Date(newStart + 'T00:00:00');
+        const scanEnd = new Date(newEnd + 'T00:00:00');
+        while (scanDate <= scanEnd) {
+            affectedDates.push(new Date(scanDate));
+            scanDate.setDate(scanDate.getDate() + 1);
+        }
+        
+        let totalConflicts = 0;
+        const conflictDates = [];
+        try {
+            const queries = affectedDates.map(date => {
+                const weekKey = getWeekKey(date);
+                const dayIdx = date.getDay();
+                const prefix = `${editId}_${weekKey}_${dayIdx}_`;
+                return db.collection('appointments')
+                    .where(firebase.firestore.FieldPath.documentId(), '>=', prefix)
+                    .where(firebase.firestore.FieldPath.documentId(), '<', prefix + '\uf8ff')
+                    .get()
+                    .then(snapshot => {
+                        if (!snapshot.empty) {
+                            totalConflicts += snapshot.size;
+                            conflictDates.push(date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
+                        }
+                    });
+            });
+            await Promise.all(queries);
+        } catch (e) {
+            // If query fails, proceed without warning
+        }
+        
+        if (totalConflicts > 0) {
+            const dateList = conflictDates.length <= 5 
+                ? conflictDates.join(', ') 
+                : conflictDates.slice(0, 5).join(', ') + ` and ${conflictDates.length - 5} more`;
+            const msg = `${totalConflicts} existing booking(s) found on: ${dateList}.\n\nThey will be hidden but not deleted. Remove them manually if needed.\n\nContinue adding this closure?`;
+            if (!confirm(msg)) return;
         }
         
         const closureEntry = { 
@@ -2854,7 +3426,8 @@ const firebaseConfig = {
                 useQuarterHour: false,
                 advanceLimitEnabled: false,
                 advanceLimitDays: 1,
-                advanceLimitAdminBypass: false
+                advanceLimitAdminBypass: false,
+                allowRecurring: false
             };
             
             // Populate closure dates dropdown
@@ -2908,7 +3481,8 @@ const firebaseConfig = {
                 useQuarterHour: false,
                 advanceLimitEnabled: false,
                 advanceLimitDays: 1,
-                advanceLimitAdminBypass: false
+                advanceLimitAdminBypass: false,
+                allowRecurring: false
             };
             try { 
                 pendingSelectionId = newRes.id;
@@ -2947,8 +3521,11 @@ const firebaseConfig = {
                 pendingNewResource.advanceLimitEnabled = source.advanceLimitEnabled || false;
                 pendingNewResource.advanceLimitDays = source.advanceLimitDays || 1;
                 pendingNewResource.advanceLimitAdminBypass = source.advanceLimitAdminBypass || false;
-                pendingNewResource.subRooms = source.subRooms || '';
+                pendingNewResource.subRooms = Array.isArray(source.subRooms) 
+                    ? source.subRooms.map(sr => ({ ...sr, id: 'sr-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4) }))
+                    : [];
                 pendingNewResource.adminOnly = source.adminOnly || false;
+                pendingNewResource.allowRecurring = source.allowRecurring || false;
                 pendingNewResource.colorPalette = source.colorPalette || 'default';
             }
         } else {
@@ -3067,9 +3644,10 @@ const firebaseConfig = {
             }
         }
         target.viewMode = newViewMode;
-        target.subRooms = document.getElementById('editSubRooms').value;
+        target.subRooms = readSubRoomCards(target);
         target.defaultShowNotes = document.getElementById('editDefaultShowNotes').checked;
         target.adminOnly = document.getElementById('editAdminOnly').checked;
+        target.allowRecurring = document.getElementById('editAllowRecurring').checked;
         target.useQuarterHour = document.getElementById('editUseQuarterHour').checked;
 
         // Save Sidebar Settings
@@ -3135,6 +3713,10 @@ const firebaseConfig = {
             html += `<div class="popover-staff">w/ ${escapeHtml(booking.data.staffName)}</div>`;
         }
         
+        if (booking.data.seriesId) {
+            html += `<div class="popover-series">🔁 Recurring series</div>`;
+        }
+        
         if (anon) {
             if (booking.data.notes) {
                 html += `<div class="popover-notes" style="font-style: italic; opacity: 0.8;">Past notes anonymized for patron privacy</div>`;
@@ -3184,23 +3766,120 @@ const firebaseConfig = {
     
     async function deleteBooking() { 
         const slotId = document.getElementById('slotId').value;
-        if(!allBookings[slotId]) return closeModal('bookingModal');
-        if(confirm("Delete booking?")) { 
-            showLoading(true); 
-            try {
-                await db.collection('appointments').doc(slotId).delete();
-                closeModal('bookingModal');
-            } catch(e) {
-                showToast("Error deleting: " + e.message, "error");
+        const booking = allBookings[slotId];
+        if(!booking) return closeModal('bookingModal');
+        
+        if (booking.seriesId) {
+            // Series booking - show series delete modal
+            pendingSeriesDeleteSlotId = slotId;
+            pendingSeriesDeleteSeriesId = booking.seriesId;
+            document.getElementById('seriesDeleteModal').style.display = 'flex';
+        } else {
+            if(confirm("Delete booking?")) { 
+                showLoading(true); 
+                try {
+                    await db.collection('appointments').doc(slotId).delete();
+                    closeModal('bookingModal');
+                } catch(e) {
+                    showToast("Error deleting: " + e.message, "error");
+                }
+                showLoading(false); 
             }
-            showLoading(false); 
         }
+    }
+
+    let pendingSeriesDeleteSlotId = null;
+    let pendingSeriesDeleteSeriesId = null;
+
+    async function confirmSeriesDelete(mode) {
+        closeModal('seriesDeleteModal');
+        
+        if (mode === 'one') {
+            showLoading(true);
+            try {
+                await db.collection('appointments').doc(pendingSeriesDeleteSlotId).delete();
+                closeModal('bookingModal');
+                showToast('Booking deleted.', 'success');
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+            showLoading(false);
+        } else if (mode === 'all') {
+            if (!confirm('Delete ALL bookings in this series? This cannot be undone.')) return;
+            showLoading(true);
+            try {
+                const snapshot = await db.collection('appointments')
+                    .where('seriesId', '==', pendingSeriesDeleteSeriesId)
+                    .get();
+                const batch = db.batch();
+                snapshot.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+                closeModal('bookingModal');
+                showToast(snapshot.size + ' booking(s) in series deleted.', 'success');
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+            showLoading(false);
+        }
+        
+        pendingSeriesDeleteSlotId = null;
+        pendingSeriesDeleteSeriesId = null;
     }
     
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
     function createDiv(cls, content) { const d = document.createElement('div'); d.className = cls; d.innerHTML = content; return d; }
     function showLoading(show) { document.getElementById('loading').className = show ? 'loading-overlay' : 'loading-overlay hidden'; }
     function toggleStaffInput() { const isChecked = document.getElementById('bookHasStaff').checked; document.getElementById('staffInputContainer').classList.toggle('hidden', !isChecked); }
+    function toggleRecurringOptions() { 
+        const isChecked = document.getElementById('bookRecurring').checked; 
+        document.getElementById('recurringOptions').classList.toggle('hidden', !isChecked); 
+    }
+    function toggleRecurEndDate() {
+        const val = document.getElementById('recurEndType').value;
+        document.getElementById('recurCountGroup').classList.toggle('hidden', val !== 'count');
+        document.getElementById('recurDateGroup').classList.toggle('hidden', val !== 'date');
+    }
+    function onRecurPatternChange() {
+        const val = document.getElementById('recurPattern').value;
+        const isManual = val === 'manual';
+        const isCustomDays = val === 'custom-days';
+        document.getElementById('customDaysGroup').classList.toggle('hidden', !isCustomDays);
+        document.getElementById('manualDatesGroup').classList.toggle('hidden', !isManual);
+        document.getElementById('recurEndControls').style.display = isManual ? 'none' : '';
+    }
+    
+    let manualSeriesDates = [];
+    
+    function addManualDate() {
+        const input = document.getElementById('manualDateInput');
+        const val = input.value;
+        if (!val) return;
+        if (manualSeriesDates.includes(val)) {
+            showToast('Date already added.', 'error');
+            return;
+        }
+        manualSeriesDates.push(val);
+        manualSeriesDates.sort();
+        input.value = '';
+        renderManualDates();
+    }
+    
+    function removeManualDate(dateStr) {
+        manualSeriesDates = manualSeriesDates.filter(d => d !== dateStr);
+        renderManualDates();
+    }
+    
+    function renderManualDates() {
+        const container = document.getElementById('manualDatesList');
+        if (manualSeriesDates.length === 0) {
+            container.innerHTML = '<span style="font-size:0.85em; color:#999;">No additional dates added yet.</span>';
+            return;
+        }
+        container.innerHTML = manualSeriesDates.map(d => {
+            const display = new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            return `<span class="manual-date-chip">${display} <span class="chip-remove" onclick="removeManualDate('${d}')">&times;</span></span>`;
+        }).join('');
+    }
     function handleBookingEnter(e) { if (e.key === 'Enter' && !document.getElementById('btnSaveBooking').classList.contains('hidden')) saveBooking(); }
     function checkAdvanceLimit(res, weekKey, dayIdx) {
         if (!res.advanceLimitEnabled) return { allowed: true };
@@ -3582,8 +4261,8 @@ const firebaseConfig = {
         const tfoot = document.getElementById('statsGridFoot');
         
         // Determine sub-room count for utilization
-        const subRooms = res.subRooms ? res.subRooms.split(',').map(s => s.trim()).filter(s => s) : [];
-        const roomMultiplier = subRooms.length > 0 ? subRooms.length : 1;
+        const activeSubRooms = getActiveSubRooms(res);
+        const roomMultiplier = activeSubRooms.length > 0 ? activeSubRooms.length : 1;
         
         // Find max hours for heat map scaling
         let maxHours = 0;
