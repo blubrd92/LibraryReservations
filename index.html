@@ -470,7 +470,7 @@
                         <label style="font-weight:bold; display:block; margin-bottom:5px;">Operating Hours (24h Format)</label>
                         <div class="day-config-grid" id="daysConfigContainer"></div>
                         <div class="closure-actions" style="margin-top: 10px;">
-                            <button onclick="applyHoursToAllResources()" style="font-size:0.85em;">Apply to All Resources</button>
+                            <button onclick="openApplyHoursModal()" style="font-size:0.85em;">Apply Hours to Other Resources...</button>
                         </div>
                     </div>
                     <div style="border-top: 1px solid #eee; margin-top: 15px; padding-top: 15px;">
@@ -490,7 +490,7 @@
                             <div class="closure-empty">No closure dates set</div>
                         </div>
                         <div class="closure-actions">
-                            <button onclick="openApplyClosuresModal()" style="font-size:0.85em;">Apply Year to Other Resources...</button>
+                            <button onclick="openApplyClosuresModal()" style="font-size:0.85em;">Apply Closures to Other Resources...</button>
                         </div>
                     </div>
                 </div>
@@ -594,6 +594,17 @@
         <div class="flex gap">
             <button class="btn-danger" onclick="confirmDeleteResource()" style="background: var(--danger); color: white;">Delete Permanently</button>
             <button onclick="closeModal('deleteResourceModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+<div id="applyHoursModal" class="modal">
+    <div class="modal-content" style="max-width: 420px;">
+        <div class="modal-header">Apply Hours to Resources</div>
+        <p id="applyHoursDesc" style="margin: 10px 0; font-size: 0.9em; color: #555;"></p>
+        <div id="applyHoursCheckboxes" style="margin: 12px 0; max-height: 300px; overflow-y: auto;"></div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 15px;">
+            <button onclick="closeModal('applyHoursModal')">Cancel</button>
+            <button class="btn-success" onclick="confirmApplyHours()">Apply</button>
         </div>
     </div>
 </div>

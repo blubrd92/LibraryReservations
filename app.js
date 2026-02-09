@@ -3473,10 +3473,33 @@ const firebaseConfig = {
         showLoading(false);
     }
 
-    async function applyHoursToAllResources() {
+    function openApplyHoursModal() {
         const editId = document.getElementById('settingResSelect').value;
         const sourceRes = resources.find(x => x.id === editId);
         if (!sourceRes) return;
+        
+        const otherResources = resources.filter(r => r.id !== editId);
+        if (otherResources.length === 0) {
+            showToast("No other resources to apply to.", "error");
+            return;
+        }
+        
+        document.getElementById('applyHoursDesc').textContent = 
+            `Apply operating hours from "${sourceRes.name}" to:`;
+        
+        const container = document.getElementById('applyHoursCheckboxes');
+        container.innerHTML = otherResources.map(r => {
+            return `<label style="display:flex; align-items:center; gap:8px; padding:6px 4px; cursor:pointer;">
+                <input type="checkbox" value="${r.id}" checked style="width:auto;">
+                <span>${escapeHtml(r.name)}</span>
+            </label>`;
+        }).join('');
+        
+        document.getElementById('applyHoursModal').style.display = 'flex';
+    }
+    
+    async function confirmApplyHours() {
+        const editId = document.getElementById('settingResSelect').value;
         
         // Get current hours from the form inputs
         const currentHours = [];
@@ -3485,21 +3508,26 @@ const firebaseConfig = {
             currentHours[(i * 2) + 1] = parseFloat(document.getElementById(`e_${i}`).value) || 0;
         }
         
-        if (!confirm(`Apply these operating hours to ALL other resources? This will overwrite their existing hours.`)) {
+        const checkboxes = document.querySelectorAll('#applyHoursCheckboxes input[type="checkbox"]:checked');
+        const targetIds = [...checkboxes].map(cb => cb.value);
+        
+        if (targetIds.length === 0) {
+            showToast("No resources selected.", "error");
             return;
         }
         
-        // Apply to all other resources
+        let applied = 0;
         resources.forEach(r => {
-            if (r.id === editId) return; // Skip source
+            if (!targetIds.includes(r.id)) return;
             r.hours = [...currentHours];
+            applied++;
         });
         
-        // Save all resources
+        closeModal('applyHoursModal');
         showLoading(true);
         try {
             await db.collection('system').doc('resources').set({ list: resources });
-            showToast(`Operating hours applied to ${resources.length - 1} other resource(s)!`, "success");
+            showToast(`Operating hours applied to ${applied} resource(s).`, "success");
         } catch (e) {
             showToast("Error: " + e.message, "error");
         }
