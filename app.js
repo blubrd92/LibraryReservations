@@ -2892,14 +2892,14 @@ const firebaseConfig = {
             const isClosed = start === end;
             container.innerHTML += `<div class="day-box ${isClosed ? 'day-closed' : ''}">
                 <strong>${d}</strong>
-                <label class="day-closed-label">
-                    <input type="checkbox" id="closed_${i}" ${isClosed ? 'checked' : ''} onchange="toggleDayClosed(${i})" style="width:auto;">
-                    <span>Closed</span>
-                </label>
                 <div class="day-hours-inputs" ${isClosed ? 'style="opacity:0.3; pointer-events:none;"' : ''} id="dayInputs_${i}">
                     <input type="number" id="s_${i}" value="${start}" min="0" max="24" step="${stepVal}">
                     <input type="number" id="e_${i}" value="${end}" min="0" max="24" step="${stepVal}">
                 </div>
+                <label class="day-closed-label">
+                    <input type="checkbox" id="closed_${i}" ${isClosed ? 'checked' : ''} onchange="toggleDayClosed(${i})" style="width:auto;">
+                    <span>Closed</span>
+                </label>
             </div>`;
         });
         
