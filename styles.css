@@ -322,10 +322,12 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     opacity: 0.4;
 }
 
-.subroom-drop-target {
-    border-color: #4caf50;
-    background: #e8f5e9;
-    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
+.subroom-drop-indicator {
+    height: 3px;
+    background: #4caf50;
+    border-radius: 2px;
+    margin: 2px 0;
+    transition: opacity 0.1s;
 }
 
 .subroom-badge-inactive {
@@ -418,6 +420,13 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
 .form-group { margin-bottom: 15px; }
 .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #555; }
 .form-group input, .form-group textarea, .form-group select { width: 100%; box-sizing: border-box; }
+
+#editSidebarText::placeholder {
+    color: #999;
+    font-size: 0.92em;
+    line-height: 1.6;
+    white-space: pre-line;
+}
 .required-asterisk { color: #d32f2f; font-weight: bold; }
 
 /* LOGIN SCREEN */

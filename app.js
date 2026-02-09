@@ -2977,16 +2977,17 @@ const firebaseConfig = {
 
         container.innerHTML = html;
 
-        // Attach drag event listeners to active cards only
+        // Attach drag event listeners to active cards (dragstart/dragend only)
         const cards = container.querySelectorAll('.subroom-card:not(.subroom-inactive)');
         cards.forEach(card => {
             card.addEventListener('dragstart', onSubRoomDragStart);
-            card.addEventListener('dragover', onSubRoomDragOver);
-            card.addEventListener('dragenter', onSubRoomDragEnter);
-            card.addEventListener('dragleave', onSubRoomDragLeave);
-            card.addEventListener('drop', onSubRoomDrop);
             card.addEventListener('dragend', onSubRoomDragEnd);
         });
+        
+        // Container-level drag handling for reliable drop targeting
+        container.addEventListener('dragover', onSubRoomContainerDragOver);
+        container.addEventListener('drop', onSubRoomContainerDrop);
+        container.addEventListener('dragleave', onSubRoomContainerDragLeave);
     }
 
     function toggleInactiveSubRooms() {
@@ -3003,51 +3004,111 @@ const firebaseConfig = {
         subRoomDragIdx = this.dataset.idx;
         this.classList.add('subroom-dragging');
         e.dataTransfer.effectAllowed = 'move';
+        // Needed for Firefox
+        e.dataTransfer.setData('text/plain', this.dataset.idx);
     }
 
-    function onSubRoomDragOver(e) {
+    function onSubRoomContainerDragOver(e) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-    }
-
-    function onSubRoomDragEnter(e) {
-        e.preventDefault();
-        this.classList.add('subroom-drop-target');
-    }
-
-    function onSubRoomDragLeave() {
-        this.classList.remove('subroom-drop-target');
-    }
-
-    function onSubRoomDrop(e) {
-        e.preventDefault();
-        this.classList.remove('subroom-drop-target');
-        const dropIdx = this.dataset.idx;
-        if (subRoomDragIdx === null || subRoomDragIdx === dropIdx) return;
-
-        // Get current visual order
+        if (subRoomDragIdx === null) return;
+        
         const container = document.getElementById('subRoomCardList');
-        const cards = [...container.querySelectorAll('.subroom-card')];
-        const visualOrder = cards.map(c => parseInt(c.dataset.idx));
+        // Remove any existing indicator
+        const existing = container.querySelector('.subroom-drop-indicator');
+        if (existing) existing.remove();
+        
+        // Find which active card we're over and whether above or below midpoint
+        const activeCards = [...container.querySelectorAll('.subroom-card:not(.subroom-inactive):not(.subroom-dragging)')];
+        if (activeCards.length === 0) return;
+        
+        let insertBefore = null;
+        for (const card of activeCards) {
+            const rect = card.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+                insertBefore = card;
+                break;
+            }
+        }
+        
+        // Create drop indicator line
+        const indicator = document.createElement('div');
+        indicator.className = 'subroom-drop-indicator';
+        if (insertBefore) {
+            container.insertBefore(indicator, insertBefore);
+        } else {
+            // After the last active card
+            const lastActive = activeCards[activeCards.length - 1];
+            if (lastActive.nextSibling) {
+                container.insertBefore(indicator, lastActive.nextSibling);
+            } else {
+                container.appendChild(indicator);
+            }
+        }
+    }
+    
+    function onSubRoomContainerDragLeave(e) {
+        const container = document.getElementById('subRoomCardList');
+        // Only remove indicator if we actually left the container
+        if (!container.contains(e.relatedTarget)) {
+            const indicator = container.querySelector('.subroom-drop-indicator');
+            if (indicator) indicator.remove();
+        }
+    }
 
-        // Remove dragged item and insert at drop position
-        const dragPos = visualOrder.indexOf(parseInt(subRoomDragIdx));
-        const dropPos = visualOrder.indexOf(parseInt(dropIdx));
-        const [moved] = visualOrder.splice(dragPos, 1);
-        visualOrder.splice(dropPos, 0, moved);
-
-        // Reassign displayOrder based on new visual position
-        visualOrder.forEach((arrIdx, newOrder) => {
+    function onSubRoomContainerDrop(e) {
+        e.preventDefault();
+        const container = document.getElementById('subRoomCardList');
+        const indicator = container.querySelector('.subroom-drop-indicator');
+        if (indicator) indicator.remove();
+        
+        if (subRoomDragIdx === null) return;
+        
+        // Determine drop position from active cards' visual order
+        const activeCards = [...container.querySelectorAll('.subroom-card:not(.subroom-inactive):not(.subroom-dragging)')];
+        
+        let dropVisualPos = activeCards.length; // default: end
+        for (let i = 0; i < activeCards.length; i++) {
+            const rect = activeCards[i].getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+                dropVisualPos = i;
+                break;
+            }
+        }
+        
+        // Build current visual order of active items (excluding dragged)
+        const dragArrIdx = parseInt(subRoomDragIdx);
+        const activeOrder = activeCards.map(c => parseInt(c.dataset.idx));
+        
+        // Insert dragged item at the drop position
+        activeOrder.splice(dropVisualPos, 0, dragArrIdx);
+        
+        // Include all inactive items at the end (preserve their relative order)
+        const inactiveIdxs = editingSubRooms
+            .map((sr, idx) => ({ sr, idx }))
+            .filter(x => x.sr.active === false)
+            .map(x => x.idx);
+        
+        const fullOrder = [...activeOrder, ...inactiveIdxs];
+        
+        // Reassign displayOrder
+        fullOrder.forEach((arrIdx, newOrder) => {
             editingSubRooms[arrIdx].displayOrder = newOrder;
         });
-
+        
+        subRoomDragIdx = null;
         drawSubRoomCards();
     }
 
     function onSubRoomDragEnd() {
         subRoomDragIdx = null;
-        document.querySelectorAll('.subroom-dragging, .subroom-drop-target').forEach(el => {
-            el.classList.remove('subroom-dragging', 'subroom-drop-target');
+        const container = document.getElementById('subRoomCardList');
+        if (container) {
+            const indicator = container.querySelector('.subroom-drop-indicator');
+            if (indicator) indicator.remove();
+        }
+        document.querySelectorAll('.subroom-dragging').forEach(el => {
+            el.classList.remove('subroom-dragging');
         });
     }
 
@@ -4438,7 +4499,7 @@ const firebaseConfig = {
         document.getElementById('statsAvgDuration').innerText = avgDuration;
         
         // Busiest and quietest day of week (normalized avg hours per occurrence)
-        const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const DAY_NAMES = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
         let busiestDayIdx = -1, busiestDayAvg = -1;
         let quietestDayIdx = -1, quietestDayAvg = Infinity;
         for (let i = 0; i < 7; i++) {
