@@ -2889,7 +2889,18 @@ const firebaseConfig = {
         DAYS.forEach((d, i) => {
             const start = r.hours[i*2];
             const end = r.hours[(i*2)+1];
-            container.innerHTML += `<div class="day-box"><strong>${d}</strong><input type="number" id="s_${i}" value="${start}" min="0" max="24" step="${stepVal}"><input type="number" id="e_${i}" value="${end}" min="0" max="24" step="${stepVal}"></div>`;
+            const isClosed = start === end;
+            container.innerHTML += `<div class="day-box ${isClosed ? 'day-closed' : ''}">
+                <strong>${d}</strong>
+                <label class="day-closed-label">
+                    <input type="checkbox" id="closed_${i}" ${isClosed ? 'checked' : ''} onchange="toggleDayClosed(${i})" style="width:auto;">
+                    <span>Closed</span>
+                </label>
+                <div class="day-hours-inputs" ${isClosed ? 'style="opacity:0.3; pointer-events:none;"' : ''} id="dayInputs_${i}">
+                    <input type="number" id="s_${i}" value="${start}" min="0" max="24" step="${stepVal}">
+                    <input type="number" id="e_${i}" value="${end}" min="0" max="24" step="${stepVal}">
+                </div>
+            </div>`;
         });
         
         // Load Closure Dates
@@ -2911,6 +2922,26 @@ const firebaseConfig = {
         const container = document.getElementById('subRoomConfig'); 
         if (mode === 'day') { container.classList.remove('hidden'); } 
         else { container.classList.add('hidden'); } 
+    }
+
+    function toggleDayClosed(dayIdx) {
+        const cb = document.getElementById('closed_' + dayIdx);
+        const inputs = document.getElementById('dayInputs_' + dayIdx);
+        const dayBox = cb.closest('.day-box');
+        if (cb.checked) {
+            document.getElementById('s_' + dayIdx).value = 0;
+            document.getElementById('e_' + dayIdx).value = 0;
+            inputs.style.opacity = '0.3';
+            inputs.style.pointerEvents = 'none';
+            dayBox.classList.add('day-closed');
+        } else {
+            // Restore sensible defaults
+            document.getElementById('s_' + dayIdx).value = 9;
+            document.getElementById('e_' + dayIdx).value = 17;
+            inputs.style.opacity = '';
+            inputs.style.pointerEvents = '';
+            dayBox.classList.remove('day-closed');
+        }
     }
 
     // Temporary working copy of sub-rooms for settings editing
