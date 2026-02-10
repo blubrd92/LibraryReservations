@@ -4428,12 +4428,15 @@ const firebaseConfig = {
         let ytdTotal = 0;
         let ytdAvailable = 0;
         let ytdDaysBookable = 0;
+        const monthlyTotalsYtd = new Array(12).fill(0);
+        const monthlyAvailableYtd = new Array(12).fill(0);
         
         // New stat trackers
         let totalBookingCount = 0;
         let totalDurationSum = 0;
         const dayOfWeekHours = [0, 0, 0, 0, 0, 0, 0]; // Sun-Sat total hours
         const dayOfWeekCount = [0, 0, 0, 0, 0, 0, 0]; // Sun-Sat open day count (YTD)
+        const dayOfWeekAvailable = [0, 0, 0, 0, 0, 0, 0]; // Sun-Sat total available hours (YTD)
         const hourSlotCounts = {}; // { '9': 5, '10': 8, ... } booking start times
         let staffAssistedCount = 0;
         
@@ -4509,6 +4512,9 @@ const firebaseConfig = {
                             ytdDaysBookable++;
                             dayOfWeekHours[dayOfWeek] += hours;
                             dayOfWeekCount[dayOfWeek]++;
+                            dayOfWeekAvailable[dayOfWeek] += dayAvailable;
+                            monthlyTotalsYtd[month] += hours;
+                            monthlyAvailableYtd[month] += dayAvailable;
                         }
                         
                         // Calculate heat map level (0-8)
@@ -4548,16 +4554,15 @@ const firebaseConfig = {
         const utilPct = ytdAvailable > 0 ? ((ytdTotal / ytdAvailable) * 100).toFixed(1) : 0;
         document.getElementById('statsUtilization').innerText = ytdAvailable > 0 ? utilPct + '%' : 'N/A';
         
-        // Find busiest month
-        let busiestIdx = 0;
-        let busiestVal = 0;
-        monthlyTotals.forEach((t, i) => {
-            if (t > busiestVal) {
-                busiestVal = t;
-                busiestIdx = i;
-            }
-        });
-        document.getElementById('statsBusiestMonth').innerText = busiestVal > 0 ? `${MONTHS[busiestIdx]} (${parseFloat(busiestVal.toFixed(2))}h)` : '-';
+        // Find busiest month (by utilization YTD)
+        let busiestMonthIdx = -1, busiestMonthUtil = -1;
+        for (let i = 0; i < 12; i++) {
+            if (monthlyAvailableYtd[i] === 0) continue;
+            const util = (monthlyTotalsYtd[i] / monthlyAvailableYtd[i]) * 100;
+            if (util > busiestMonthUtil) { busiestMonthUtil = util; busiestMonthIdx = i; }
+        }
+        document.getElementById('statsBusiestMonth').innerText = busiestMonthIdx >= 0
+            ? `${MONTHS[busiestMonthIdx]} (${parseFloat(monthlyTotalsYtd[busiestMonthIdx].toFixed(2))}h, ${busiestMonthUtil.toFixed(1)}%)` : '-';
         
         // Average hours per open day (YTD)
         const avgHours = ytdDaysBookable > 0 ? (ytdTotal / ytdDaysBookable).toFixed(1) : 0;
@@ -4569,18 +4574,21 @@ const firebaseConfig = {
         
         // Busiest and quietest day of week (normalized avg hours per occurrence)
         const DAY_NAMES = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
-        let busiestDayIdx = -1, busiestDayAvg = -1;
-        let quietestDayIdx = -1, quietestDayAvg = Infinity;
+        let busiestDayIdx = -1, busiestDayUtil = -1;
+        let quietestDayIdx = -1, quietestDayUtil = Infinity;
+        const dayAvgs = [];
         for (let i = 0; i < 7; i++) {
-            if (dayOfWeekCount[i] === 0) continue;
-            const avg = dayOfWeekHours[i] / dayOfWeekCount[i];
-            if (avg > busiestDayAvg) { busiestDayAvg = avg; busiestDayIdx = i; }
-            if (avg < quietestDayAvg) { quietestDayAvg = avg; quietestDayIdx = i; }
+            if (dayOfWeekCount[i] === 0) { dayAvgs.push(null); continue; }
+            const avgHrs = dayOfWeekHours[i] / dayOfWeekCount[i];
+            const util = dayOfWeekAvailable[i] > 0 ? (dayOfWeekHours[i] / dayOfWeekAvailable[i]) * 100 : 0;
+            dayAvgs.push({ avgHrs, util });
+            if (util > busiestDayUtil) { busiestDayUtil = util; busiestDayIdx = i; }
+            if (util < quietestDayUtil) { quietestDayUtil = util; quietestDayIdx = i; }
         }
         document.getElementById('statsBusiestDay').innerText = busiestDayIdx >= 0
-            ? `${DAY_NAMES[busiestDayIdx]} (avg ${busiestDayAvg.toFixed(1)}h)` : '-';
+            ? `${DAY_NAMES[busiestDayIdx]} (avg ${dayAvgs[busiestDayIdx].avgHrs.toFixed(1)}h, ${dayAvgs[busiestDayIdx].util.toFixed(1)}%)` : '-';
         document.getElementById('statsQuietestDay').innerText = quietestDayIdx >= 0
-            ? `${DAY_NAMES[quietestDayIdx]} (avg ${quietestDayAvg.toFixed(1)}h)` : '-';
+            ? `${DAY_NAMES[quietestDayIdx]} (avg ${dayAvgs[quietestDayIdx].avgHrs.toFixed(1)}h, ${dayAvgs[quietestDayIdx].util.toFixed(1)}%)` : '-';
         
         // Peak hour
         let peakHour = -1, peakCount = 0;
