@@ -1442,6 +1442,7 @@ const firebaseConfig = {
         if (!advCheck.allowed) { return; }
 
         e.preventDefault();
+        document.body.classList.add('is-dragging');
 
         // Calculate quarter-hour offset if enabled
         const quarterOffset = getQuarterHourOffset(e, slotElement, res);
@@ -1641,6 +1642,7 @@ const firebaseConfig = {
         
         document.removeEventListener('mousemove', doSelection);
         document.removeEventListener('mouseup', endSelection);
+        document.body.classList.remove('is-dragging');
         
         if (selectionState.overlayElement) {
             selectionState.overlayElement.remove();
@@ -1814,6 +1816,7 @@ const firebaseConfig = {
         
         // Hide any open popover
         hideBookingPopover();
+        document.body.classList.add('is-dragging');
         
         // Calculate max duration based on closing time and collisions
         const dayEnd = res.hours[(col.dayIndex * 2) + 1];
@@ -1955,12 +1958,12 @@ const firebaseConfig = {
         
         document.removeEventListener('mousemove', doResize);
         document.removeEventListener('mouseup', endResize);
+        document.body.classList.remove('is-dragging');
         
         // Set flag to prevent accidental clicks, clear after event loop settles
         resizeJustEnded = true;
         setTimeout(() => { resizeJustEnded = false; }, 100);
         
-        // Clean up overlay and tooltip
         // Clean up overlay (label is child, removed with it)
         if (resizeState.overlayElement) {
             resizeState.overlayElement.remove();

@@ -146,6 +146,10 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     font-size: 0.85em; white-space: nowrap; pointer-events: none; z-index: 20;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
+/* Suppress slot tooltips during drag-to-create and resize */
+body.is-dragging .slot::after {
+    display: none !important;
+}
 
 .slot.closed { background-color: #cccccc !important; border-color: #cccccc; cursor: not-allowed; opacity: 1; pointer-events: none; }
 
@@ -577,12 +581,15 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     overflow: hidden;
 }
 .overlay-label {
+    background: #333;
     color: #fff;
-    font-size: 0.8em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
     font-weight: 600;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
     white-space: nowrap;
     pointer-events: none;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 /* Resize Handle */
