@@ -86,7 +86,7 @@ const firebaseConfig = {
         activeWeekKey: null,
         startSlotRect: null,
         overlayElement: null,
-        tooltipElement: null,
+        labelElement: null,
         useQuarterHour: false,
         quarterOffset: 0
     };
@@ -110,7 +110,7 @@ const firebaseConfig = {
         maxDuration: 0,
         originalRect: null,
         overlayElement: null,
-        tooltipElement: null,
+        labelElement: null,
         useQuarterHour: false
     };
     let resizeJustEnded = false;
@@ -788,10 +788,12 @@ const firebaseConfig = {
                 
                 // Event handlers - popover on hover
                 bookingEl.onmouseenter = (e) => {
+                    if (selectionState.active || resizeState.active) return;
                     highlightBooking(booking.id);
                     showBookingPopover(e, booking);
                 };
                 bookingEl.onmousemove = (e) => {
+                    if (selectionState.active || resizeState.active) return;
                     updatePopoverPosition(e);
                 };
                 bookingEl.onmouseleave = () => {
@@ -1428,15 +1430,6 @@ const firebaseConfig = {
     }
 
     // --- DRAG-TO-CREATE HANDLERS ---
-    function positionSelectionTooltip(tooltip, rect) {
-        const tooltipWidth = tooltip.offsetWidth;
-        if (rect.right + 10 + tooltipWidth > window.innerWidth) {
-            tooltip.style.left = (rect.left - tooltipWidth - 10) + 'px';
-        } else {
-            tooltip.style.left = (rect.right + 10) + 'px';
-        }
-    }
-
     function startSelection(e, slotId, timeVal, col, res, activeWeekKey, slotElement) {
         // Only start on left click, not during other operations
         if (e.button !== 0) return;
@@ -1535,7 +1528,7 @@ const firebaseConfig = {
             activeWeekKey: activeWeekKey,
             startSlotRect: rect,
             overlayElement: null,
-            tooltipElement: null,
+            labelElement: null,
             useQuarterHour: res.useQuarterHour || false,
             quarterOffset: quarterOffset
         };
@@ -1563,14 +1556,12 @@ const firebaseConfig = {
         document.body.appendChild(overlay);
         selectionState.overlayElement = overlay;
 
-        // Create tooltip
-        const tooltip = document.createElement('div');
-        tooltip.className = 'selection-tooltip';
-        tooltip.innerText = `${formatTime(adjustedTimeVal)} - ${formatTime(adjustedTimeVal + minDuration)} (${minDuration}h)`;
-        tooltip.style.top = rect.top + 'px';
-        document.body.appendChild(tooltip);
-        positionSelectionTooltip(tooltip, rect);
-        selectionState.tooltipElement = tooltip;
+        // Add centered label inside overlay
+        const label = document.createElement('div');
+        label.className = 'overlay-label';
+        label.innerText = `${formatTime(adjustedTimeVal)} - ${formatTime(adjustedTimeVal + minDuration)} (${minDuration}h)`;
+        overlay.appendChild(label);
+        selectionState.labelElement = label;
 
 
         document.addEventListener('mousemove', doSelection);
@@ -1639,10 +1630,9 @@ const firebaseConfig = {
             selectionState.overlayElement.style.height = Math.max(10, overlayHeight) + 'px';
         }
 
-        if (selectionState.tooltipElement) {
+        if (selectionState.labelElement) {
             const endTime = selectionState.startTime + newDuration;
-            selectionState.tooltipElement.innerText = `${formatTime(selectionState.startTime)} - ${formatTime(endTime)} (${newDuration}h)`;
-            positionSelectionTooltip(selectionState.tooltipElement, selectionState.startSlotRect);
+            selectionState.labelElement.innerText = `${formatTime(selectionState.startTime)} - ${formatTime(endTime)} (${newDuration}h)`;
         }
     }
     
@@ -1654,9 +1644,6 @@ const firebaseConfig = {
         
         if (selectionState.overlayElement) {
             selectionState.overlayElement.remove();
-        }
-        if (selectionState.tooltipElement) {
-            selectionState.tooltipElement.remove();
         }
         
         const duration = selectionState.currentDuration;
@@ -1679,7 +1666,7 @@ const firebaseConfig = {
             activeWeekKey: null,
             startSlotRect: null,
             overlayElement: null,
-            tooltipElement: null,
+            labelElement: null,
             useQuarterHour: false,
             quarterOffset: 0
         };
@@ -1900,7 +1887,7 @@ const firebaseConfig = {
             maxDuration: maxDuration,
             originalRect: rect,
             overlayElement: null,
-            tooltipElement: null,
+            labelElement: null,
             useQuarterHour: res.useQuarterHour || false
         };
         
@@ -1918,14 +1905,12 @@ const firebaseConfig = {
         document.body.appendChild(overlay);
         resizeState.overlayElement = overlay;
         
-        // Create tooltip
-        const tooltip = document.createElement('div');
-        tooltip.className = 'resize-tooltip';
-        tooltip.innerText = `${formatTime(booking.start)} - ${formatTime(booking.start + booking.data.duration)} (${booking.data.duration}h)`;
-        tooltip.style.top = rect.top + 'px';
-        document.body.appendChild(tooltip);
-        positionSelectionTooltip(tooltip, rect);
-        resizeState.tooltipElement = tooltip;
+        // Add centered label inside overlay
+        const label = document.createElement('div');
+        label.className = 'overlay-label';
+        label.innerText = `${formatTime(booking.start)} - ${formatTime(booking.start + booking.data.duration)} (${booking.data.duration}h)`;
+        overlay.appendChild(label);
+        resizeState.labelElement = label;
         
         document.addEventListener('mousemove', doResize);
         document.addEventListener('mouseup', endResize);
@@ -1959,10 +1944,9 @@ const firebaseConfig = {
         }
 
         // Update tooltip
-        if (resizeState.tooltipElement) {
+        if (resizeState.labelElement) {
             const newEndTime = resizeState.bookingStart + newDuration;
-            resizeState.tooltipElement.innerText = `${formatTime(resizeState.bookingStart)} - ${formatTime(newEndTime)} (${newDuration}h)`;
-            positionSelectionTooltip(resizeState.tooltipElement, resizeState.originalRect);
+            resizeState.labelElement.innerText = `${formatTime(resizeState.bookingStart)} - ${formatTime(newEndTime)} (${newDuration}h)`;
         }
     }
     
@@ -1977,11 +1961,9 @@ const firebaseConfig = {
         setTimeout(() => { resizeJustEnded = false; }, 100);
         
         // Clean up overlay and tooltip
+        // Clean up overlay (label is child, removed with it)
         if (resizeState.overlayElement) {
             resizeState.overlayElement.remove();
-        }
-        if (resizeState.tooltipElement) {
-            resizeState.tooltipElement.remove();
         }
         
         const newDuration = resizeState.currentDuration;
@@ -2017,7 +1999,7 @@ const firebaseConfig = {
             maxDuration: 0,
             originalRect: null,
             overlayElement: null,
-            tooltipElement: null,
+            labelElement: null,
             useQuarterHour: false
         };
     }
