@@ -4595,8 +4595,59 @@ const firebaseConfig = {
             document.getElementById('statsStaffSection').style.display = 'none';
         }
         
-        // Store for CSV export
-        statsData = { dailyStats, year, res, monthlyTotals, monthlyAvailable, grandTotal, totalAvailable };
+        // Store raw data for CSV export
+        const DAY_NAMES_EXPORT = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        // Build monthly summary (YTD)
+        const monthlySummary = [];
+        for (let i = 0; i < 12; i++) {
+            if (monthlyAvailableYtd[i] === 0 && monthlyTotalsYtd[i] === 0) continue;
+            monthlySummary.push({
+                month: MONTHS[i],
+                bookedHours: parseFloat(monthlyTotalsYtd[i].toFixed(2)),
+                availableHours: parseFloat(monthlyAvailableYtd[i].toFixed(2)),
+                utilization: monthlyAvailableYtd[i] > 0 ? parseFloat(((monthlyTotalsYtd[i] / monthlyAvailableYtd[i]) * 100).toFixed(1)) : 0
+            });
+        }
+        
+        // Build day-of-week summary
+        const dowSummary = [];
+        for (let i = 0; i < 7; i++) {
+            if (dayOfWeekCount[i] === 0) continue;
+            dowSummary.push({
+                day: DAY_NAMES_EXPORT[i],
+                avgHours: parseFloat((dayOfWeekHours[i] / dayOfWeekCount[i]).toFixed(1)),
+                totalHours: parseFloat(dayOfWeekHours[i].toFixed(2)),
+                availableHours: parseFloat(dayOfWeekAvailable[i].toFixed(2)),
+                utilization: dayOfWeekAvailable[i] > 0 ? parseFloat(((dayOfWeekHours[i] / dayOfWeekAvailable[i]) * 100).toFixed(1)) : 0,
+                openDayCount: dayOfWeekCount[i]
+            });
+        }
+        
+        // Build hourly distribution
+        const hourlyDist = [];
+        const allHours = Object.keys(hourSlotCounts).map(Number).sort((a, b) => a - b);
+        allHours.forEach(h => {
+            hourlyDist.push({ hour: formatTime(h), bookings: hourSlotCounts[h] });
+        });
+        
+        statsData = {
+            dailyStats, year, res, monthlyTotals, monthlyAvailable, grandTotal, totalAvailable,
+            summary: {
+                totalHours: parseFloat(grandTotal.toFixed(2)),
+                totalBookings: totalBookingCount,
+                utilization: ytdAvailable > 0 ? parseFloat(((ytdTotal / ytdAvailable) * 100).toFixed(1)) : null,
+                avgHoursPerDay: ytdDaysBookable > 0 ? parseFloat((ytdTotal / ytdDaysBookable).toFixed(1)) : 0,
+                avgDuration: totalBookingCount > 0 ? parseFloat((totalDurationSum / totalBookingCount).toFixed(1)) : null,
+                peakHour: peakHour >= 0 ? formatTime(peakHour) : null,
+                peakHourBookings: peakHour >= 0 ? peakCount : null,
+                staffAssistedCount: res.hasStaffField ? staffAssistedCount : null,
+                staffAssistedPct: res.hasStaffField && totalBookingCount > 0 ? parseFloat(((staffAssistedCount / totalBookingCount) * 100).toFixed(1)) : null
+            },
+            monthlySummary,
+            dowSummary,
+            hourlyDist
+        };
     }
 
     
@@ -4606,10 +4657,49 @@ const firebaseConfig = {
             return;
         }
         
-        const { dailyStats, year, res, monthlyTotals, grandTotal } = statsData;
+        const { dailyStats, year, res, monthlyTotals, grandTotal, summary, monthlySummary, dowSummary, hourlyDist } = statsData;
         const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         
         let csv = `${res.name} - Usage Statistics ${year}\n\n`;
+        
+        // Section 1: Overview
+        csv += 'OVERVIEW (YTD)\n';
+        csv += 'Metric,Value\n';
+        csv += `Total Hours,${summary.totalHours}\n`;
+        csv += `Total Bookings,${summary.totalBookings}\n`;
+        csv += `Utilization %,${summary.utilization !== null ? summary.utilization : ''}\n`;
+        csv += `Avg Hours per Open Day,${summary.avgHoursPerDay}\n`;
+        csv += `Avg Booking Duration (hours),${summary.avgDuration !== null ? summary.avgDuration : ''}\n`;
+        csv += `Peak Hour,${summary.peakHour || ''}\n`;
+        csv += `Bookings at Peak Hour,${summary.peakHourBookings || ''}\n`;
+        if (summary.staffAssistedCount !== null) {
+            csv += `Staff Assisted Count,${summary.staffAssistedCount}\n`;
+            csv += `Staff Assisted %,${summary.staffAssistedPct !== null ? summary.staffAssistedPct : ''}\n`;
+        }
+        
+        // Section 2: Monthly Summary
+        csv += '\nMONTHLY SUMMARY (YTD)\n';
+        csv += 'Month,Booked Hours,Available Hours,Utilization %\n';
+        monthlySummary.forEach(m => {
+            csv += `${m.month},${m.bookedHours},${m.availableHours},${m.utilization}\n`;
+        });
+        
+        // Section 3: Day-of-Week Summary
+        csv += '\nDAY-OF-WEEK SUMMARY (YTD)\n';
+        csv += 'Day,Avg Hours,Total Hours,Available Hours,Utilization %,Open Days\n';
+        dowSummary.forEach(d => {
+            csv += `${d.day},${d.avgHours},${d.totalHours},${d.availableHours},${d.utilization},${d.openDayCount}\n`;
+        });
+        
+        // Section 4: Hourly Distribution
+        csv += '\nHOURLY DISTRIBUTION (YTD)\n';
+        csv += 'Hour,Bookings\n';
+        hourlyDist.forEach(h => {
+            csv += `${h.hour},${h.bookings}\n`;
+        });
+        
+        // Section 5: Daily Breakdown
+        csv += '\nDAILY BREAKDOWN\n';
         csv += 'Day,' + MONTHS.join(',') + ',Total\n';
         
         for (let day = 1; day <= 31; day++) {
