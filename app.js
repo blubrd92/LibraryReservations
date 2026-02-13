@@ -4552,32 +4552,174 @@ const firebaseConfig = {
 
         html += '</div>'; // end row 2
 
-        // === ROW 3: Highlights ===
-        html += '<div class="dash-row dash-row-single">';
+        // === ROW 3: Monthly Trend + Unused Capacity ===
+        html += '<div class="dash-row">';
+
+        // Monthly Utilization Trend Line
+        const ms = statsData.monthlySummary || [];
         html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Highlights</div>';
-        html += '<div class="dash-highlights">';
-        const bm = document.getElementById('statsBusiestMonth').innerText;
-        html += buildHighlightCard('Busiest Month', bm, '', 'busiest');
-        const bd = document.getElementById('statsBusiestDay').innerText;
-        html += buildHighlightCard('Busiest Day', bd, '', 'busiest');
-        const qd = document.getElementById('statsQuietestDay').innerText;
-        html += buildHighlightCard('Quietest Day', qd, '', 'quietest');
-        const ph = document.getElementById('statsPeakHour').innerText;
-        html += buildHighlightCard('Peak Hour', ph, '', 'peak');
+        html += '<div class="dash-panel-title">Utilization Trend (YTD)</div>';
+        if (ms.length >= 2) {
+            const MONTHS_MAP = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+            const points = ms.map(m => ({ label: m.month, util: m.utilization, idx: MONTHS_MAP[m.month] }));
+            // SVG line chart
+            const svgW = 500, svgH = 160, padL = 40, padR = 15, padT = 20, padB = 30;
+            const chartW = svgW - padL - padR;
+            const chartH = svgH - padT - padB;
+            const maxUtil = Math.max(100, ...points.map(p => p.util));
+            const xStep = points.length > 1 ? chartW / (points.length - 1) : 0;
+
+            html += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" style="width:100%;height:auto;" xmlns="http://www.w3.org/2000/svg">';
+            // Grid lines
+            for (let g = 0; g <= 4; g++) {
+                const gy = padT + chartH - (chartH * (g * 25) / maxUtil);
+                const label = (g * 25) + '%';
+                html += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (svgW - padR) + '" y2="' + gy + '" stroke="#e0e0e0" stroke-width="1"/>';
+                html += '<text x="' + (padL - 5) + '" y="' + (gy + 4) + '" text-anchor="end" fill="#999" font-size="10">' + label + '</text>';
+            }
+            // Build path
+            let pathD = '';
+            const dotPositions = [];
+            points.forEach((p, i) => {
+                const x = padL + i * xStep;
+                const y = padT + chartH - (chartH * p.util / maxUtil);
+                dotPositions.push({ x, y, label: p.label, util: p.util });
+                pathD += (i === 0 ? 'M' : 'L') + x + ',' + y;
+            });
+            // Area fill
+            const areaD = pathD + ' L' + (padL + (points.length - 1) * xStep) + ',' + (padT + chartH) + ' L' + padL + ',' + (padT + chartH) + ' Z';
+            html += '<path d="' + areaD + '" fill="rgba(25,118,210,0.1)"/>';
+            html += '<path d="' + pathD + '" fill="none" stroke="#1976d2" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+            // Dots and labels
+            dotPositions.forEach(d => {
+                html += '<circle cx="' + d.x + '" cy="' + d.y + '" r="4" fill="#1976d2" stroke="#fff" stroke-width="1.5"/>';
+                html += '<text x="' + d.x + '" y="' + (d.y - 8) + '" text-anchor="middle" fill="#333" font-size="10" font-weight="600">' + d.util + '%</text>';
+                html += '<text x="' + d.x + '" y="' + (padT + chartH + 15) + '" text-anchor="middle" fill="#777" font-size="10">' + d.label + '</text>';
+            });
+            html += '</svg>';
+        } else if (ms.length === 1) {
+            html += '<div style="text-align:center;padding:20px;color:#555;">Only one month of data (' + ms[0].month + ': ' + ms[0].utilization + '% utilization). Trend will appear with more months.</div>';
+        } else {
+            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
+        }
         html += '</div>';
+
+        // Unused Capacity Slots
+        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel-title">Most Available Slots (YTD)</div>';
+        const hm = statsData.dayHourHeatmap || [];
+        const dow = statsData.dowSummary || [];
+        const activeSubRooms = getActiveSubRooms(res);
+        const roomMult = activeSubRooms.length > 0 ? activeSubRooms.length : 1;
+        const DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const DOW_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        // Build a map of openDayCount per weekday index
+        const dowCountMap = {};
+        dow.forEach(d => { dowCountMap[DOW_NAMES.indexOf(d.day)] = d.openDayCount; });
+
+        const slotUsage = [];
+        for (let d = 0; d < 7; d++) {
+            const openDays = dowCountMap[d] || 0;
+            if (openDays === 0) continue;
+            const dayStart = res.hours[d * 2];
+            const dayEnd = res.hours[d * 2 + 1];
+            if (dayStart === dayEnd) continue;
+            for (let h = dayStart; h < dayEnd; h++) {
+                const hourKey = Math.floor(h);
+                const booked = (hm[d] && hm[d][hourKey]) || 0;
+                const possible = openDays * roomMult;
+                const usedPct = possible > 0 ? (booked / possible) * 100 : 0;
+                const freePct = 100 - usedPct;
+                slotUsage.push({ day: d, hour: h, booked, possible, usedPct, freePct });
+            }
+        }
+        // Sort by highest free percentage (most underused), then by day/hour
+        slotUsage.sort((a, b) => b.freePct - a.freePct || a.day - b.day || a.hour - b.hour);
+        // Show top 8
+        const topUnused = slotUsage.slice(0, 8);
+
+        if (topUnused.length > 0) {
+            html += '<div class="dash-hbar-chart">';
+            topUnused.forEach(slot => {
+                const label = DOW_SHORT[slot.day] + ' ' + formatTime(slot.hour);
+                const freePctDisplay = Math.round(slot.freePct);
+                const barWidth = slot.freePct;
+                const title = label + ': booked ' + slot.booked + ' of ' + slot.possible + ' possible (' + Math.round(slot.usedPct) + '% used)';
+                html += '<div class="dash-hbar-row">';
+                html += '  <div class="dash-hbar-label" style="width:60px;">' + label + '</div>';
+                html += '  <div class="dash-hbar-track" style="background:#e8eaf6;" title="' + title + '"><div class="dash-hbar-fill unused" style="width:' + barWidth + '%;"></div></div>';
+                html += '  <div class="dash-hbar-value">' + freePctDisplay + '% open</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+        } else {
+            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
+        }
         html += '</div>';
-        html += '</div>';
+
+        html += '</div>'; // end row 3
+
+        // === ROW 4: Weekly Volume Timeline ===
+        const wv = statsData.weeklyVolume || {};
+        const wvKeys = Object.keys(wv);
+        if (wvKeys.length > 0) {
+            html += '<div class="dash-row" style="grid-template-columns:1fr;">';
+            html += '<div class="dash-panel">';
+            html += '<div class="dash-panel-title">Weekly Volume (' + statsData.year + ')</div>';
+
+            // Build all weeks for the year
+            const yr = statsData.year;
+            const allWeeks = [];
+            let wDate = new Date(yr, 0, 1);
+            // Rewind to Sunday
+            wDate.setDate(wDate.getDate() - wDate.getDay());
+            const yearEnd = new Date(yr, 11, 31);
+            while (wDate <= yearEnd) {
+                const wKey = formatDateISO(wDate);
+                const data = wv[wKey] || null;
+                allWeeks.push({ key: wKey, date: new Date(wDate), data: data });
+                wDate.setDate(wDate.getDate() + 7);
+            }
+
+            const maxWkBookings = allWeeks.reduce((mx, w) => Math.max(mx, w.data ? w.data.bookings : 0), 0) || 1;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+            html += '<div class="dash-weekly-timeline">';
+            // Month labels
+            html += '<div class="dash-wt-months">';
+            let lastMonth = -1;
+            allWeeks.forEach((w, i) => {
+                const m = w.date.getMonth();
+                if (m !== lastMonth) {
+                    html += '<div class="dash-wt-month-label" style="grid-column:' + (i + 1) + ';">' + MONTHS_SHORT[m] + '</div>';
+                    lastMonth = m;
+                }
+            });
+            html += '</div>';
+            // Bars
+            html += '<div class="dash-wt-bars" style="grid-template-columns:repeat(' + allWeeks.length + ',1fr);">';
+            allWeeks.forEach(w => {
+                const isFuture = w.date > today;
+                const bookings = w.data ? w.data.bookings : 0;
+                const hours = w.data ? parseFloat(w.data.hours.toFixed(1)) : 0;
+                const pct = (bookings / maxWkBookings) * 100;
+                const weekEnd = new Date(w.date);
+                weekEnd.setDate(weekEnd.getDate() + 6);
+                const label = (w.date.getMonth() + 1) + '/' + w.date.getDate() + ' - ' + (weekEnd.getMonth() + 1) + '/' + weekEnd.getDate();
+                const title = label + ': ' + bookings + ' bookings, ' + hours + 'h';
+                const barClass = isFuture ? 'dash-wt-bar future' : (bookings > 0 ? 'dash-wt-bar' : 'dash-wt-bar empty');
+                html += '<div class="' + barClass + '" title="' + title + '" style="height:' + (bookings > 0 ? Math.max(pct, 4) : 2) + '%;"></div>';
+            });
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>'; // end row 4
+        }
 
         container.innerHTML = html;
-    }
-
-    function buildHighlightCard(label, value, detail, type) {
-        return '<div class="dash-highlight-card ' + (type || '') + '">'
-            + '<div class="hl-label">' + label + '</div>'
-            + '<div class="hl-value">' + value + '</div>'
-            + (detail ? '<div class="hl-detail">' + detail + '</div>' : '')
-            + '</div>';
     }
 
     function renderStatsGrid(dailyStats, year, res, bookings) {
@@ -4638,6 +4780,7 @@ const firebaseConfig = {
         const durationBuckets = {}; // { '0.5': 3, '1': 8, ... }
         const dayHourHeatmap = Array.from({length: 7}, () => ({})); // [day][hour] = count
         const subRoomCounts = {}; // { '0': 12, '1': 8, ... }
+        const weeklyVolume = {}; // { 'YYYY-MM-DD': { bookings: N, hours: N } } keyed by week start
         
         // Analyze individual bookings for count, duration, peak hour, staff
         const resPrefix = res.id + '_';
@@ -4681,6 +4824,13 @@ const firebaseConfig = {
             if (subIdx !== null) {
                 subRoomCounts[subIdx] = (subRoomCounts[subIdx] || 0) + 1;
             }
+            
+            // Weekly volume
+            const ws = getWeekStart(bookingDate);
+            const wsKey = formatDateISO(ws);
+            if (!weeklyVolume[wsKey]) weeklyVolume[wsKey] = { bookings: 0, hours: 0 };
+            weeklyVolume[wsKey].bookings++;
+            weeklyVolume[wsKey].hours += dur;
         });
         
         for (let day = 1; day <= 31; day++) {
@@ -4875,7 +5025,8 @@ const firebaseConfig = {
             hourlyDist,
             durationBuckets,
             dayHourHeatmap,
-            subRoomCounts
+            subRoomCounts,
+            weeklyVolume
         };
 
         // Render dashboard (must come after statsData is populated)

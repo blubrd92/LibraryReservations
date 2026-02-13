@@ -795,7 +795,7 @@ body.is-dragging .slot::after {
 .stats-heat-8 { background: #1976d2; color: white; }
 
 /* Stats Chart Styles */
-.stats-box { background: white; padding: 0; width: 1200px; max-width: 95%; max-height: 90vh; overflow: hidden; border-radius: 8px; display: flex; flex-direction: column; }
+.stats-box { background: white; padding: 0; width: 1260px; max-width: 97%; max-height: 90vh; overflow: hidden; border-radius: 8px; display: flex; flex-direction: column; }
 .stats-body { padding: 15px 20px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .stats-view-toggle {
     display: inline-flex;
@@ -829,9 +829,6 @@ body.is-dragging .slot::after {
 }
 .dash-row.dash-row-thirds {
     grid-template-columns: 1fr 1fr 1fr;
-}
-.dash-row.dash-row-single {
-    grid-template-columns: 1fr;
 }
 .dash-panel {
     background: #fafafa;
@@ -1015,6 +1012,9 @@ body.is-dragging .slot::after {
 .dash-hbar-fill.duration {
     background: linear-gradient(90deg, #5c6bc0, #9fa8da);
 }
+.dash-hbar-fill.unused {
+    background: linear-gradient(90deg, #78909c, #b0bec5);
+}
 .dash-hbar-value {
     font-size: 0.78em;
     color: #555;
@@ -1083,42 +1083,47 @@ body.is-dragging .slot::after {
     color: #888;
 }
 
-/* Highlights panel */
-.dash-highlights {
+/* Weekly Volume Timeline */
+.dash-weekly-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.dash-wt-months {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-.dash-highlight-card {
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border-left: 4px solid #1976d2;
-    border-radius: 4px;
-    padding: 10px 12px;
-}
-.dash-highlight-card.busiest { border-left-color: #c62828; }
-.dash-highlight-card.quietest { border-left-color: #2e7d32; }
-.dash-highlight-card.peak { border-left-color: #e65100; }
-.dash-highlight-card .hl-label {
     font-size: 0.72em;
-    color: #888;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-.dash-highlight-card .hl-value {
-    font-size: 1em;
-    font-weight: 700;
-    color: #333;
-    margin-top: 2px;
-}
-.dash-highlight-card .hl-detail {
-    font-size: 0.78em;
     color: #777;
-    margin-top: 1px;
+    font-weight: 600;
+    height: 16px;
+}
+.dash-wt-month-label {
+    white-space: nowrap;
+    overflow: hidden;
+}
+.dash-wt-bars {
+    display: grid;
+    gap: 2px;
+    align-items: flex-end;
+    height: 80px;
+}
+.dash-wt-bar {
+    background: linear-gradient(180deg, #1976d2, #42a5f5);
+    border-radius: 2px 2px 0 0;
+    min-width: 0;
+    transition: opacity 0.15s;
+}
+.dash-wt-bar:hover {
+    opacity: 0.75;
+}
+.dash-wt-bar.empty {
+    background: #e0e0e0;
+}
+.dash-wt-bar.future {
+    background: #e0e0e0;
+    opacity: 0.4;
 }
 
 @media (max-width: 800px) {
     .dash-row, .dash-row.dash-row-thirds { grid-template-columns: 1fr; }
-    .dash-highlights { grid-template-columns: 1fr; }
     .dash-pie-container { flex-direction: column; align-items: center; }
 }
