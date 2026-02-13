@@ -635,7 +635,7 @@ const firebaseConfig = {
                                     adjustedStart < b.end && quarterEnd > b.start
                                 );
                                 if (quarterBlocked) {
-                                    slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom');
+                                    slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom', 'drag-over-valid', 'drag-over-invalid');
                                     slot.setAttribute('data-time', '');
                                 } else {
                                     slot.setAttribute('data-time', `${formatTime(adjustedStart)} - ${formatTime(adjustedStart + 0.5)}`);
@@ -647,10 +647,30 @@ const firebaseConfig = {
                                         slot.classList.remove('quarter-hover-bottom');
                                         slot.classList.add('quarter-hover-top');
                                     }
+                                    // Reschedule mode: show valid/invalid feedback
+                                    if (rescheduleMode.active) {
+                                        let testSlotId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${adjustedStart}`;
+                                        if (col.subIndex !== null) testSlotId += `_${col.subIndex}`;
+                                        const rv = validateRescheduleTarget(testSlotId);
+                                        slot.classList.remove('drag-over-valid', 'drag-over-invalid');
+                                        slot.classList.add(rv.valid ? 'drag-over-valid' : 'drag-over-invalid');
+                                    }
                                 }
                             };
                             slot.onmouseleave = () => {
-                                slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom');
+                                slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom', 'drag-over-valid', 'drag-over-invalid');
+                            };
+                        } else {
+                            // Standard mode: reschedule hover feedback
+                            slot.onmouseenter = () => {
+                                if (!rescheduleMode.active) return;
+                                let testSlotId = `${res.id}_${activeWeekKey}_${col.dayIndex}_${timeVal}`;
+                                if (col.subIndex !== null) testSlotId += `_${col.subIndex}`;
+                                const rv = validateRescheduleTarget(testSlotId);
+                                slot.classList.add(rv.valid ? 'drag-over-valid' : 'drag-over-invalid');
+                            };
+                            slot.onmouseleave = () => {
+                                slot.classList.remove('drag-over-valid', 'drag-over-invalid');
                             };
                         }
 
@@ -1378,6 +1398,57 @@ const firebaseConfig = {
             }
         }
         
+        return { valid: true };
+    }
+
+    function validateRescheduleTarget(targetSlotId) {
+        if (!rescheduleMode.active || !rescheduleMode.sourceData) return { valid: false };
+        const res = resources.find(r => r.id === currentResId);
+        const prefix = res.id + "_";
+        const isDayView = res.viewMode === 'day';
+
+        const targetSuffix = targetSlotId.substring(prefix.length);
+        const targetParts = targetSuffix.split('_');
+        const targetWeekKey = targetParts[0];
+        const targetDay = parseInt(targetParts[1]);
+        const targetTime = parseFloat(targetParts[2]);
+        const targetSub = targetParts[3] || '';
+
+        if (targetSlotId === rescheduleMode.sourceId) return { valid: false };
+
+        // Closure check
+        const targetDate = new Date(targetWeekKey + 'T00:00:00');
+        targetDate.setDate(targetDate.getDate() + targetDay);
+        if (getClosureReason(res, targetDate)) return { valid: false };
+
+        // Advance booking limit
+        const advCheck = checkAdvanceLimit(res, targetWeekKey, targetDay);
+        if (!advCheck.allowed) return { valid: false };
+
+        // Operating hours
+        const dayStart = res.hours[targetDay * 2];
+        const dayEnd = res.hours[(targetDay * 2) + 1];
+        if (targetTime < dayStart || targetTime >= dayEnd || dayStart === dayEnd) return { valid: false };
+
+        // Duration fits
+        const duration = rescheduleMode.sourceData.duration;
+        const bookingEnd = targetTime + duration;
+        if (bookingEnd > dayEnd) return { valid: false };
+
+        // Conflict check
+        const activeWeekKey = getWeekKey(isDayView ? currentDayDate : currentWeekStart);
+        for (const key of Object.keys(allBookings)) {
+            if (key === rescheduleMode.sourceId) continue;
+            if (!key.startsWith(res.id + "_" + activeWeekKey)) continue;
+            const kParts = key.substring(prefix.length).split('_');
+            const kDay = parseInt(kParts[1]);
+            const kTime = parseFloat(kParts[2]);
+            const kSub = kParts[3] || '';
+            if (kDay !== targetDay || kSub !== targetSub) continue;
+            const kEnd = kTime + allBookings[key].duration;
+            if (targetTime < kEnd && bookingEnd > kTime) return { valid: false };
+        }
+
         return { valid: true };
     }
 
