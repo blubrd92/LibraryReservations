@@ -237,7 +237,6 @@ body.is-dragging .slot::after {
 }
 
 .booking-popover .popover-staff {
-    color: #e67e22;
     font-weight: 500;
     margin-bottom: 6px;
 }
@@ -1087,4 +1086,5 @@ body.is-dragging .slot::after {
 @media (max-width: 800px) {
     .dash-row, .dash-row.dash-row-thirds { grid-template-columns: 1fr; }
     .dash-pie-container { flex-direction: column; align-items: center; }
+
 }
