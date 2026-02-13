@@ -4391,7 +4391,7 @@ const firebaseConfig = {
         html += '  <div class="dash-ring" style="background: conic-gradient(' + ringColor + ' 0% ' + utilVal + '%, #e0e0e0 ' + utilVal + '% 100%);">';
         html += '    <div class="dash-ring-inner">';
         html += '      <span class="dash-ring-pct">' + (s.utilization !== null ? s.utilization + '%' : 'N/A') + '</span>';
-        html += '      <span class="dash-ring-sub">' + (s.totalHours || 0) + 'h of ' + (statsData.totalAvailable ? parseFloat(statsData.totalAvailable.toFixed(0)) : '?') + 'h</span>';
+        html += '      <span class="dash-ring-sub">' + (statsData.ytdTotal ? parseFloat(statsData.ytdTotal.toFixed(1)) : 0) + 'h of ' + (statsData.ytdAvailable ? parseFloat(statsData.ytdAvailable.toFixed(0)) : '?') + 'h</span>';
         html += '    </div>';
         html += '  </div>';
         html += '  <div class="dash-ring-legend">';
@@ -4858,7 +4858,7 @@ const firebaseConfig = {
         });
         
         statsData = {
-            dailyStats, year, res, monthlyTotals, monthlyAvailable, grandTotal, totalAvailable,
+            dailyStats, year, res, monthlyTotals, monthlyAvailable, grandTotal, totalAvailable, ytdAvailable, ytdTotal,
             summary: {
                 totalHours: parseFloat(grandTotal.toFixed(2)),
                 totalBookings: totalBookingCount,
