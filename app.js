@@ -2535,8 +2535,38 @@ const firebaseConfig = {
             seriesEl.style.display = 'none';
         }
         
-        // Hide recurring options for existing bookings
-        document.getElementById('recurringSection').style.display = 'none';
+        // Show recurring options for new bookings if resource allows it; hide for existing
+        const recurSection = document.getElementById('recurringSection');
+        if (!data && canEdit && res.allowRecurring) {
+            recurSection.style.display = '';
+            document.getElementById('bookRecurring').checked = false;
+            document.getElementById('recurringOptions').classList.add('hidden');
+            document.getElementById('recurPattern').value = '7';
+            document.getElementById('customDaysGroup').classList.add('hidden');
+            document.getElementById('manualDatesGroup').classList.add('hidden');
+            document.getElementById('recurEndControls').style.display = '';
+            document.getElementById('recurEndType').value = 'count';
+            document.getElementById('recurCount').value = '4';
+            document.getElementById('recurCountGroup').classList.remove('hidden');
+            document.getElementById('recurDateGroup').classList.add('hidden');
+            manualSeriesDates = [];
+            renderManualDates();
+
+            // Set dynamic labels for monthly weekday options
+            const slotDate = new Date(parts[0] + 'T00:00:00');
+            slotDate.setDate(slotDate.getDate() + dayIdx);
+            const weekdayName = slotDate.toLocaleDateString('en-US', { weekday: 'long' });
+            const dayOfMonth = slotDate.getDate();
+            const ordinal = Math.ceil(dayOfMonth / 7);
+            const ordinalNames = ['', '1st', '2nd', '3rd', '4th', '5th'];
+            const ordinalStr = ordinalNames[ordinal] || ordinal + 'th';
+            const opt30 = document.querySelector('#recurPattern option[value="30"]');
+            if (opt30) opt30.textContent = `Monthly (same date, ${dayOfMonth})`;
+            const optMW = document.querySelector('#recurPattern option[value="monthly-weekday"]');
+            if (optMW) optMW.textContent = `Monthly (${ordinalStr} ${weekdayName})`;
+        } else {
+            recurSection.style.display = 'none';
+        }
 
         modal.style.display = 'flex';
     }
