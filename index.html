@@ -511,7 +511,7 @@
             <span>📊 Usage Statistics</span>
         </div>
         <div class="stats-body">
-            <div style="display: flex; gap: 15px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;">
+            <div style="display: flex; gap: 15px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; flex-shrink: 0;">
                 <div>
                     <label style="font-weight: bold;">Resource:</label>
                     <select id="statsResourceSelect" onchange="handleStatsResourceChange()"></select>
@@ -523,8 +523,8 @@
                 <button class="btn-success" onclick="exportStatsCSV()">📥 Export CSV</button>
             </div>
             
-            <div id="statsSummary" style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid #e0e0e0;">
-                <div style="display: flex; flex-wrap: wrap; background: #f5f7fa; padding: 6px 15px; gap: 4px 24px; border-bottom: 1px solid #e0e0e0;">
+            <div id="statsSummary" style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid #e0e0e0; flex-shrink: 0;">
+                <div style="display: flex; flex-wrap: wrap; background: #f5f7fa; padding: 8px 15px; gap: 6px 24px; border-bottom: 1px solid #e0e0e0;">
                     <div><strong>Total Hours:</strong> <span id="statsTotalHours">0</span></div>
                     <div><strong>Bookings:</strong> <span id="statsBookingCount">0</span></div>
                     <div><strong>Utilization (YTD):</strong> <span id="statsUtilization">0%</span></div>
@@ -532,7 +532,7 @@
                     <div><strong>Avg Duration:</strong> <span id="statsAvgDuration">0</span></div>
                     <div id="statsStaffSection" style="display:none;"><strong>Staff Assisted:</strong> <span id="statsStaffAssisted">-</span></div>
                 </div>
-                <div style="display: flex; flex-wrap: wrap; background: #fafafa; padding: 6px 15px; gap: 4px 24px;">
+                <div style="display: flex; flex-wrap: wrap; background: #fafafa; padding: 8px 15px; gap: 6px 24px;">
                     <div><strong>Busiest Month:</strong> <span id="statsBusiestMonth">-</span></div>
                     <div><strong>Busiest Day:</strong> <span id="statsBusiestDay">-</span></div>
                     <div><strong>Quietest Day:</strong> <span id="statsQuietestDay">-</span></div>
@@ -540,7 +540,7 @@
                 </div>
             </div>
 
-            <div style="margin-bottom: 8px;">
+            <div style="margin-bottom: 8px; flex-shrink: 0;">
                 <div class="stats-view-toggle">
                     <button id="statsViewChart" onclick="toggleStatsView('chart')">📊 Dashboard</button>
                     <button id="statsViewGrid" class="active" onclick="toggleStatsView('grid')">📋 Grid</button>
