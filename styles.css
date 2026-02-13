@@ -113,6 +113,18 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
 
 .slot:not(.has-booking):not(.booked-body):not(.closed):not(.quarter-hour-slot):hover { background-color: #e3f2fd; }
 
+/* Quarter-hour mode: midline on open slots */
+.slot.quarter-hour-slot:not(.closed):not(.has-booking):not(.booked-body)::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    border-top: 1px dashed #ccc;
+    pointer-events: none;
+    z-index: 1;
+}
+
 /* Quarter-hour mode: highlight only top or bottom half (preserve row-alt banding) */
 .slot.quarter-hour-slot.quarter-hover-top:not(.closed) {
     background: linear-gradient(to bottom, #e3f2fd 50%, transparent 50%);
@@ -1086,5 +1098,4 @@ body.is-dragging .slot::after {
 @media (max-width: 800px) {
     .dash-row, .dash-row.dash-row-thirds { grid-template-columns: 1fr; }
     .dash-pie-container { flex-direction: column; align-items: center; }
-
 }
