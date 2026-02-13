@@ -4659,66 +4659,6 @@ const firebaseConfig = {
 
         html += '</div>'; // end row 3
 
-        // === ROW 4: Weekly Volume Timeline ===
-        const wv = statsData.weeklyVolume || {};
-        const wvKeys = Object.keys(wv);
-        if (wvKeys.length > 0) {
-            html += '<div class="dash-row" style="grid-template-columns:1fr;">';
-            html += '<div class="dash-panel">';
-            html += '<div class="dash-panel-title">Weekly Volume (' + statsData.year + ')</div>';
-
-            // Build all weeks for the year
-            const yr = statsData.year;
-            const allWeeks = [];
-            let wDate = new Date(yr, 0, 1);
-            // Rewind to Sunday
-            wDate.setDate(wDate.getDate() - wDate.getDay());
-            const yearEnd = new Date(yr, 11, 31);
-            while (wDate <= yearEnd) {
-                const wKey = formatDateISO(wDate);
-                const data = wv[wKey] || null;
-                allWeeks.push({ key: wKey, date: new Date(wDate), data: data });
-                wDate.setDate(wDate.getDate() + 7);
-            }
-
-            const maxWkBookings = allWeeks.reduce((mx, w) => Math.max(mx, w.data ? w.data.bookings : 0), 0) || 1;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-            html += '<div class="dash-weekly-timeline">';
-            // Month labels
-            html += '<div class="dash-wt-months">';
-            let lastMonth = -1;
-            allWeeks.forEach((w, i) => {
-                const m = w.date.getMonth();
-                if (m !== lastMonth) {
-                    html += '<div class="dash-wt-month-label" style="grid-column:' + (i + 1) + ';">' + MONTHS_SHORT[m] + '</div>';
-                    lastMonth = m;
-                }
-            });
-            html += '</div>';
-            // Bars
-            html += '<div class="dash-wt-bars" style="grid-template-columns:repeat(' + allWeeks.length + ',1fr);">';
-            allWeeks.forEach(w => {
-                const isFuture = w.date > today;
-                const bookings = w.data ? w.data.bookings : 0;
-                const hours = w.data ? parseFloat(w.data.hours.toFixed(1)) : 0;
-                const pct = (bookings / maxWkBookings) * 100;
-                const weekEnd = new Date(w.date);
-                weekEnd.setDate(weekEnd.getDate() + 6);
-                const label = (w.date.getMonth() + 1) + '/' + w.date.getDate() + ' - ' + (weekEnd.getMonth() + 1) + '/' + weekEnd.getDate();
-                const title = label + ': ' + bookings + ' bookings, ' + hours + 'h';
-                const barClass = isFuture ? 'dash-wt-bar future' : (bookings > 0 ? 'dash-wt-bar' : 'dash-wt-bar empty');
-                html += '<div class="' + barClass + '" title="' + title + '" style="height:' + (bookings > 0 ? Math.max(pct, 4) : 2) + '%;"></div>';
-            });
-            html += '</div>';
-            html += '</div>';
-
-            html += '</div>';
-            html += '</div>'; // end row 4
-        }
-
         container.innerHTML = html;
     }
 
@@ -4780,7 +4720,6 @@ const firebaseConfig = {
         const durationBuckets = {}; // { '0.5': 3, '1': 8, ... }
         const dayHourHeatmap = Array.from({length: 7}, () => ({})); // [day][hour] = count
         const subRoomCounts = {}; // { '0': 12, '1': 8, ... }
-        const weeklyVolume = {}; // { 'YYYY-MM-DD': { bookings: N, hours: N } } keyed by week start
         
         // Analyze individual bookings for count, duration, peak hour, staff
         const resPrefix = res.id + '_';
@@ -4824,13 +4763,6 @@ const firebaseConfig = {
             if (subIdx !== null) {
                 subRoomCounts[subIdx] = (subRoomCounts[subIdx] || 0) + 1;
             }
-            
-            // Weekly volume
-            const ws = getWeekStart(bookingDate);
-            const wsKey = formatDateISO(ws);
-            if (!weeklyVolume[wsKey]) weeklyVolume[wsKey] = { bookings: 0, hours: 0 };
-            weeklyVolume[wsKey].bookings++;
-            weeklyVolume[wsKey].hours += dur;
         });
         
         for (let day = 1; day <= 31; day++) {
@@ -5025,8 +4957,7 @@ const firebaseConfig = {
             hourlyDist,
             durationBuckets,
             dayHourHeatmap,
-            subRoomCounts,
-            weeklyVolume
+            subRoomCounts
         };
 
         // Render dashboard (must come after statsData is populated)

@@ -1084,46 +1084,6 @@ body.is-dragging .slot::after {
     color: #888;
 }
 
-/* Weekly Volume Timeline */
-.dash-weekly-timeline {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-.dash-wt-months {
-    display: grid;
-    font-size: 0.72em;
-    color: #777;
-    font-weight: 600;
-    height: 16px;
-}
-.dash-wt-month-label {
-    white-space: nowrap;
-    overflow: hidden;
-}
-.dash-wt-bars {
-    display: grid;
-    gap: 2px;
-    align-items: flex-end;
-    height: 80px;
-}
-.dash-wt-bar {
-    background: linear-gradient(180deg, #1976d2, #42a5f5);
-    border-radius: 2px 2px 0 0;
-    min-width: 0;
-    transition: opacity 0.15s;
-}
-.dash-wt-bar:hover {
-    opacity: 0.75;
-}
-.dash-wt-bar.empty {
-    background: #e0e0e0;
-}
-.dash-wt-bar.future {
-    background: #e0e0e0;
-    opacity: 0.4;
-}
-
 @media (max-width: 800px) {
     .dash-row, .dash-row.dash-row-thirds { grid-template-columns: 1fr; }
     .dash-pie-container { flex-direction: column; align-items: center; }
