@@ -544,44 +544,44 @@ body.is-dragging .slot::after {
     border-color: var(--danger);
 }
 .slot.drag-over-valid { 
-    background-color: rgba(39, 174, 96, 0.3) !important; 
+    background: rgba(39, 174, 96, 0.3) !important; 
     box-shadow: inset 0 0 0 2px var(--success);
 }
 .slot.drag-over-valid.quarter-hover-top {
     background: linear-gradient(to bottom, rgba(39, 174, 96, 0.3) 50%, transparent 50%) !important;
-    box-shadow: inset 0 0 0 2px var(--success);
+    box-shadow: none;
 }
 .slot.drag-over-valid.quarter-hover-bottom {
     background: linear-gradient(to bottom, transparent 50%, rgba(39, 174, 96, 0.3) 50%) !important;
-    box-shadow: inset 0 0 0 2px var(--success);
+    box-shadow: none;
 }
 .slot.row-alt.drag-over-valid.quarter-hover-top {
     background: linear-gradient(to bottom, rgba(39, 174, 96, 0.3) 50%, #f0f0f0 50%) !important;
-    box-shadow: inset 0 0 0 2px var(--success);
+    box-shadow: none;
 }
 .slot.row-alt.drag-over-valid.quarter-hover-bottom {
     background: linear-gradient(to bottom, #f0f0f0 50%, rgba(39, 174, 96, 0.3) 50%) !important;
-    box-shadow: inset 0 0 0 2px var(--success);
+    box-shadow: none;
 }
 .slot.drag-over-invalid { 
-    background-color: rgba(192, 57, 43, 0.3) !important; 
+    background: rgba(192, 57, 43, 0.3) !important; 
     box-shadow: inset 0 0 0 2px var(--danger);
 }
 .slot.drag-over-invalid.quarter-hover-top {
     background: linear-gradient(to bottom, rgba(192, 57, 43, 0.3) 50%, transparent 50%) !important;
-    box-shadow: inset 0 0 0 2px var(--danger);
+    box-shadow: none;
 }
 .slot.drag-over-invalid.quarter-hover-bottom {
     background: linear-gradient(to bottom, transparent 50%, rgba(192, 57, 43, 0.3) 50%) !important;
-    box-shadow: inset 0 0 0 2px var(--danger);
+    box-shadow: none;
 }
 .slot.row-alt.drag-over-invalid.quarter-hover-top {
     background: linear-gradient(to bottom, rgba(192, 57, 43, 0.3) 50%, #f0f0f0 50%) !important;
-    box-shadow: inset 0 0 0 2px var(--danger);
+    box-shadow: none;
 }
 .slot.row-alt.drag-over-invalid.quarter-hover-bottom {
     background: linear-gradient(to bottom, #f0f0f0 50%, rgba(192, 57, 43, 0.3) 50%) !important;
-    box-shadow: inset 0 0 0 2px var(--danger);
+    box-shadow: none;
 }
 /* Keep tooltip visible during drag on empty slots */
 .slot:not(.has-booking).drag-over-valid::after,
