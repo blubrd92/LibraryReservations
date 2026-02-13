@@ -395,10 +395,7 @@ body.is-dragging .slot::after {
     background: rgba(255,255,255,0.3);
 }
 
-/* Slots under bookings - subtle indicator */
-.slot.has-booking {
-    /* Can leave empty or add subtle background */
-}
+/* Slots under bookings - no additional styles needed */
 
 .booking-hover-effect {
     opacity: 1 !important;
@@ -664,10 +661,7 @@ body.is-dragging .slot::after {
     overflow: hidden;
 }
 
-/* Closure Date Cell Styles */
-.slot.closed.closure-day {
-    /* Same as regular closed cells */
-}
+/* Closure Date Cell Styles - inherits from .slot.closed */
 
 /* Middle cell with closure reason text */
 .slot.closed.closure-day.has-reason {
@@ -1071,9 +1065,6 @@ body.is-dragging .slot::after {
     display: grid;
     gap: 2px;
     font-size: 0.72em;
-}
-.dash-hm-corner {
-    /* empty top-left cell */
 }
 .dash-hm-hdr {
     text-align: center;
