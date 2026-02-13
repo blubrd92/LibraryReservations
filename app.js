@@ -4372,28 +4372,97 @@ const firebaseConfig = {
         }
 
         const s = statsData.summary;
-        const ms = statsData.monthlySummary || [];
-        const dow = statsData.dowSummary || [];
-        const hourly = statsData.hourlyDist || [];
         const mTotals = statsData.monthlyTotals || [];
         const mAvail = statsData.monthlyAvailable || [];
+        const res = statsData.res;
 
         let html = '';
 
-        // === ROW 1: KPI Cards ===
-        html += '<div class="dash-kpi-row">';
-        html += buildKpiCard(s.totalHours !== null ? s.totalHours + 'h' : '0', 'Total Hours');
-        html += buildKpiCard(s.totalBookings || '0', 'Bookings');
-        html += buildKpiCard(s.utilization !== null ? s.utilization + '%' : 'N/A', 'Utilization (YTD)', true);
-        html += buildKpiCard(s.avgHoursPerDay || '0', 'Avg Hours/Day');
-        html += buildKpiCard(s.avgDuration !== null ? s.avgDuration + 'h' : '-', 'Avg Duration');
-        if (s.staffAssistedCount !== null) {
-            const staffLabel = s.staffAssistedPct !== null ? s.staffAssistedCount + ' (' + s.staffAssistedPct + '%)' : '-';
-            html += buildKpiCard(staffLabel, 'Staff Assisted');
+        // === ROW 1: Utilization Ring + Duration Distribution + Sub-Room Pie (conditional) ===
+        const hasSubRooms = res.viewMode === 'day' && Array.isArray(res.subRooms) && getActiveSubRooms(res).length > 1;
+        html += '<div class="dash-row' + (hasSubRooms ? ' dash-row-thirds' : '') + '">';
+
+        // Utilization Ring
+        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel-title">YTD Utilization</div>';
+        const utilVal = s.utilization !== null ? s.utilization : 0;
+        const ringColor = utilVal >= 75 ? '#c62828' : utilVal >= 50 ? '#e65100' : utilVal >= 25 ? '#1976d2' : '#2e7d32';
+        html += '<div class="dash-ring-container">';
+        html += '  <div class="dash-ring" style="background: conic-gradient(' + ringColor + ' 0% ' + utilVal + '%, #e0e0e0 ' + utilVal + '% 100%);">';
+        html += '    <div class="dash-ring-inner">';
+        html += '      <span class="dash-ring-pct">' + (s.utilization !== null ? s.utilization + '%' : 'N/A') + '</span>';
+        html += '      <span class="dash-ring-sub">' + (s.totalHours || 0) + 'h of ' + (statsData.totalAvailable ? parseFloat(statsData.totalAvailable.toFixed(0)) : '?') + 'h</span>';
+        html += '    </div>';
+        html += '  </div>';
+        html += '  <div class="dash-ring-legend">';
+        html += '    <div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:#2e7d32;"></span> 0-25% Light</div>';
+        html += '    <div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:#1976d2;"></span> 25-50% Moderate</div>';
+        html += '    <div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:#e65100;"></span> 50-75% Heavy</div>';
+        html += '    <div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:#c62828;"></span> 75%+ Near Capacity</div>';
+        html += '  </div>';
+        html += '</div>';
+        html += '</div>';
+
+        // Duration Distribution
+        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel-title">Booking Duration Breakdown</div>';
+        const durBuckets = statsData.durationBuckets || {};
+        const durKeys = Object.keys(durBuckets).map(Number).sort((a, b) => a - b);
+        if (durKeys.length > 0) {
+            const maxDurCount = Math.max(...Object.values(durBuckets));
+            html += '<div class="dash-hbar-chart">';
+            durKeys.forEach(d => {
+                const count = durBuckets[d.toString()];
+                const pct = (count / maxDurCount) * 100;
+                const label = d < 1 ? (d * 60) + 'm' : d + 'h';
+                const bookPct = s.totalBookings > 0 ? Math.round((count / s.totalBookings) * 100) : 0;
+                html += '<div class="dash-hbar-row">';
+                html += '  <div class="dash-hbar-label">' + label + '</div>';
+                html += '  <div class="dash-hbar-track" title="' + count + ' bookings (' + bookPct + '%)"><div class="dash-hbar-fill duration" style="width:' + pct + '%;"></div></div>';
+                html += '  <div class="dash-hbar-value">' + count + ' (' + bookPct + '%)</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+        } else {
+            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
         }
         html += '</div>';
 
-        // === ROW 2: Monthly Bars + Day-of-Week Bars ===
+        // Sub-Room Pie (conditional)
+        if (hasSubRooms) {
+            html += '<div class="dash-panel">';
+            html += '<div class="dash-panel-title">Room Distribution</div>';
+            const srCounts = statsData.subRoomCounts || {};
+            const srKeys = Object.keys(srCounts);
+            const srTotal = srKeys.reduce((sum, k) => sum + srCounts[k], 0);
+            if (srTotal > 0) {
+                // Build conic-gradient slices
+                const PIE_COLORS = ['#5c6bc0', '#26a69a', '#ef5350', '#ffa726', '#ab47bc', '#29b6f6', '#66bb6a', '#ec407a'];
+                let cumPct = 0;
+                let gradientParts = [];
+                let legendItems = [];
+                srKeys.sort((a, b) => srCounts[b] - srCounts[a]).forEach((k, i) => {
+                    const count = srCounts[k];
+                    const pct = (count / srTotal) * 100;
+                    const color = PIE_COLORS[i % PIE_COLORS.length];
+                    const roomName = getSubRoomName(res, parseInt(k));
+                    gradientParts.push(color + ' ' + cumPct + '% ' + (cumPct + pct) + '%');
+                    cumPct += pct;
+                    legendItems.push('<div class="dash-pie-legend-item"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + roomName + ': ' + count + ' (' + Math.round(pct) + '%)</div>');
+                });
+                html += '<div class="dash-pie-container">';
+                html += '  <div class="dash-pie" style="background: conic-gradient(' + gradientParts.join(', ') + ');"></div>';
+                html += '  <div class="dash-pie-legend">' + legendItems.join('') + '</div>';
+                html += '</div>';
+            } else {
+                html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
+            }
+            html += '</div>';
+        }
+
+        html += '</div>'; // end row 1
+
+        // === ROW 2: Monthly Bars + Weekly Heatmap ===
         html += '<div class="dash-row">';
 
         // Monthly utilization bar chart
@@ -4417,91 +4486,90 @@ const firebaseConfig = {
         html += '</div>';
         html += '</div>';
 
-        // Day-of-week horizontal bars
+        // Weekly Heatmap
         html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">By Day of Week (YTD Avg Hours)</div>';
-        html += '<div class="dash-hbar-chart">';
-        const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const maxDowAvg = dow.reduce((mx, d) => Math.max(mx, d.avgHours), 0) || 1;
-        const dowByDay = {};
-        dow.forEach(d => { dowByDay[d.day] = d; });
-        for (let i = 0; i < 7; i++) {
-            const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][i];
-            const d = dowByDay[dayName];
-            if (!d) continue;
-            const pct = (d.avgHours / maxDowAvg) * 100;
-            const title = dayName + ': avg ' + d.avgHours + 'h, ' + d.utilization + '% util, ' + d.openDayCount + ' open days';
-            html += '<div class="dash-hbar-row">';
-            html += '  <div class="dash-hbar-label">' + DAY_ABBR[i] + '</div>';
-            html += '  <div class="dash-hbar-track" title="' + title + '"><div class="dash-hbar-fill" style="width:' + pct + '%;"></div></div>';
-            html += '  <div class="dash-hbar-value">' + d.avgHours + 'h (' + d.utilization + '%)</div>';
-            html += '</div>';
-        }
-        if (dow.length === 0) {
-            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
-        }
-        html += '</div>';
-        html += '</div>';
-
-        html += '</div>'; // end dash-row
-
-        // === ROW 3: Hourly Distribution + Highlights ===
-        html += '<div class="dash-row">';
-
-        // Hourly distribution
-        html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Hourly Distribution (YTD)</div>';
-        html += '<div class="dash-hbar-chart">';
-        const maxHourly = hourly.reduce((mx, h) => Math.max(mx, h.bookings), 0) || 1;
-        if (hourly.length > 0) {
-            hourly.forEach(h => {
-                const pct = (h.bookings / maxHourly) * 100;
-                html += '<div class="dash-hbar-row">';
-                html += '  <div class="dash-hbar-label">' + h.hour + '</div>';
-                html += '  <div class="dash-hbar-track" title="' + h.hour + ': ' + h.bookings + ' bookings"><div class="dash-hbar-fill hourly" style="width:' + pct + '%;"></div></div>';
-                html += '  <div class="dash-hbar-value">' + h.bookings + ' bookings</div>';
-                html += '</div>';
+        html += '<div class="dash-panel-title">Weekly Rhythm (Day &times; Hour)</div>';
+        const heatmap = statsData.dayHourHeatmap || [];
+        // Find all active hours across all days and the max count
+        const activeHours = new Set();
+        let heatMax = 0;
+        for (let d = 0; d < 7; d++) {
+            Object.keys(heatmap[d] || {}).forEach(h => {
+                activeHours.add(parseInt(h));
+                if (heatmap[d][h] > heatMax) heatMax = heatmap[d][h];
             });
+        }
+        const sortedHours = Array.from(activeHours).sort((a, b) => a - b);
+        if (sortedHours.length > 0 && heatMax > 0) {
+            // Fill in any gaps between min and max hour
+            const minH = sortedHours[0];
+            const maxH = sortedHours[sortedHours.length - 1];
+            const allHeatHours = [];
+            for (let h = minH; h <= maxH; h++) allHeatHours.push(h);
+
+            const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const colCount = allHeatHours.length + 1; // +1 for day label column
+            html += '<div class="dash-heatmap" style="grid-template-columns: 36px repeat(' + allHeatHours.length + ', 1fr);">';
+            // Header row
+            html += '<div class="dash-hm-corner"></div>';
+            allHeatHours.forEach(h => {
+                html += '<div class="dash-hm-hdr">' + formatTime(h) + '</div>';
+            });
+            // Data rows
+            for (let d = 0; d < 7; d++) {
+                const dayData = heatmap[d] || {};
+                // Skip days with no operating hours
+                const dayStart = res.hours[d * 2];
+                const dayEnd = res.hours[d * 2 + 1];
+                if (dayStart === dayEnd) {
+                    html += '<div class="dash-hm-day">' + DAY_ABBR[d] + '</div>';
+                    allHeatHours.forEach(() => {
+                        html += '<div class="dash-hm-cell dash-hm-closed" title="Closed"></div>';
+                    });
+                    continue;
+                }
+                html += '<div class="dash-hm-day">' + DAY_ABBR[d] + '</div>';
+                allHeatHours.forEach(h => {
+                    const count = dayData[h] || 0;
+                    const intensity = count > 0 ? Math.min(8, Math.ceil((count / heatMax) * 8)) : 0;
+                    const title = DAY_ABBR[d] + ' ' + formatTime(h) + ': ' + count + ' booking' + (count !== 1 ? 's' : '');
+                    html += '<div class="dash-hm-cell dash-hm-lvl-' + intensity + '" title="' + title + '">' + (count > 0 ? count : '') + '</div>';
+                });
+            }
+            html += '</div>';
+            // Heatmap scale legend
+            html += '<div class="dash-hm-scale">';
+            html += '<span>Less</span>';
+            for (let i = 0; i <= 8; i++) {
+                html += '<span class="dash-hm-cell dash-hm-lvl-' + i + '" style="width:14px;height:14px;display:inline-block;border-radius:2px;"></span>';
+            }
+            html += '<span>More</span>';
+            html += '</div>';
         } else {
             html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
         }
         html += '</div>';
-        html += '</div>';
 
-        // Highlights panel
+        html += '</div>'; // end row 2
+
+        // === ROW 3: Highlights ===
+        html += '<div class="dash-row dash-row-single">';
         html += '<div class="dash-panel">';
         html += '<div class="dash-panel-title">Highlights</div>';
         html += '<div class="dash-highlights">';
-
-        // Busiest month
         const bm = document.getElementById('statsBusiestMonth').innerText;
         html += buildHighlightCard('Busiest Month', bm, '', 'busiest');
-
-        // Busiest day
         const bd = document.getElementById('statsBusiestDay').innerText;
         html += buildHighlightCard('Busiest Day', bd, '', 'busiest');
-
-        // Quietest day
         const qd = document.getElementById('statsQuietestDay').innerText;
         html += buildHighlightCard('Quietest Day', qd, '', 'quietest');
-
-        // Peak hour
         const ph = document.getElementById('statsPeakHour').innerText;
         html += buildHighlightCard('Peak Hour', ph, '', 'peak');
-
         html += '</div>';
         html += '</div>';
-
-        html += '</div>'; // end dash-row
+        html += '</div>';
 
         container.innerHTML = html;
-    }
-
-    function buildKpiCard(value, label, accent) {
-        return '<div class="dash-kpi-card' + (accent ? ' kpi-accent' : '') + '">'
-            + '<div class="kpi-value">' + value + '</div>'
-            + '<div class="kpi-label">' + label + '</div>'
-            + '</div>';
     }
 
     function buildHighlightCard(label, value, detail, type) {
@@ -4567,6 +4635,9 @@ const firebaseConfig = {
         const dayOfWeekAvailable = [0, 0, 0, 0, 0, 0, 0]; // Sun-Sat total available hours (YTD)
         const hourSlotCounts = {}; // { '9': 5, '10': 8, ... } booking start times
         let staffAssistedCount = 0;
+        const durationBuckets = {}; // { '0.5': 3, '1': 8, ... }
+        const dayHourHeatmap = Array.from({length: 7}, () => ({})); // [day][hour] = count
+        const subRoomCounts = {}; // { '0': 12, '1': 8, ... }
         
         // Analyze individual bookings for count, duration, peak hour, staff
         const resPrefix = res.id + '_';
@@ -4577,6 +4648,7 @@ const firebaseConfig = {
             const weekKey = parts[0];
             const dayIndex = parseInt(parts[1]);
             const startTime = parseFloat(parts[2]);
+            const subIdx = parts[3] || null;
             
             const [wy, wm, wd] = weekKey.split('-').map(Number);
             const bookingDate = new Date(wy, wm - 1, wd);
@@ -4587,7 +4659,8 @@ const firebaseConfig = {
             if (bookingDate > today) return;
             
             totalBookingCount++;
-            totalDurationSum += booking.duration || 0;
+            const dur = booking.duration || 0;
+            totalDurationSum += dur;
             
             // Track start hour for peak hour
             const hourKey = Math.floor(startTime);
@@ -4595,6 +4668,19 @@ const firebaseConfig = {
             
             // Track staff assistance
             if (booking.hasStaff) staffAssistedCount++;
+            
+            // Duration distribution
+            const durKey = dur.toString();
+            durationBuckets[durKey] = (durationBuckets[durKey] || 0) + 1;
+            
+            // Day-hour heatmap
+            const bookDow = bookingDate.getDay();
+            dayHourHeatmap[bookDow][hourKey] = (dayHourHeatmap[bookDow][hourKey] || 0) + 1;
+            
+            // Sub-room distribution
+            if (subIdx !== null) {
+                subRoomCounts[subIdx] = (subRoomCounts[subIdx] || 0) + 1;
+            }
         });
         
         for (let day = 1; day <= 31; day++) {
@@ -4670,9 +4756,6 @@ const firebaseConfig = {
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
-
-        // Render dashboard
-        renderStatsChart();
 
         // Update summary
         document.getElementById('statsTotalHours').innerText = parseFloat(grandTotal.toFixed(2)) + ' hours';
@@ -4789,8 +4872,14 @@ const firebaseConfig = {
             },
             monthlySummary,
             dowSummary,
-            hourlyDist
+            hourlyDist,
+            durationBuckets,
+            dayHourHeatmap,
+            subRoomCounts
         };
+
+        // Render dashboard (must come after statsData is populated)
+        renderStatsChart();
     }
 
     
