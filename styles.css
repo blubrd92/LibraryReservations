@@ -114,7 +114,7 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
 .slot:not(.has-booking):not(.booked-body):not(.closed):not(.quarter-hour-slot):hover { background-color: #e3f2fd; }
 
 /* Quarter-hour mode: midline on open slots */
-.slot.quarter-hour-slot:not(.closed):not(.has-booking):not(.booked-body)::before {
+.slot.quarter-hour-slot:not(.closed):not(.booked-body)::before {
     content: '';
     position: absolute;
     left: 0;
