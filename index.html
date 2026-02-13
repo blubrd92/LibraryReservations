@@ -510,8 +510,8 @@
         <div class="settings-header">
             <span>📊 Usage Statistics</span>
         </div>
-        <div class="stats-body">
-            <div style="display: flex; gap: 15px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; flex-shrink: 0;">
+        <div class="stats-toolbar">
+            <div style="display: flex; gap: 15px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;">
                 <div>
                     <label style="font-weight: bold;">Resource:</label>
                     <select id="statsResourceSelect" onchange="handleStatsResourceChange()"></select>
@@ -523,7 +523,7 @@
                 <button class="btn-success" onclick="exportStatsCSV()">📥 Export CSV</button>
             </div>
             
-            <div id="statsSummary" style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid #e0e0e0; flex-shrink: 0;">
+            <div id="statsSummary" style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid #e0e0e0;">
                 <div style="display: flex; flex-wrap: wrap; background: #f5f7fa; padding: 8px 15px; gap: 6px 16px; border-bottom: 1px solid #e0e0e0;">
                     <div><strong>Total Hours:</strong> <span id="statsTotalHours">0</span></div>
                     <div><strong>Bookings:</strong> <span id="statsBookingCount">0</span></div>
@@ -540,13 +540,14 @@
                 </div>
             </div>
 
-            <div style="margin-bottom: 8px; flex-shrink: 0;">
+            <div>
                 <div class="stats-view-toggle">
                     <button id="statsViewChart" onclick="toggleStatsView('chart')">📊 Dashboard</button>
                     <button id="statsViewGrid" class="active" onclick="toggleStatsView('grid')">📋 Grid</button>
                 </div>
             </div>
-
+        </div>
+        <div class="stats-body">
             <div id="statsChartContainer" class="stats-chart-container" style="display: none;">
                 <div id="statsChart"></div>
             </div>

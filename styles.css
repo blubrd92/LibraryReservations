@@ -796,6 +796,7 @@ body.is-dragging .slot::after {
 
 /* Stats Chart Styles */
 .stats-box { background: white; padding: 0; width: 1260px; max-width: 97%; max-height: 90vh; overflow: hidden; border-radius: 8px; display: flex; flex-direction: column; }
+.stats-toolbar { padding: 15px 20px 10px 20px; flex-shrink: 0; border-bottom: 1px solid #e0e0e0; }
 .stats-body { padding: 15px 20px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .stats-view-toggle {
     display: inline-flex;
