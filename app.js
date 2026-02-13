@@ -3942,6 +3942,33 @@ const firebaseConfig = {
     }
     
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    // Global Escape key handler: closes the topmost visible modal
+    document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        // Order matters: check child/confirmation modals first, then parent modals
+        const modalPriority = [
+            'seriesDeleteModal',
+            'rescheduleConfirmModal',
+            'moveModal',
+            'resizeModal',
+            'deleteResourceModal',
+            'applyHoursModal',
+            'applyClosuresModal',
+            'importClosuresModal',
+            'adminPassModal',
+            'bookingModal',
+            'statsModal',
+            'settingsOverlay'
+        ];
+        for (const id of modalPriority) {
+            const el = document.getElementById(id);
+            if (el && el.style.display === 'flex') {
+                closeModal(id);
+                return;
+            }
+        }
+    });
     function createDiv(cls, content) { const d = document.createElement('div'); d.className = cls; d.innerHTML = content; return d; }
     function showLoading(show) { document.getElementById('loading').className = show ? 'loading-overlay' : 'loading-overlay hidden'; }
     function toggleStaffInput() { const isChecked = document.getElementById('bookHasStaff').checked; document.getElementById('staffInputContainer').classList.toggle('hidden', !isChecked); }
@@ -4335,38 +4362,154 @@ const firebaseConfig = {
         }
     }
 
-    function renderStatsChart(monthlyTotals, monthlyAvailable) {
+    function renderStatsChart() {
         const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const container = document.getElementById('statsChart');
         
-        let html = '';
-        for (let i = 0; i < 12; i++) {
-            const hours = monthlyTotals[i];
-            const available = monthlyAvailable[i];
-            const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : 0;
-            const displayAvail = available > 0 ? parseFloat(available.toFixed(2)) : 0;
-            const utilPct = available > 0 ? Math.round((hours / available) * 100) : 0;
-            const utilText = available > 0 ? utilPct + '%' : '-';
-            const fillPct = available > 0 ? Math.min(100, (hours / available) * 100) : 0;
-            const barTitle = `${MONTHS[i]}: ${displayHours}h booked / ${displayAvail}h available (${utilText})`;
-            
-            html += `<div class="stats-bar-col">`;
-            html += `  <div class="stats-bar-track" title="${barTitle}">`;
-            html += `    <div class="stats-bar-fill" style="height: ${fillPct}%;"></div>`;
-            html += `  </div>`;
-            html += `  <div class="stats-bar-label">${MONTHS[i]}</div>`;
-            html += `  <div class="stats-bar-detail">`;
-            html += `    <span class="stats-bar-booked">${displayHours}h</span>`;
-            if (available > 0) {
-                html += `    <span class="stats-bar-outof">out of</span>`;
-                html += `    <span class="stats-bar-avail">${displayAvail}h</span>`;
-            }
-            html += `  </div>`;
-            html += `  <div class="stats-bar-util">${utilText}</div>`;
-            html += `</div>`;
+        if (!statsData || !statsData.summary) {
+            container.innerHTML = '<p style="text-align:center;color:#999;">No data available.</p>';
+            return;
         }
-        
+
+        const s = statsData.summary;
+        const ms = statsData.monthlySummary || [];
+        const dow = statsData.dowSummary || [];
+        const hourly = statsData.hourlyDist || [];
+        const mTotals = statsData.monthlyTotals || [];
+        const mAvail = statsData.monthlyAvailable || [];
+
+        let html = '';
+
+        // === ROW 1: KPI Cards ===
+        html += '<div class="dash-kpi-row">';
+        html += buildKpiCard(s.totalHours !== null ? s.totalHours + 'h' : '0', 'Total Hours');
+        html += buildKpiCard(s.totalBookings || '0', 'Bookings');
+        html += buildKpiCard(s.utilization !== null ? s.utilization + '%' : 'N/A', 'Utilization (YTD)', true);
+        html += buildKpiCard(s.avgHoursPerDay || '0', 'Avg Hours/Day');
+        html += buildKpiCard(s.avgDuration !== null ? s.avgDuration + 'h' : '-', 'Avg Duration');
+        if (s.staffAssistedCount !== null) {
+            const staffLabel = s.staffAssistedPct !== null ? s.staffAssistedCount + ' (' + s.staffAssistedPct + '%)' : '-';
+            html += buildKpiCard(staffLabel, 'Staff Assisted');
+        }
+        html += '</div>';
+
+        // === ROW 2: Monthly Bars + Day-of-Week Bars ===
+        html += '<div class="dash-row">';
+
+        // Monthly utilization bar chart
+        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel-title">Monthly Usage</div>';
+        html += '<div class="dash-vbar-chart">';
+        for (let i = 0; i < 12; i++) {
+            const booked = mTotals[i] || 0;
+            const avail = mAvail[i] || 0;
+            const pct = avail > 0 ? Math.round((booked / avail) * 100) : 0;
+            const fillPct = avail > 0 ? Math.min(100, (booked / avail) * 100) : 0;
+            const title = MONTHS[i] + ': ' + parseFloat(booked.toFixed(1)) + 'h / ' + parseFloat(avail.toFixed(1)) + 'h (' + pct + '%)';
+            html += '<div class="dash-vbar-col">';
+            html += '  <div class="dash-vbar-pct">' + (avail > 0 ? pct + '%' : '') + '</div>';
+            html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
+            html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
+            html += '  </div>';
+            html += '  <div class="dash-vbar-label">' + MONTHS[i] + '</div>';
+            html += '</div>';
+        }
+        html += '</div>';
+        html += '</div>';
+
+        // Day-of-week horizontal bars
+        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel-title">By Day of Week (YTD Avg Hours)</div>';
+        html += '<div class="dash-hbar-chart">';
+        const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const maxDowAvg = dow.reduce((mx, d) => Math.max(mx, d.avgHours), 0) || 1;
+        const dowByDay = {};
+        dow.forEach(d => { dowByDay[d.day] = d; });
+        for (let i = 0; i < 7; i++) {
+            const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][i];
+            const d = dowByDay[dayName];
+            if (!d) continue;
+            const pct = (d.avgHours / maxDowAvg) * 100;
+            const title = dayName + ': avg ' + d.avgHours + 'h, ' + d.utilization + '% util, ' + d.openDayCount + ' open days';
+            html += '<div class="dash-hbar-row">';
+            html += '  <div class="dash-hbar-label">' + DAY_ABBR[i] + '</div>';
+            html += '  <div class="dash-hbar-track" title="' + title + '"><div class="dash-hbar-fill" style="width:' + pct + '%;"></div></div>';
+            html += '  <div class="dash-hbar-value">' + d.avgHours + 'h (' + d.utilization + '%)</div>';
+            html += '</div>';
+        }
+        if (dow.length === 0) {
+            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
+        }
+        html += '</div>';
+        html += '</div>';
+
+        html += '</div>'; // end dash-row
+
+        // === ROW 3: Hourly Distribution + Highlights ===
+        html += '<div class="dash-row">';
+
+        // Hourly distribution
+        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel-title">Hourly Distribution (YTD)</div>';
+        html += '<div class="dash-hbar-chart">';
+        const maxHourly = hourly.reduce((mx, h) => Math.max(mx, h.bookings), 0) || 1;
+        if (hourly.length > 0) {
+            hourly.forEach(h => {
+                const pct = (h.bookings / maxHourly) * 100;
+                html += '<div class="dash-hbar-row">';
+                html += '  <div class="dash-hbar-label">' + h.hour + '</div>';
+                html += '  <div class="dash-hbar-track" title="' + h.hour + ': ' + h.bookings + ' bookings"><div class="dash-hbar-fill hourly" style="width:' + pct + '%;"></div></div>';
+                html += '  <div class="dash-hbar-value">' + h.bookings + ' bookings</div>';
+                html += '</div>';
+            });
+        } else {
+            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
+        }
+        html += '</div>';
+        html += '</div>';
+
+        // Highlights panel
+        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel-title">Highlights</div>';
+        html += '<div class="dash-highlights">';
+
+        // Busiest month
+        const bm = document.getElementById('statsBusiestMonth').innerText;
+        html += buildHighlightCard('Busiest Month', bm, '', 'busiest');
+
+        // Busiest day
+        const bd = document.getElementById('statsBusiestDay').innerText;
+        html += buildHighlightCard('Busiest Day', bd, '', 'busiest');
+
+        // Quietest day
+        const qd = document.getElementById('statsQuietestDay').innerText;
+        html += buildHighlightCard('Quietest Day', qd, '', 'quietest');
+
+        // Peak hour
+        const ph = document.getElementById('statsPeakHour').innerText;
+        html += buildHighlightCard('Peak Hour', ph, '', 'peak');
+
+        html += '</div>';
+        html += '</div>';
+
+        html += '</div>'; // end dash-row
+
         container.innerHTML = html;
+    }
+
+    function buildKpiCard(value, label, accent) {
+        return '<div class="dash-kpi-card' + (accent ? ' kpi-accent' : '') + '">'
+            + '<div class="kpi-value">' + value + '</div>'
+            + '<div class="kpi-label">' + label + '</div>'
+            + '</div>';
+    }
+
+    function buildHighlightCard(label, value, detail, type) {
+        return '<div class="dash-highlight-card ' + (type || '') + '">'
+            + '<div class="hl-label">' + label + '</div>'
+            + '<div class="hl-value">' + value + '</div>'
+            + (detail ? '<div class="hl-detail">' + detail + '</div>' : '')
+            + '</div>';
     }
 
     function renderStatsGrid(dailyStats, year, res, bookings) {
@@ -4528,8 +4671,8 @@ const firebaseConfig = {
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
 
-        // Render bar chart
-        renderStatsChart(monthlyTotals, monthlyAvailable);
+        // Render dashboard
+        renderStatsChart();
 
         // Update summary
         document.getElementById('statsTotalHours').innerText = parseFloat(grandTotal.toFixed(2)) + ' hours';
