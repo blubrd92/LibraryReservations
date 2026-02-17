@@ -41,7 +41,9 @@ const firebaseConfig = {
         }, 3000);
     }
 
-    // STATE
+    // --- STATE ---
+    // Global state: resources array, current view position, bookings map, and
+    // interaction state objects for drag-move, drag-to-create, and resize operations.
     let resources = [];
     let currentResId = null;
     let pendingSelectionId = null;
@@ -198,6 +200,8 @@ const firebaseConfig = {
     }
 
     // --- CORE LOGIC ---
+    // Data loading (Firestore real-time listeners), date navigation, UI controls,
+    // and the main renderGrid() function that builds the entire scheduling grid.
     let loadVersion = 0; // Track which load request is current
     
     function loadBookingsForCurrentView() {
@@ -872,6 +876,8 @@ const firebaseConfig = {
     }
 
     // --- DRAG-AND-DROP HANDLERS ---
+    // Moving existing bookings to new time slots via HTML5 drag-and-drop.
+    // Includes validation, conflict checking, and move confirmation modal.
     function handleDragStart(e, bookingId, bookingData) {
         // Don't start drag from resize handle
         if (e.target.classList.contains('resize-handle')) {
@@ -1501,6 +1507,8 @@ const firebaseConfig = {
     }
 
     // --- DRAG-TO-CREATE HANDLERS ---
+    // Creating new bookings by clicking and dragging on empty time slots.
+    // Shows a visual overlay during selection, then opens the booking modal.
     function startSelection(e, slotId, timeVal, col, res, activeWeekKey, slotElement) {
         // Only start on left click, not during other operations
         if (e.button !== 0) return;
@@ -1878,6 +1886,8 @@ const firebaseConfig = {
     }
 
     // --- RESIZE HANDLERS ---
+    // Changing booking duration by dragging the bottom edge of a booking element.
+    // Shows overlay during resize, then shows confirmation modal.
     function startResize(e, booking, col, res, activeWeekKey, slotElement) {
         e.preventDefault();
         e.stopPropagation();
@@ -2179,7 +2189,9 @@ const firebaseConfig = {
         }
     }
 
-    // --- RESCHEDULE MODE (uses main calendar) ---
+    // --- RESCHEDULE MODE ---
+    // Multi-step rescheduling: user enters reschedule mode from a booking modal,
+    // navigates to the target day/week, then clicks an empty slot to place the booking.
     const DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     let rescheduleMode = {
         active: false,
@@ -2417,6 +2429,8 @@ const firebaseConfig = {
     }
 
     // --- MODAL & SAVE ---
+    // Booking modal: form population, validation, saveBooking() for single bookings,
+    // saveRecurringBooking() for repeating series, and recurring date pattern logic.
     function openBookingModal(slotId, data, subIdx) {
         const modal = document.getElementById('bookingModal');
         const res = resources.find(r => r.id === currentResId);
@@ -2913,7 +2927,11 @@ const firebaseConfig = {
         return new Date(year, month, lastDay.getDate() - dayOffset);
     }
 
-    function openAdminPanel() { 
+    // --- ADMIN PANEL ---
+    // Admin settings UI: resource management (create/delete/duplicate), operating
+    // hours, sub-room configuration, booking rules, color palettes, and saveAllSettings().
+
+    function openAdminPanel() {
         document.getElementById('adminPassInput').value = '';
         document.getElementById('adminPassModal').style.display = 'flex';
         setTimeout(() => document.getElementById('adminPassInput').focus(), 100);
@@ -3289,6 +3307,8 @@ const firebaseConfig = {
     }
 
     // --- CLOSURE DATE MANAGEMENT ---
+    // Adding/removing closure dates (holidays), year-based storage, rendering the
+    // closure list in admin panel, and applying closures across multiple resources.
     function renderClosureList(res) {
         // If called without argument, get current resource
         if (!res || typeof res !== 'object') {
@@ -3621,6 +3641,8 @@ const firebaseConfig = {
     }
 
     // --- NEW RESOURCE WITH IMPORT OPTION ---
+    // Creating new resources with the option to clone settings (hours, closures,
+    // all config) from an existing resource.
     async function addNewResource() {
         const name = prompt("Name for new resource?");
         if(!name) return;
@@ -3909,10 +3931,12 @@ const firebaseConfig = {
 
         loadBookingsForCurrentView();
     }
+    // --- BOOKING POPOVER & HIGHLIGHTS ---
+    // Hover popover showing booking details, highlight effects, and deleteBooking()
+    // with series-aware deletion (single vs. entire series).
+
     function highlightBooking(id) { document.querySelectorAll(`.booking-float[data-bid="${id}"]`).forEach(s => s.classList.add('booking-hover-effect')); }
     function unhighlightBooking(id) { document.querySelectorAll(`.booking-float[data-bid="${id}"]`).forEach(s => s.classList.remove('booking-hover-effect')); }
-    
-    // Popover for booking details
     let activePopover = null;
     
     function showBookingPopover(e, booking) {
@@ -4042,6 +4066,10 @@ const firebaseConfig = {
         pendingSeriesDeleteSeriesId = null;
     }
     
+    // --- UTILITY FUNCTIONS ---
+    // Shared helpers: modal management, DOM creation, time formatting,
+    // date helpers, advance limit checking, recurring booking toggles.
+
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     // Global Escape key handler: closes the topmost visible modal
@@ -4215,6 +4243,8 @@ const firebaseConfig = {
     }
 
     // --- STATS FUNCTIONS ---
+    // Statistics modal: heatmap calendar, dashboard charts (utilization, peak hours,
+    // duration distribution, day-of-week analysis), summary metrics, and CSV export.
     let statsData = {}; // Cache for loaded stats
     
     function getWeekStart(date) {
