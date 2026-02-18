@@ -4576,10 +4576,11 @@ const firebaseConfig = {
             html += '<path d="' + areaD + '" fill="rgba(25,118,210,0.1)"/>';
             html += '<path d="' + pathD + '" fill="none" stroke="#1976d2" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
             // Dots and labels
-            dotPositions.forEach(d => {
+            dotPositions.forEach((d, i) => {
+                var anchor = i === 0 ? 'start' : i === dotPositions.length - 1 ? 'end' : 'middle';
                 html += '<circle cx="' + d.x + '" cy="' + d.y + '" r="4" fill="#1976d2" stroke="#fff" stroke-width="1.5"/>';
-                html += '<text x="' + d.x + '" y="' + (d.y - 8) + '" text-anchor="middle" fill="#333" font-size="10" font-weight="600">' + d.util + '%</text>';
-                html += '<text x="' + d.x + '" y="' + (padT + chartH + 15) + '" text-anchor="middle" fill="#777" font-size="10">' + d.label + '</text>';
+                html += '<text x="' + d.x + '" y="' + (d.y - 8) + '" text-anchor="' + anchor + '" fill="#333" font-size="10" font-weight="600">' + d.util + '%</text>';
+                html += '<text x="' + d.x + '" y="' + (padT + chartH + 15) + '" text-anchor="' + anchor + '" fill="#777" font-size="10">' + d.label + '</text>';
             });
             html += '</svg>';
         } else if (ms.length === 1) {
