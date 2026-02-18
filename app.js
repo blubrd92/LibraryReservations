@@ -373,119 +373,9 @@ const firebaseConfig = {
         document.getElementById('headerResourceName').innerText = res.name;
     }
 
-    // Helper to check if a date is a closure date for the resource
-    function getClosureReason(res, date) {
-        const dateStr = formatDateISO(date);
-        const year = String(date.getFullYear());
-        
-        // Check closuresByYear (new format)
-        if (res.closuresByYear) {
-            // Check the date's year and adjacent years (for ranges spanning year boundaries)
-            const yearsToCheck = [String(parseInt(year) - 1), year];
-            for (const y of yearsToCheck) {
-                const closures = res.closuresByYear[y];
-                if (!closures || !Array.isArray(closures)) continue;
-                for (const closure of closures) {
-                    if (!closure.endDate) {
-                        if (closure.date === dateStr) return closure.reason;
-                    } else {
-                        if (dateStr >= closure.date && dateStr <= closure.endDate) return closure.reason;
-                    }
-                }
-            }
-        }
-        
-        // Fallback: check legacy closureDates array (pre-migration)
-        if (res.closureDates && Array.isArray(res.closureDates)) {
-            for (const closure of res.closureDates) {
-                if (!closure.endDate) {
-                    if (closure.date === dateStr) return closure.reason;
-                } else {
-                    if (dateStr >= closure.date && dateStr <= closure.endDate) return closure.reason;
-                }
-            }
-        }
-        
-        return null;
-    }
-
-    // Migrate legacy closureDates array to closuresByYear
-    function migrateClosureDates(res) {
-        if (res.closureDates && Array.isArray(res.closureDates) && res.closureDates.length > 0) {
-            if (!res.closuresByYear) res.closuresByYear = {};
-            res.closureDates.forEach(c => {
-                const year = c.date.substring(0, 4);
-                if (!res.closuresByYear[year]) res.closuresByYear[year] = [];
-                // Avoid duplicates
-                if (!res.closuresByYear[year].some(existing => existing.date === c.date && existing.endDate === c.endDate)) {
-                    res.closuresByYear[year].push({ ...c });
-                }
-            });
-            delete res.closureDates;
-            return true; // migration happened
-        }
-        if (!res.closuresByYear) res.closuresByYear = {};
-        return false;
-    }
-    
-    // Get all closures for a specific year from a resource
-    function getClosuresForYear(res, year) {
-        if (!res.closuresByYear) return [];
-        return res.closuresByYear[String(year)] || [];
-    }
-    
-    // Get all closures across all years (flat list)
-    function getAllClosures(res) {
-        if (!res.closuresByYear) return [];
-        let all = [];
-        Object.values(res.closuresByYear).forEach(yearClosures => {
-            all = all.concat(yearClosures);
-        });
-        return all;
-    }
-
-    // Migrate legacy comma-separated subRooms string to array of objects
-    function migrateSubRooms(res) {
-        if (typeof res.subRooms === 'string' && res.subRooms.trim()) {
-            const names = res.subRooms.split(',').map(s => s.trim()).filter(s => s);
-            res.subRooms = names.map((name, idx) => ({
-                id: 'sr-' + Date.now().toString(36) + idx,
-                name: name,
-                active: true,
-                displayOrder: idx
-            }));
-            return true;
-        }
-        // If it's already an array or empty, no migration needed
-        if (!res.subRooms || res.subRooms === '') {
-            res.subRooms = [];
-        }
-        return false;
-    }
-
-    // Get active sub-rooms sorted by displayOrder
-    function getActiveSubRooms(res) {
-        if (!Array.isArray(res.subRooms) || res.subRooms.length === 0) return [];
-        return res.subRooms
-            .map((sr, idx) => ({ ...sr, _arrayIndex: idx }))
-            .filter(sr => sr.active !== false)
-            .sort((a, b) => (a.displayOrder ?? a._arrayIndex) - (b.displayOrder ?? b._arrayIndex));
-    }
-
-    // Get sub-room name by array index (for resolving booking slot IDs)
-    function getSubRoomName(res, arrayIndex) {
-        if (!Array.isArray(res.subRooms)) return 'Room ' + (arrayIndex + 1);
-        const sr = res.subRooms[arrayIndex];
-        return sr ? sr.name : 'Room ' + (arrayIndex + 1);
-    }
-
-    // Format date as YYYY-MM-DD for comparison
-    function formatDateISO(d) {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
+    // NOTE: getClosureReason, migrateClosureDates, getClosuresForYear, getAllClosures,
+    // migrateSubRooms, getActiveSubRooms, getSubRoomName, and formatDateISO
+    // are now defined in utils.js (loaded before this file).
 
     function renderGrid() {
         hideBookingPopover();
@@ -1313,12 +1203,7 @@ const firebaseConfig = {
                sourceSub === targetSub;
     }
 
-    function normalizeSubIndex(val) {
-        if (val === null || val === undefined || val === '' || val === 'null' || val === 'undefined') {
-            return null;
-        }
-        return parseInt(val);
-    }
+    // NOTE: normalizeSubIndex is now defined in utils.js
 
     function validateDropTarget(targetSlotId) {
         const res = resources.find(r => r.id === currentResId);
@@ -2906,26 +2791,7 @@ const firebaseConfig = {
         showLoading(false);
     }
     
-    // Helper: get Nth occurrence of a weekday in a month (0-indexed month)
-    function getNthWeekdayOfMonth(year, month, weekday, n) {
-        const first = new Date(year, month, 1);
-        let dayOffset = weekday - first.getDay();
-        if (dayOffset < 0) dayOffset += 7;
-        const firstOccurrence = 1 + dayOffset;
-        const target = firstOccurrence + (n - 1) * 7;
-        // Check if target day is still in this month
-        const result = new Date(year, month, target);
-        if (result.getMonth() !== month) return null; // e.g., 5th Wednesday doesn't exist
-        return result;
-    }
-    
-    // Helper: get last occurrence of a weekday in a month
-    function getLastWeekdayOfMonth(year, month, weekday) {
-        const lastDay = new Date(year, month + 1, 0); // last day of month
-        let dayOffset = lastDay.getDay() - weekday;
-        if (dayOffset < 0) dayOffset += 7;
-        return new Date(year, month, lastDay.getDate() - dayOffset);
-    }
+    // NOTE: getNthWeekdayOfMonth, getLastWeekdayOfMonth are now defined in utils.js
 
     // --- ADMIN PANEL ---
     // Admin settings UI: resource management (create/delete/duplicate), operating
@@ -4187,53 +4053,8 @@ const firebaseConfig = {
         return { allowed: true };
     }
 
-    function isBookingAnonymized(weekKey, dayIndex, res) {
-        // Compute the booking's actual date
-        const [y, m, d] = weekKey.split('-').map(Number);
-        const bookingDate = new Date(y, m - 1, d);
-        bookingDate.setDate(bookingDate.getDate() + dayIndex);
-        bookingDate.setHours(0, 0, 0, 0);
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (res.viewMode === 'day') {
-            // Day view: anonymize everything before today
-            return bookingDate < today;
-        } else {
-            // Week view: anonymize everything before the current week (Sunday)
-            const day = today.getDay();
-            const thisWeekStart = new Date(today);
-            thisWeekStart.setDate(today.getDate() - day);
-            return bookingDate < thisWeekStart;
-        }
-    }
-
-    function getWeekKey(d) {
-        const d2 = new Date(d);
-        const day = d2.getDay();
-        const diff = d2.getDate() - day;
-        const s = new Date(d2.setDate(diff));
-        return `${s.getFullYear()}-${String(s.getMonth()+1).padStart(2,'0')}-${String(s.getDate()).padStart(2,'0')}`;
-    }
-    function formatDateShort(d) { return (d.getMonth()+1) + "/" + d.getDate(); }
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-    }
-    function formatTime(val) {
-        const h = Math.floor(val);
-        const frac = val % 1;
-        let m;
-        if (frac === 0) m = '00';
-        else if (frac === 0.25) m = '15';
-        else if (frac === 0.5) m = '30';
-        else if (frac === 0.75) m = '45';
-        else m = String(Math.round(frac * 60)).padStart(2, '0');
-        const suffix = h >= 12 ? 'pm' : 'am';
-        const h12 = h % 12 || 12;
-        return `${h12}:${m}${suffix}`;
-    }
+    // NOTE: isBookingAnonymized, getWeekKey, formatDateShort, escapeHtml, formatTime
+    // are now defined in utils.js (loaded before this file).
 
     function getQuarterHourOffset(e, slotElement, res) {
         if (!res.useQuarterHour) return 0;
@@ -4246,14 +4067,8 @@ const firebaseConfig = {
     // Statistics modal: heatmap calendar, dashboard charts (utilization, peak hours,
     // duration distribution, day-of-week analysis), summary metrics, and CSV export.
     let statsData = {}; // Cache for loaded stats
-    
-    function getWeekStart(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day;
-        return new Date(d.setDate(diff));
-    }
-    
+    // NOTE: getWeekStart is now defined in utils.js
+
     // Update stats metadata when a booking is saved
     async function updateStatsYearMeta(resId, slotId) {
         try {
