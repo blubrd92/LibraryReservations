@@ -42,10 +42,10 @@
             <input type="date" id="datePicker" onchange="handleDatePick()">
         </div>
         <button class="btn-nav" onclick="navigateTime(1)">&#8594;</button>
-        <button class="btn-primary" onclick="goToToday()" style="background: #1565c0;">Today</button>
+        <button class="btn-primary btn-today" onclick="goToToday()">Today</button>
 
         <div style="width: 1px; height: 30px; background: #ccc; margin: 0 10px;"></div>
-        <button class="btn-primary" onclick="openStatsModal()" style="background: #7b1fa2;">📊 Stats</button>
+        <button class="btn-primary btn-stats" onclick="openStatsModal()">📊 Stats</button>
         <button id="btnAdminSettings" class="btn-primary" onclick="openAdminPanel()">⚙ Admin</button>
         <button class="btn-danger" onclick="doLogout()">Logout</button>
     </div>

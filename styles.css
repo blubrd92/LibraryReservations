@@ -31,7 +31,10 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 /* Controls */
 button { cursor: pointer; padding: 8px 14px; border: 1px solid #ccc; border-radius: 4px; background: var(--light); transition: 0.2s; font-weight: 600; }
 button:hover { background: #e2e6ea; }
-.btn-primary { background: var(--primary); color: white; border: none; }
+.btn-primary { background: var(--primary); color: white; border: none; transition: filter 0.15s; }
+.btn-primary:hover { filter: brightness(1.15); }
+.btn-primary.btn-stats { background: #7b1fa2; }
+.btn-primary.btn-today { background: #1565c0; }
 .btn-success { background: var(--success); color: white; border: none; }
 .btn-danger { background: white; color: var(--danger); border: 1px solid var(--danger); }
 .btn-nav { font-weight: bold; width: 40px; text-align: center; }
