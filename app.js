@@ -4475,29 +4475,8 @@ const firebaseConfig = {
 
         html += '</div>'; // end row 1
 
-        // === ROW 2: Monthly Bars + Weekly Usage ===
+        // === ROW 2: Weekly Usage + Monthly Bars ===
         html += '<div class="dash-row">';
-
-        // Monthly utilization bar chart
-        html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Monthly Usage</div>';
-        html += '<div class="dash-vbar-chart">';
-        for (let i = 0; i < 12; i++) {
-            const booked = mTotals[i] || 0;
-            const avail = mAvail[i] || 0;
-            const pct = avail > 0 ? Math.round((booked / avail) * 100) : 0;
-            const fillPct = avail > 0 ? Math.min(100, (booked / avail) * 100) : 0;
-            const title = MONTHS[i] + ': ' + parseFloat(booked.toFixed(1)) + 'h / ' + parseFloat(avail.toFixed(1)) + 'h (' + pct + '%)';
-            html += '<div class="dash-vbar-col">';
-            html += '  <div class="dash-vbar-pct">' + (avail > 0 ? pct + '%' : '') + '</div>';
-            html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
-            html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
-            html += '  </div>';
-            html += '  <div class="dash-vbar-label">' + MONTHS[i] + '</div>';
-            html += '</div>';
-        }
-        html += '</div>';
-        html += '</div>';
 
         // Weekly Usage bar chart (avg hours per day of week, YTD)
         html += '<div class="dash-panel">';
@@ -4531,6 +4510,29 @@ const firebaseConfig = {
             html += '</div>';
         }
         html += '</div>';
+        html += '<div class="dash-vbar-hint">Hover over bars for details</div>';
+        html += '</div>';
+
+        // Monthly utilization bar chart
+        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel-title">Monthly Usage</div>';
+        html += '<div class="dash-vbar-chart">';
+        for (let i = 0; i < 12; i++) {
+            const booked = mTotals[i] || 0;
+            const avail = mAvail[i] || 0;
+            const pct = avail > 0 ? Math.round((booked / avail) * 100) : 0;
+            const fillPct = avail > 0 ? Math.min(100, (booked / avail) * 100) : 0;
+            const title = MONTHS[i] + ': ' + parseFloat(booked.toFixed(1)) + 'h / ' + parseFloat(avail.toFixed(1)) + 'h (' + pct + '%)';
+            html += '<div class="dash-vbar-col">';
+            html += '  <div class="dash-vbar-pct">' + (avail > 0 ? pct + '%' : '') + '</div>';
+            html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
+            html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
+            html += '  </div>';
+            html += '  <div class="dash-vbar-label">' + MONTHS[i] + '</div>';
+            html += '</div>';
+        }
+        html += '</div>';
+        html += '<div class="dash-vbar-hint">Hover over bars for details</div>';
         html += '</div>';
 
         html += '</div>'; // end row 2

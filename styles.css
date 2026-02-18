@@ -1015,6 +1015,13 @@ body.is-dragging .slot::after {
     margin-top: 4px;
     font-weight: 600;
 }
+.dash-vbar-hint {
+    text-align: center;
+    font-size: 0.78em;
+    color: #aaa;
+    font-style: italic;
+    margin-top: 6px;
+}
 
 /* Horizontal bar chart (duration, day-of-week, hourly) */
 .dash-hbar-chart {
