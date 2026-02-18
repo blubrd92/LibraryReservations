@@ -35,6 +35,7 @@ button:hover { background: #e2e6ea; }
 .btn-success { background: var(--success); color: white; border: none; }
 .btn-danger { background: white; color: var(--danger); border: 1px solid var(--danger); }
 .btn-nav { font-weight: bold; width: 40px; text-align: center; }
+.btn-today { font-size: 0.85em; padding: 6px 12px; background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
 select, input[type="date"], input[type="text"], input[type="number"], input[type="password"] { padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 1rem; }
 
 /* === UPDATED: LAYOUT WRAPPER === */
@@ -1121,4 +1122,42 @@ body.is-dragging .slot::after {
 @media (max-width: 800px) {
     .dash-row, .dash-row.dash-row-thirds { grid-template-columns: 1fr; }
     .dash-pie-container { flex-direction: column; align-items: center; }
+}
+
+/* Print Styles */
+@media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+    body { padding: 0; height: auto; overflow: visible; }
+
+    /* Hide non-essential UI */
+    #loginOverlay, #status-bar, #loading, #toast-container,
+    .modal, #rescheduleBanner, .info-sidebar,
+    .booking-popover, .drag-tooltip, .drag-slot-highlight,
+    .selection-overlay, .resize-overlay { display: none !important; }
+
+    /* Header: show title/range, hide controls */
+    header { margin-bottom: 10px; }
+    header .flex.gap select,
+    header .flex.gap .btn-nav,
+    header .flex.gap .btn-today,
+    header .flex.gap .date-picker-wrapper,
+    header .flex.gap .btn-primary,
+    header .flex.gap .btn-danger,
+    header .flex.gap > div[style*="width: 1px"] { display: none !important; }
+
+    /* Grid fills the page */
+    .layout-wrapper { overflow: visible; height: auto; }
+    .grid-container { overflow: visible !important; height: auto !important; border: 2px solid #333; }
+
+    /* Sticky headers become static for print */
+    .header-cell { position: static; }
+    .time-cell { position: static; }
+
+    /* Booking overlays: ensure visible */
+    .booking-float { box-shadow: none; }
+    .booking-float .resize-handle { display: none; }
+
+    /* Page break handling */
+    .grid-container { page-break-inside: avoid; }
 }

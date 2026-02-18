@@ -329,6 +329,20 @@ const firebaseConfig = {
         loadBookingsForCurrentView();
     }
 
+    function goToToday() {
+        hideBookingPopover();
+        const d = new Date();
+        const day = d.getDay();
+        const diff = d.getDate() - day;
+        currentWeekStart = new Date(d);
+        currentWeekStart.setDate(diff);
+        currentWeekStart.setHours(0, 0, 0, 0);
+        currentDayDate = new Date();
+        currentDayDate.setHours(0, 0, 0, 0);
+        updateUIControls();
+        loadBookingsForCurrentView();
+    }
+
     function updateUIControls() {
         const res = resources.find(x => x.id === currentResId);
         if(!res) return;
@@ -4268,6 +4282,7 @@ const firebaseConfig = {
                     
                     dailyStats[dateStr] = {
                         hours: 0,
+                        bookingCount: 0,
                         closed: (dayStart === dayEnd) || closureReason !== null,
                         reason: closureReason || (dayStart === dayEnd ? 'Closed' : ''),
                         dayOfWeek: dayOfWeek
@@ -4297,6 +4312,7 @@ const firebaseConfig = {
                     const dateStr = formatDateISO(bookingDate);
                     if (dailyStats[dateStr]) {
                         dailyStats[dateStr].hours += booking.duration || 0;
+                        dailyStats[dateStr].bookingCount++;
                     }
                 }
             });
@@ -4662,8 +4678,10 @@ const firebaseConfig = {
         // Build rows (days 1-31)
         let html = '';
         const monthlyTotals = new Array(12).fill(0);
+        const monthlyBookingCounts = new Array(12).fill(0);
         const monthlyAvailable = new Array(12).fill(0);
         let grandTotal = 0;
+        let grandBookingCount = 0;
         let totalAvailable = 0;
         let totalDaysBookable = 0;
         
@@ -4749,9 +4767,11 @@ const firebaseConfig = {
                     const dateTooltip = dayOfWeekNames[date.getDay()] + ', ' + formatDateWithOrdinal(month, day, year);
                     const hours = stat.hours;
                     
-                    // Always count hours in totals (fix: closed days with bookings still count)
+                    // Always count hours and bookings in totals (fix: closed days with bookings still count)
                     monthlyTotals[month] += hours;
+                    monthlyBookingCounts[month] += stat.bookingCount;
                     grandTotal += hours;
+                    grandBookingCount += stat.bookingCount;
                     
                     if (stat.closed) {
                         const shortReason = stat.reason.length > 8 ? stat.reason.substring(0, 7) + '\u2026' : stat.reason;
@@ -4785,7 +4805,8 @@ const firebaseConfig = {
                         const heatLevel = hours === 0 ? 0 : Math.min(8, Math.ceil((hours / maxHours) * 8));
                         const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : '';
                         const dayUtil = dayAvailable > 0 ? ((hours / dayAvailable) * 100).toFixed(1) : '0.0';
-                        const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'} (${dayUtil}% utilization)` : 'No bookings';
+                        const bc = stat.bookingCount;
+                        const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'}, ${bc} booking${bc === 1 ? '' : 's'} (${dayUtil}% utilization)` : 'No bookings';
                         rowHtml += `<td class="stats-heat-${heatLevel}" title="${dateTooltip} - ${hoursText}">${displayHours}</td>`;
                     }
                 }
@@ -4797,11 +4818,13 @@ const firebaseConfig = {
         
         tbody.innerHTML = html;
         
-        // Build footer (monthly totals with month names)
+        // Build footer (monthly totals with month names, hours, and booking counts)
         let footHtml = '<tr><td>Total</td>';
         monthlyTotals.forEach((t, i) => {
             const displayTotal = t > 0 ? parseFloat(t.toFixed(2)) + 'h' : '-';
-            footHtml += `<td><div style="color:#1565c0;font-weight:bold;">${MONTHS[i]}</div>${displayTotal}</td>`;
+            const bc = monthlyBookingCounts[i];
+            const countLabel = bc > 0 ? `<div style="font-size:0.85em;color:#555;font-weight:normal;">${bc} booking${bc === 1 ? '' : 's'}</div>` : '';
+            footHtml += `<td><div style="color:#1565c0;font-weight:bold;">${MONTHS[i]}</div>${displayTotal}${countLabel}</td>`;
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
