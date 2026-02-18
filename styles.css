@@ -1018,8 +1018,9 @@ body.is-dragging .slot::after {
 .dash-vbar-hint {
     text-align: center;
     font-size: 0.78em;
-    color: #aaa;
+    color: #888;
     font-style: italic;
+    font-weight: 500;
     margin-top: 6px;
 }
 
