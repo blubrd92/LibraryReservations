@@ -1742,7 +1742,8 @@ const firebaseConfig = {
             const opt = document.createElement('option');
             opt.value = val;
             const endVal = start + val;
-            opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (${formatTime(start)} - ${formatTime(endVal)})`;
+            const dragModalCosmeticMin = res.cosmeticCloseMinutes || 0;
+            opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (${formatTime(start)} - ${formatCosmeticTime(endVal, dayEnd, dragModalCosmeticMin)})`;
             if (val === presetDuration) opt.selected = true;
             durSel.appendChild(opt);
         }
