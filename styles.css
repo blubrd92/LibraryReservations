@@ -31,8 +31,8 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 /* Controls */
 button { cursor: pointer; padding: 8px 14px; border: 1px solid #ccc; border-radius: 4px; background: var(--light); transition: 0.2s; font-weight: 600; }
 button:not(.btn-primary):not(.btn-success):not(.btn-danger):hover { background: #e2e6ea; }
-.btn-primary { background: var(--primary); color: white; border: none; transition: filter 0.15s; }
-.btn-primary:hover { filter: brightness(1.15); }
+.btn-primary { background: var(--primary); color: white; border: none; transition: transform 0.15s, box-shadow 0.15s, filter 0.15s; }
+.btn-primary:hover { filter: brightness(1.2); transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.25); }
 .btn-primary.btn-stats { background: #7b1fa2; }
 .btn-primary.btn-today { background: #1565c0; }
 .btn-success { background: var(--success); color: white; border: none; }
