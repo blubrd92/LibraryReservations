@@ -36,7 +36,8 @@ button:not(.btn-primary):not(.btn-success):not(.btn-danger):hover { background: 
 .btn-primary.btn-stats { background: #7b1fa2; }
 .btn-primary.btn-today { background: #1565c0; }
 .btn-success { background: var(--success); color: white; border: none; }
-.btn-danger { background: white; color: var(--danger); border: 1px solid var(--danger); }
+.btn-danger { background: white; color: var(--danger); border: 1px solid var(--danger); transition: transform 0.15s, box-shadow 0.15s, filter 0.15s; }
+.btn-danger:hover { filter: brightness(0.95); transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
 .btn-nav { font-weight: bold; width: 40px; text-align: center; }
 select, input[type="date"], input[type="text"], input[type="number"], input[type="password"] { padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 1rem; }
 
