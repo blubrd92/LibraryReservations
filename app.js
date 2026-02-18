@@ -473,6 +473,7 @@ const firebaseConfig = {
         
         // Track slot elements for positioning bookings later
         const slotElements = {}; // key: "colIndex-slotIndex" -> element
+        const printLabelsAdded = new Set(); // Track which bookings have print labels
         
         for (let i = 0; i < totalSlots; i++) {
             const timeVal = minH + (i * 0.5);
@@ -517,6 +518,18 @@ const firebaseConfig = {
                     if (booking) {
                         slot.classList.add('has-booking');
                         slot.dataset.bid = booking.id;
+                        // Add inline print label on the first slot of each booking
+                        if (!printLabelsAdded.has(booking.id)) {
+                            printLabelsAdded.add(booking.id);
+                            const anon = isBookingAnonymized(activeWeekKey, booking.dayIndex, res);
+                            const printLabel = document.createElement('div');
+                            printLabel.className = 'print-booking-label';
+                            const bookingDayEnd = res.hours[(booking.dayIndex * 2) + 1];
+                            const cosmeticMin = res.cosmeticCloseMinutes || 0;
+                            const printName = anon ? 'Past Booking' : booking.data.name;
+                            printLabel.textContent = printName + ' (' + formatTime(booking.start) + '-' + formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin) + ')';
+                            slot.appendChild(printLabel);
+                        }
                     }
 
                     // Set up interactions if slot is empty OR has partial availability in quarter-hour mode

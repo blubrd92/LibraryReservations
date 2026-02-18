@@ -167,7 +167,8 @@ body.is-dragging .slot::after {
 .slot.closed { background-color: #cccccc !important; border-color: #cccccc; cursor: not-allowed; opacity: 1; pointer-events: none; }
 
 /* Merged Cell Styles */
-.slot.booked-body { display: none; } 
+.slot.booked-body { display: none; }
+.print-booking-label { display: none; }
 
 /* Floating booking elements (absolutely positioned) */
 .booking-float {
@@ -1154,9 +1155,18 @@ body.is-dragging .slot::after {
     .header-cell { position: static; }
     .time-cell { position: static; }
 
-    /* Booking overlays: ensure visible */
-    .booking-float { box-shadow: none; }
-    .booking-float .resize-handle { display: none; }
+    /* Hide floating overlays; show inline print labels instead */
+    .booking-float { display: none !important; }
+    .slot.has-booking { background: #d6e9f8 !important; }
+    .print-booking-label {
+        display: block;
+        font-size: 0.75em;
+        font-weight: 600;
+        color: #1a3a5c;
+        word-wrap: break-word;
+        overflow: hidden;
+        line-height: 1.2;
+    }
 
     /* Page break handling */
     .grid-container { page-break-inside: avoid; }
