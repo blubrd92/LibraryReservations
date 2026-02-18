@@ -3778,7 +3778,7 @@ const firebaseConfig = {
         target.advanceLimitAdminBypass = document.getElementById('editAdvanceLimitAdminBypass').checked;
         
         // Save Cosmetic Close Minutes
-        target.cosmeticCloseMinutes = parseInt(document.getElementById('editCosmeticCloseMinutes').value) || 0;
+        target.cosmeticCloseMinutes = Math.min(15, Math.max(0, parseInt(document.getElementById('editCosmeticCloseMinutes').value) || 0));
 
         // Save Color Palette
         target.colorPalette = document.getElementById('editColorPalette').value || 'default';
