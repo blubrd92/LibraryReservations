@@ -4552,7 +4552,7 @@ const firebaseConfig = {
             const chartW = svgW - padL - padR;
             const chartH = svgH - padT - padB;
             const maxUtil = Math.max(100, ...points.map(p => p.util));
-            const xStep = points.length > 1 ? chartW / (points.length - 1) : 0;
+            const xStep = chartW / points.length;
 
             html += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" style="width:100%;height:auto;" xmlns="http://www.w3.org/2000/svg">';
             // Grid lines
@@ -4566,21 +4566,22 @@ const firebaseConfig = {
             let pathD = '';
             const dotPositions = [];
             points.forEach((p, i) => {
-                const x = padL + i * xStep;
+                const x = padL + (i + 0.5) * xStep;
                 const y = padT + chartH - (chartH * p.util / maxUtil);
                 dotPositions.push({ x, y, label: p.label, util: p.util });
                 pathD += (i === 0 ? 'M' : 'L') + x + ',' + y;
             });
             // Area fill
-            const areaD = pathD + ' L' + (padL + (points.length - 1) * xStep) + ',' + (padT + chartH) + ' L' + padL + ',' + (padT + chartH) + ' Z';
+            const lastDot = dotPositions[dotPositions.length - 1];
+            const firstDot = dotPositions[0];
+            const areaD = pathD + ' L' + lastDot.x + ',' + (padT + chartH) + ' L' + firstDot.x + ',' + (padT + chartH) + ' Z';
             html += '<path d="' + areaD + '" fill="rgba(25,118,210,0.1)"/>';
             html += '<path d="' + pathD + '" fill="none" stroke="#1976d2" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
             // Dots and labels
-            dotPositions.forEach((d, i) => {
-                var anchor = i === 0 ? 'start' : i === dotPositions.length - 1 ? 'end' : 'middle';
+            dotPositions.forEach(d => {
                 html += '<circle cx="' + d.x + '" cy="' + d.y + '" r="4" fill="#1976d2" stroke="#fff" stroke-width="1.5"/>';
-                html += '<text x="' + d.x + '" y="' + (d.y - 8) + '" text-anchor="' + anchor + '" fill="#333" font-size="10" font-weight="600">' + d.util + '%</text>';
-                html += '<text x="' + d.x + '" y="' + (padT + chartH + 15) + '" text-anchor="' + anchor + '" fill="#777" font-size="10">' + d.label + '</text>';
+                html += '<text x="' + d.x + '" y="' + (d.y - 8) + '" text-anchor="middle" fill="#333" font-size="10" font-weight="600">' + d.util + '%</text>';
+                html += '<text x="' + d.x + '" y="' + (padT + chartH + 15) + '" text-anchor="middle" fill="#777" font-size="10">' + d.label + '</text>';
             });
             html += '</svg>';
         } else if (ms.length === 1) {
