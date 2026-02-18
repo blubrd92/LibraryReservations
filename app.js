@@ -674,7 +674,9 @@ const firebaseConfig = {
                 const displayName = anon ? 'Past Booking' : escapeHtml(booking.data.name);
                 const seriesIcon = booking.data.seriesId ? '<span class="series-indicator" title="Recurring series">🔁</span> ' : '';
                 bookingEl.innerHTML = `<span class="slot-name">${seriesIcon}${displayName}</span>`;
-                bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatTime(booking.end)} (${booking.data.duration}h)</span>`;
+                const bookingDayEnd = res.hours[(booking.dayIndex * 2) + 1];
+                const cosmeticMin = res.cosmeticCloseMinutes || 0;
+                bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin)} (${booking.data.duration}h)</span>`;
                 
                 if (booking.data.hasStaff) {
                     bookingEl.innerHTML += `<span class="slot-staff">w/ ${escapeHtml(booking.data.staffName)}</span>`;
@@ -692,8 +694,8 @@ const firebaseConfig = {
                 
                 const canEdit = canEditResource(res);
                 
-                // Add resize handle only if user can edit
-                if (canEdit) {
+                // Add resize handle only if user can edit and booking is not anonymized
+                if (canEdit && !anon) {
                     const resizeHandle = document.createElement('div');
                     resizeHandle.className = 'resize-handle';
                     resizeHandle.onmousedown = (e) => startResize(e, booking, col, res, activeWeekKey, bookingEl);
@@ -730,8 +732,8 @@ const firebaseConfig = {
                     openBookingModal(booking.id, booking.data, col.subIndex);
                 };
                 
-                // DRAG-AND-DROP (only if user can edit)
-                if (canEdit) {
+                // DRAG-AND-DROP (only if user can edit and booking is not anonymized)
+                if (canEdit && !anon) {
                     bookingEl.draggable = true;
                     bookingEl.ondragstart = (e) => handleDragStart(e, booking.id, booking.data);
                     bookingEl.ondragend = handleDragEnd;
@@ -1377,8 +1379,11 @@ const firebaseConfig = {
         const sourceDayName = DAYS[sourceDay];
         const targetDayName = DAYS[targetDay];
         
-        const sourceFormatted = `${sourceDayName} ${sourceDate.getMonth()+1}/${sourceDate.getDate()}, ${formatTime(sourceTime)} - ${formatTime(sourceTime + duration)}`;
-        const targetFormatted = `${targetDayName} ${targetDate.getMonth()+1}/${targetDate.getDate()}, ${formatTime(targetTime)} - ${formatTime(targetTime + duration)}`;
+        const moveCosmeticMin = res.cosmeticCloseMinutes || 0;
+        const sourceDayEnd = res.hours[(sourceDay * 2) + 1];
+        const targetDayEnd = res.hours[(targetDay * 2) + 1];
+        const sourceFormatted = `${sourceDayName} ${sourceDate.getMonth()+1}/${sourceDate.getDate()}, ${formatTime(sourceTime)} - ${formatCosmeticTime(sourceTime + duration, sourceDayEnd, moveCosmeticMin)}`;
+        const targetFormatted = `${targetDayName} ${targetDate.getMonth()+1}/${targetDate.getDate()}, ${formatTime(targetTime)} - ${formatCosmeticTime(targetTime + duration, targetDayEnd, moveCosmeticMin)}`;
         
         // Populate modal
         document.getElementById('moveSourceId').value = sourceId;
@@ -1977,14 +1982,18 @@ const firebaseConfig = {
         document.getElementById('resizeBookingId').value = bookingId;
         document.getElementById('resizeNewDuration').value = newDuration;
         document.getElementById('resizePatronName').innerText = bookingData.name;
-        
+
         const oldEnd = bookingStart + oldDuration;
         const newEnd = bookingStart + newDuration;
-        
-        document.getElementById('resizeFromDuration').innerText = 
-            `${formatTime(bookingStart)} - ${formatTime(oldEnd)} (${oldDuration} hour${oldDuration === 1 ? '' : 's'})`;
-        document.getElementById('resizeToDuration').innerText = 
-            `${formatTime(bookingStart)} - ${formatTime(newEnd)} (${newDuration} hour${newDuration === 1 ? '' : 's'})`;
+        const resizeRes = resources.find(r => r.id === currentResId);
+        const parsed = parseSlotId(bookingId, currentResId);
+        const resizeDayEnd = resizeRes ? resizeRes.hours[(parsed.dayIndex * 2) + 1] : 0;
+        const resizeCosmeticMin = resizeRes ? (resizeRes.cosmeticCloseMinutes || 0) : 0;
+
+        document.getElementById('resizeFromDuration').innerText =
+            `${formatTime(bookingStart)} - ${formatCosmeticTime(oldEnd, resizeDayEnd, resizeCosmeticMin)} (${oldDuration} hour${oldDuration === 1 ? '' : 's'})`;
+        document.getElementById('resizeToDuration').innerText =
+            `${formatTime(bookingStart)} - ${formatCosmeticTime(newEnd, resizeDayEnd, resizeCosmeticMin)} (${newDuration} hour${newDuration === 1 ? '' : 's'})`;
         
         // Store booking data for the execute function
         document.getElementById('resizeModal').dataset.bookingData = JSON.stringify(bookingData);
@@ -2252,10 +2261,13 @@ const firebaseConfig = {
         document.getElementById('rescheduleConfirmPatron').textContent = patronName;
         const sourceRoomSuffix = sourceRoomName ? ` (${sourceRoomName})` : '';
         const targetRoomSuffix = targetRoomName ? ` (${targetRoomName})` : '';
+        const reschCosmeticMin = res.cosmeticCloseMinutes || 0;
+        const srcDayEnd = res.hours[(rescheduleMode.sourceDayIdx * 2) + 1];
+        const tgtDayEnd = res.hours[(targetDayIdx * 2) + 1];
         document.getElementById('rescheduleConfirmFrom').textContent =
-            `${sourceDateStr}, ${formatTime(rescheduleMode.sourceStartTime)} - ${formatTime(rescheduleMode.sourceStartTime + originalDuration)}${sourceRoomSuffix}`;
+            `${sourceDateStr}, ${formatTime(rescheduleMode.sourceStartTime)} - ${formatCosmeticTime(rescheduleMode.sourceStartTime + originalDuration, srcDayEnd, reschCosmeticMin)}${sourceRoomSuffix}`;
         document.getElementById('rescheduleConfirmTo').textContent =
-            `${targetDateStr}, ${formatTime(targetTime)} - ${formatTime(targetTime + newDuration)}${targetRoomSuffix}`;
+            `${targetDateStr}, ${formatTime(targetTime)} - ${formatCosmeticTime(targetTime + newDuration, tgtDayEnd, reschCosmeticMin)}${targetRoomSuffix}`;
 
         const warningEl = document.getElementById('rescheduleConfirmWarning');
         const durationRowEl = document.getElementById('rescheduleConfirmDurationRow');
@@ -2390,14 +2402,13 @@ const firebaseConfig = {
             const opt = document.createElement('option');
             opt.value = val;
 
-            // --- UPDATED: Range Format (Option 2) ---
             const endVal = start + val;
             const startString = formatTime(start);
-            const endString = formatTime(endVal);
+            const modalCosmeticMin = res.cosmeticCloseMinutes || 0;
+            const endString = formatCosmeticTime(endVal, dayEnd, modalCosmeticMin);
 
-            // Result: "1.5 Hours (2:00pm - 3:30pm)"
+            // Result: "1.5 Hours (2:00pm - 3:30pm)" (end time adjusted by cosmetic close if applicable)
             opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (${startString} - ${endString})`;
-            // ----------------------------------------
 
             if(data && data.duration == val) opt.selected = true;
             durSel.appendChild(opt);
@@ -2846,6 +2857,9 @@ const firebaseConfig = {
         document.getElementById('editAdvanceLimitDays').value = r.advanceLimitDays !== undefined ? r.advanceLimitDays : 1;
         document.getElementById('editAdvanceLimitAdminBypass').checked = r.advanceLimitAdminBypass || false;
         toggleAdvanceLimitConfig();
+
+        // Load Cosmetic Close Minutes
+        document.getElementById('editCosmeticCloseMinutes').value = r.cosmeticCloseMinutes || 0;
 
         // Load Color Palette
         const palette = r.colorPalette || 'default';
@@ -3763,6 +3777,9 @@ const firebaseConfig = {
         target.advanceLimitDays = parseInt(document.getElementById('editAdvanceLimitDays').value) || 0;
         target.advanceLimitAdminBypass = document.getElementById('editAdvanceLimitAdminBypass').checked;
         
+        // Save Cosmetic Close Minutes
+        target.cosmeticCloseMinutes = parseInt(document.getElementById('editCosmeticCloseMinutes').value) || 0;
+
         // Save Color Palette
         target.colorPalette = document.getElementById('editColorPalette').value || 'default';
 
@@ -3812,8 +3829,12 @@ const firebaseConfig = {
         popover.className = 'booking-popover';
         const anon = booking.anonymized;
         
+        const res = resources.find(r => r.id === currentResId);
+        const popDayEnd = res ? res.hours[(booking.dayIndex * 2) + 1] : 0;
+        const popCosmeticMin = res ? (res.cosmeticCloseMinutes || 0) : 0;
+
         let html = `<div class="popover-name">${anon ? 'Past Booking' : escapeHtml(booking.data.name)}</div>`;
-        html += `<div class="popover-time">${formatTime(booking.start)} - ${formatTime(booking.end)} (${booking.data.duration}h)</div>`;
+        html += `<div class="popover-time">${formatTime(booking.start)} - ${formatCosmeticTime(booking.end, popDayEnd, popCosmeticMin)} (${booking.data.duration}h)</div>`;
         
         if (booking.data.hasStaff && booking.data.staffName) {
             html += `<div class="popover-staff">w/ ${escapeHtml(booking.data.staffName)}</div>`;

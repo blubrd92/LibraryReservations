@@ -18,7 +18,8 @@ const {
     getNthWeekdayOfMonth,
     getLastWeekdayOfMonth,
     isBookingAnonymized,
-    checkTimeConflict
+    checkTimeConflict,
+    formatCosmeticTime
 } = require('./utils');
 
 // ============================================================
@@ -571,5 +572,40 @@ describe('checkTimeConflict', () => {
         // 9:00-10:00 ends exactly when 10:00-11:30 starts - no overlap
         const result = checkTimeConflict(9, 1, 3, null, bookings, 'res-1', '2025-01-05');
         expect(result.hasConflict).toBe(false);
+    });
+});
+
+// ============================================================
+// formatCosmeticTime
+// ============================================================
+
+describe('formatCosmeticTime', () => {
+    test('applies offset when time equals dayEnd', () => {
+        // 18.0 (6:00pm) with 10 min offset → 5:50pm
+        expect(formatCosmeticTime(18, 18, 10)).toBe('5:50pm');
+    });
+
+    test('does not apply offset to non-closing times', () => {
+        // 10:30am is not the closing time, should be unchanged
+        expect(formatCosmeticTime(10.5, 18, 10)).toBe('10:30am');
+    });
+
+    test('returns normal time when cosmeticCloseMinutes is 0', () => {
+        expect(formatCosmeticTime(18, 18, 0)).toBe('6:00pm');
+    });
+
+    test('handles 15 minute offset', () => {
+        // 17.0 (5:00pm) with 15 min offset → 4:45pm
+        expect(formatCosmeticTime(17, 17, 15)).toBe('4:45pm');
+    });
+
+    test('handles 5 minute offset', () => {
+        // 20.0 (8:00pm) with 5 min offset → 7:55pm
+        expect(formatCosmeticTime(20, 20, 5)).toBe('7:55pm');
+    });
+
+    test('does not affect times before closing', () => {
+        expect(formatCosmeticTime(14.5, 18, 10)).toBe('2:30pm');
+        expect(formatCosmeticTime(9, 18, 10)).toBe('9:00am');
     });
 });

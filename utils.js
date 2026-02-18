@@ -377,6 +377,31 @@ function checkTimeConflict(startTime, duration, dayIndex, subRoomIndex, allBooki
 }
 
 // ============================================================
+// COSMETIC CLOSING TIME
+// ============================================================
+
+/**
+ * Apply the cosmetic closing time offset for display purposes.
+ * If a time value equals the day's closing hour and cosmeticCloseMinutes > 0,
+ * the displayed time is shifted earlier by that many minutes.
+ * Non-closing times are returned unchanged.
+ *
+ * Example: formatCosmeticTime(18, 18, 10) → formatTime(17.833...) → "5:50pm"
+ *          formatCosmeticTime(10.5, 18, 10) → formatTime(10.5) → "10:30am"
+ *
+ * @param {number} timeVal             - The time value (float hours)
+ * @param {number} dayEnd              - The day's actual closing hour (float)
+ * @param {number} cosmeticCloseMinutes - Minutes to subtract from closing time display (0 = disabled)
+ * @returns {string} Formatted time string
+ */
+function formatCosmeticTime(timeVal, dayEnd, cosmeticCloseMinutes) {
+    if (cosmeticCloseMinutes > 0 && timeVal === dayEnd) {
+        return formatTime(dayEnd - (cosmeticCloseMinutes / 60));
+    }
+    return formatTime(timeVal);
+}
+
+// ============================================================
 // MODULE EXPORT (Node.js / Jest) — no-op in the browser
 // ============================================================
 
@@ -401,6 +426,7 @@ if (typeof module !== 'undefined' && module.exports) {
         getNthWeekdayOfMonth,
         getLastWeekdayOfMonth,
         isBookingAnonymized,
-        checkTimeConflict
+        checkTimeConflict,
+        formatCosmeticTime
     };
 }

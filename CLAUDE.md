@@ -71,6 +71,7 @@ package.json                     - Dev dependencies (Jest only)
       advanceLimitDays: number,
       advanceLimitAdminBypass: boolean,
       adminOnly: boolean,            // restrict to admin role
+      cosmeticCloseMinutes: number,  // display closing time N minutes early (0 = disabled)
       enableSidebar: boolean,
       sidebarText: string            // Markdown content for info sidebar
     }
