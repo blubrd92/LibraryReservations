@@ -1147,9 +1147,9 @@ body.is-dragging .slot::after {
     header .flex.gap .btn-danger,
     header .flex.gap > div[style*="width: 1px"] { display: none !important; }
 
-    /* Grid fills the page */
+    /* Grid fills the page with content-sized rows */
     .layout-wrapper { overflow: visible; height: auto; }
-    .grid-container { overflow: visible !important; height: auto !important; border: 2px solid #333; }
+    .grid-container { overflow: visible !important; height: auto !important; border: 2px solid #333; grid-auto-rows: auto; }
 
     /* Sticky headers become static for print */
     .header-cell { position: static; }
