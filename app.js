@@ -4475,7 +4475,7 @@ const firebaseConfig = {
 
         html += '</div>'; // end row 1
 
-        // === ROW 2: Monthly Bars + Weekly Heatmap ===
+        // === ROW 2: Monthly Bars + Weekly Usage ===
         html += '<div class="dash-row">';
 
         // Monthly utilization bar chart
@@ -4499,73 +4499,43 @@ const firebaseConfig = {
         html += '</div>';
         html += '</div>';
 
-        // Weekly Heatmap
+        // Weekly Usage bar chart (avg hours per day of week, YTD)
         html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Weekly Rhythm (Day &times; Hour)</div>';
-        const heatmap = statsData.dayHourHeatmap || [];
-        // Find all active hours across all days and the max count
-        const activeHours = new Set();
-        let heatMax = 0;
-        for (let d = 0; d < 7; d++) {
-            Object.keys(heatmap[d] || {}).forEach(h => {
-                activeHours.add(parseInt(h));
-                if (heatmap[d][h] > heatMax) heatMax = heatmap[d][h];
-            });
-        }
-        const sortedHours = Array.from(activeHours).sort((a, b) => a - b);
-        if (sortedHours.length > 0 && heatMax > 0) {
-            // Fill in any gaps between min and max hour
-            const minH = sortedHours[0];
-            const maxH = sortedHours[sortedHours.length - 1];
-            const allHeatHours = [];
-            for (let h = minH; h <= maxH; h++) allHeatHours.push(h);
-
-            const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const colCount = allHeatHours.length + 1; // +1 for day label column
-            html += '<div class="dash-heatmap" style="grid-template-columns: 36px repeat(' + allHeatHours.length + ', 1fr);">';
-            // Header row
-            html += '<div class="dash-hm-corner"></div>';
-            allHeatHours.forEach(h => {
-                html += '<div class="dash-hm-hdr">' + formatTime(h) + '</div>';
-            });
-            // Data rows
-            for (let d = 0; d < 7; d++) {
-                const dayData = heatmap[d] || {};
-                // Skip days with no operating hours
-                const dayStart = res.hours[d * 2];
-                const dayEnd = res.hours[d * 2 + 1];
-                if (dayStart === dayEnd) {
-                    html += '<div class="dash-hm-day">' + DAY_ABBR[d] + '</div>';
-                    allHeatHours.forEach(() => {
-                        html += '<div class="dash-hm-cell dash-hm-closed" title="Closed"></div>';
-                    });
-                    continue;
-                }
-                html += '<div class="dash-hm-day">' + DAY_ABBR[d] + '</div>';
-                allHeatHours.forEach(h => {
-                    const count = dayData[h] || 0;
-                    const intensity = count > 0 ? Math.min(8, Math.ceil((count / heatMax) * 8)) : 0;
-                    const title = DAY_ABBR[d] + ' ' + formatTime(h) + ': ' + count + ' booking' + (count !== 1 ? 's' : '');
-                    html += '<div class="dash-hm-cell dash-hm-lvl-' + intensity + '" title="' + title + '">' + (count > 0 ? count : '') + '</div>';
-                });
-            }
+        html += '<div class="dash-panel-title">Weekly Usage</div>';
+        const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dowData = statsData.dowSummary || [];
+        const dowMap = {};
+        dowData.forEach(d => { dowMap[d.day] = d; });
+        const DOW_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        html += '<div class="dash-vbar-chart">';
+        for (let i = 0; i < 7; i++) {
+            const entry = dowMap[DOW_FULL[i]];
+            const avgHrs = entry ? entry.avgHours : 0;
+            const totalHrs = entry ? entry.totalHours : 0;
+            const availHrs = entry ? entry.availableHours : 0;
+            const util = entry ? entry.utilization : 0;
+            const openDays = entry ? entry.openDayCount : 0;
+            const dayStart = res.hours[i * 2];
+            const dayEnd = res.hours[i * 2 + 1];
+            const isClosed = dayStart === dayEnd;
+            const pct = isClosed ? 0 : util;
+            const fillPct = isClosed ? 0 : Math.min(100, pct);
+            const title = isClosed ? DOW_LABELS[i] + ': Closed'
+                : DOW_LABELS[i] + ': avg ' + avgHrs + 'h/day, ' + parseFloat(totalHrs.toFixed(1)) + 'h total / ' + parseFloat(availHrs.toFixed(1)) + 'h avail (' + util + '%) over ' + openDays + ' days';
+            html += '<div class="dash-vbar-col">';
+            html += '  <div class="dash-vbar-pct">' + (!isClosed && availHrs > 0 ? Math.round(pct) + '%' : '') + '</div>';
+            html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
+            html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
+            html += '  </div>';
+            html += '  <div class="dash-vbar-label">' + DOW_LABELS[i] + '</div>';
             html += '</div>';
-            // Heatmap scale legend
-            html += '<div class="dash-hm-scale">';
-            html += '<span>Less</span>';
-            for (let i = 0; i <= 8; i++) {
-                html += '<span class="dash-hm-cell dash-hm-lvl-' + i + '" style="width:14px;height:14px;display:inline-block;border-radius:2px;"></span>';
-            }
-            html += '<span>More</span>';
-            html += '</div>';
-        } else {
-            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
         }
+        html += '</div>';
         html += '</div>';
 
         html += '</div>'; // end row 2
 
-        // === ROW 3: Monthly Trend + Unused Capacity ===
+        // === ROW 3: Utilization Trend + Weekly Rhythm ===
         html += '<div class="dash-row">';
 
         // Monthly Utilization Trend Line
@@ -4617,53 +4587,63 @@ const firebaseConfig = {
         }
         html += '</div>';
 
-        // Unused Capacity Slots
+        // Weekly Rhythm Heatmap
         html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Most Available Slots (YTD)</div>';
-        const hm = statsData.dayHourHeatmap || [];
-        const dow = statsData.dowSummary || [];
-        const activeSubRooms = getActiveSubRooms(res);
-        const roomMult = activeSubRooms.length > 0 ? activeSubRooms.length : 1;
-        const DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-        const DOW_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-        // Build a map of openDayCount per weekday index
-        const dowCountMap = {};
-        dow.forEach(d => { dowCountMap[DOW_NAMES.indexOf(d.day)] = d.openDayCount; });
-
-        const slotUsage = [];
+        html += '<div class="dash-panel-title">Weekly Rhythm (Day &times; Hour)</div>';
+        const heatmap = statsData.dayHourHeatmap || [];
+        // Find all active hours across all days and the max count
+        const activeHours = new Set();
+        let heatMax = 0;
         for (let d = 0; d < 7; d++) {
-            const openDays = dowCountMap[d] || 0;
-            if (openDays === 0) continue;
-            const dayStart = res.hours[d * 2];
-            const dayEnd = res.hours[d * 2 + 1];
-            if (dayStart === dayEnd) continue;
-            for (let h = dayStart; h < dayEnd; h++) {
-                const hourKey = Math.floor(h);
-                const booked = (hm[d] && hm[d][hourKey]) || 0;
-                const possible = openDays * roomMult;
-                const usedPct = possible > 0 ? (booked / possible) * 100 : 0;
-                const freePct = 100 - usedPct;
-                slotUsage.push({ day: d, hour: h, booked, possible, usedPct, freePct });
-            }
-        }
-        // Sort by highest free percentage (most underused), then by day/hour
-        slotUsage.sort((a, b) => b.freePct - a.freePct || a.day - b.day || a.hour - b.hour);
-        // Show top 8
-        const topUnused = slotUsage.slice(0, 8);
-
-        if (topUnused.length > 0) {
-            html += '<div class="dash-hbar-chart">';
-            topUnused.forEach(slot => {
-                const label = DOW_SHORT[slot.day] + ' ' + formatTime(slot.hour);
-                const freePctDisplay = Math.round(slot.freePct);
-                const barWidth = slot.freePct;
-                const title = label + ': booked ' + slot.booked + ' of ' + slot.possible + ' possible (' + Math.round(slot.usedPct) + '% used)';
-                html += '<div class="dash-hbar-row">';
-                html += '  <div class="dash-hbar-label" style="width:60px;">' + label + '</div>';
-                html += '  <div class="dash-hbar-track" style="background:#e8eaf6;" title="' + title + '"><div class="dash-hbar-fill unused" style="width:' + barWidth + '%;"></div></div>';
-                html += '  <div class="dash-hbar-value">' + freePctDisplay + '% open</div>';
-                html += '</div>';
+            Object.keys(heatmap[d] || {}).forEach(h => {
+                activeHours.add(parseInt(h));
+                if (heatmap[d][h] > heatMax) heatMax = heatmap[d][h];
             });
+        }
+        const sortedHours = Array.from(activeHours).sort((a, b) => a - b);
+        if (sortedHours.length > 0 && heatMax > 0) {
+            // Fill in any gaps between min and max hour
+            const minH = sortedHours[0];
+            const maxH = sortedHours[sortedHours.length - 1];
+            const allHeatHours = [];
+            for (let h = minH; h <= maxH; h++) allHeatHours.push(h);
+
+            const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            html += '<div class="dash-heatmap" style="grid-template-columns: 36px repeat(' + allHeatHours.length + ', 1fr);">';
+            // Header row
+            html += '<div class="dash-hm-corner"></div>';
+            allHeatHours.forEach(h => {
+                html += '<div class="dash-hm-hdr">' + formatTime(h) + '</div>';
+            });
+            // Data rows
+            for (let d = 0; d < 7; d++) {
+                const dayData = heatmap[d] || {};
+                // Skip days with no operating hours
+                const dayStart = res.hours[d * 2];
+                const dayEnd = res.hours[d * 2 + 1];
+                if (dayStart === dayEnd) {
+                    html += '<div class="dash-hm-day">' + DAY_ABBR[d] + '</div>';
+                    allHeatHours.forEach(() => {
+                        html += '<div class="dash-hm-cell dash-hm-closed" title="Closed"></div>';
+                    });
+                    continue;
+                }
+                html += '<div class="dash-hm-day">' + DAY_ABBR[d] + '</div>';
+                allHeatHours.forEach(h => {
+                    const count = dayData[h] || 0;
+                    const intensity = count > 0 ? Math.min(8, Math.ceil((count / heatMax) * 8)) : 0;
+                    const title = DAY_ABBR[d] + ' ' + formatTime(h) + ': ' + count + ' booking' + (count !== 1 ? 's' : '');
+                    html += '<div class="dash-hm-cell dash-hm-lvl-' + intensity + '" title="' + title + '">' + (count > 0 ? count : '') + '</div>';
+                });
+            }
+            html += '</div>';
+            // Heatmap scale legend
+            html += '<div class="dash-hm-scale">';
+            html += '<span>Less</span>';
+            for (let i = 0; i <= 8; i++) {
+                html += '<span class="dash-hm-cell dash-hm-lvl-' + i + '" style="width:14px;height:14px;display:inline-block;border-radius:2px;"></span>';
+            }
+            html += '<span>More</span>';
             html += '</div>';
         } else {
             html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
