@@ -42,9 +42,10 @@
             <input type="date" id="datePicker" onchange="handleDatePick()">
         </div>
         <button class="btn-nav" onclick="navigateTime(1)">&#8594;</button>
-        
+        <button class="btn-primary btn-today" onclick="goToToday()">Today</button>
+
         <div style="width: 1px; height: 30px; background: #ccc; margin: 0 10px;"></div>
-        <button class="btn-primary" onclick="openStatsModal()" style="background: #7b1fa2;">📊 Stats</button>
+        <button class="btn-primary btn-stats" onclick="openStatsModal()">📊 Stats</button>
         <button id="btnAdminSettings" class="btn-primary" onclick="openAdminPanel()">⚙ Admin</button>
         <button class="btn-danger" onclick="doLogout()">Logout</button>
     </div>
@@ -472,6 +473,15 @@
                         <div class="closure-actions" style="margin-top: 10px;">
                             <button onclick="openApplyHoursModal()" style="font-size:0.85em;">Apply Hours to Other Resources...</button>
                         </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
+                            <label style="font-weight:bold; display:block; margin-bottom:4px;">Cosmetic Closing Time</label>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span>Show closing time as</span>
+                                <input type="number" id="editCosmeticCloseMinutes" min="0" max="15" step="1" value="0" style="width: 60px;">
+                                <span>minutes before actual close</span>
+                            </div>
+                            <small style="color:#666; display:block; margin-top:4px;">Set to 0 to disable (15 minutes max). This only changes the displayed closing time, booking durations and data are not affected.</small>
+                        </div>
                     </div>
                     <div style="border-top: 1px solid #eee; margin-top: 15px; padding-top: 15px;">
                         <label style="font-weight:bold; display:block; margin-bottom:10px;">Closure Dates (Holidays/Closures)</label>
@@ -634,6 +644,7 @@
 </div>
 <div id="toast-container"></div>
 
+<script src="utils.js"></script>
 <script src="app.js"></script>
 </body>
 

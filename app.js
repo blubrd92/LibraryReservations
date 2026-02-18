@@ -41,7 +41,9 @@ const firebaseConfig = {
         }, 3000);
     }
 
-    // STATE
+    // --- STATE ---
+    // Global state: resources array, current view position, bookings map, and
+    // interaction state objects for drag-move, drag-to-create, and resize operations.
     let resources = [];
     let currentResId = null;
     let pendingSelectionId = null;
@@ -198,6 +200,8 @@ const firebaseConfig = {
     }
 
     // --- CORE LOGIC ---
+    // Data loading (Firestore real-time listeners), date navigation, UI controls,
+    // and the main renderGrid() function that builds the entire scheduling grid.
     let loadVersion = 0; // Track which load request is current
     
     function loadBookingsForCurrentView() {
@@ -325,6 +329,20 @@ const firebaseConfig = {
         loadBookingsForCurrentView();
     }
 
+    function goToToday() {
+        hideBookingPopover();
+        const d = new Date();
+        const day = d.getDay();
+        const diff = d.getDate() - day;
+        currentWeekStart = new Date(d);
+        currentWeekStart.setDate(diff);
+        currentWeekStart.setHours(0, 0, 0, 0);
+        currentDayDate = new Date();
+        currentDayDate.setHours(0, 0, 0, 0);
+        updateUIControls();
+        loadBookingsForCurrentView();
+    }
+
     function updateUIControls() {
         const res = resources.find(x => x.id === currentResId);
         if(!res) return;
@@ -369,119 +387,9 @@ const firebaseConfig = {
         document.getElementById('headerResourceName').innerText = res.name;
     }
 
-    // Helper to check if a date is a closure date for the resource
-    function getClosureReason(res, date) {
-        const dateStr = formatDateISO(date);
-        const year = String(date.getFullYear());
-        
-        // Check closuresByYear (new format)
-        if (res.closuresByYear) {
-            // Check the date's year and adjacent years (for ranges spanning year boundaries)
-            const yearsToCheck = [String(parseInt(year) - 1), year];
-            for (const y of yearsToCheck) {
-                const closures = res.closuresByYear[y];
-                if (!closures || !Array.isArray(closures)) continue;
-                for (const closure of closures) {
-                    if (!closure.endDate) {
-                        if (closure.date === dateStr) return closure.reason;
-                    } else {
-                        if (dateStr >= closure.date && dateStr <= closure.endDate) return closure.reason;
-                    }
-                }
-            }
-        }
-        
-        // Fallback: check legacy closureDates array (pre-migration)
-        if (res.closureDates && Array.isArray(res.closureDates)) {
-            for (const closure of res.closureDates) {
-                if (!closure.endDate) {
-                    if (closure.date === dateStr) return closure.reason;
-                } else {
-                    if (dateStr >= closure.date && dateStr <= closure.endDate) return closure.reason;
-                }
-            }
-        }
-        
-        return null;
-    }
-
-    // Migrate legacy closureDates array to closuresByYear
-    function migrateClosureDates(res) {
-        if (res.closureDates && Array.isArray(res.closureDates) && res.closureDates.length > 0) {
-            if (!res.closuresByYear) res.closuresByYear = {};
-            res.closureDates.forEach(c => {
-                const year = c.date.substring(0, 4);
-                if (!res.closuresByYear[year]) res.closuresByYear[year] = [];
-                // Avoid duplicates
-                if (!res.closuresByYear[year].some(existing => existing.date === c.date && existing.endDate === c.endDate)) {
-                    res.closuresByYear[year].push({ ...c });
-                }
-            });
-            delete res.closureDates;
-            return true; // migration happened
-        }
-        if (!res.closuresByYear) res.closuresByYear = {};
-        return false;
-    }
-    
-    // Get all closures for a specific year from a resource
-    function getClosuresForYear(res, year) {
-        if (!res.closuresByYear) return [];
-        return res.closuresByYear[String(year)] || [];
-    }
-    
-    // Get all closures across all years (flat list)
-    function getAllClosures(res) {
-        if (!res.closuresByYear) return [];
-        let all = [];
-        Object.values(res.closuresByYear).forEach(yearClosures => {
-            all = all.concat(yearClosures);
-        });
-        return all;
-    }
-
-    // Migrate legacy comma-separated subRooms string to array of objects
-    function migrateSubRooms(res) {
-        if (typeof res.subRooms === 'string' && res.subRooms.trim()) {
-            const names = res.subRooms.split(',').map(s => s.trim()).filter(s => s);
-            res.subRooms = names.map((name, idx) => ({
-                id: 'sr-' + Date.now().toString(36) + idx,
-                name: name,
-                active: true,
-                displayOrder: idx
-            }));
-            return true;
-        }
-        // If it's already an array or empty, no migration needed
-        if (!res.subRooms || res.subRooms === '') {
-            res.subRooms = [];
-        }
-        return false;
-    }
-
-    // Get active sub-rooms sorted by displayOrder
-    function getActiveSubRooms(res) {
-        if (!Array.isArray(res.subRooms) || res.subRooms.length === 0) return [];
-        return res.subRooms
-            .map((sr, idx) => ({ ...sr, _arrayIndex: idx }))
-            .filter(sr => sr.active !== false)
-            .sort((a, b) => (a.displayOrder ?? a._arrayIndex) - (b.displayOrder ?? b._arrayIndex));
-    }
-
-    // Get sub-room name by array index (for resolving booking slot IDs)
-    function getSubRoomName(res, arrayIndex) {
-        if (!Array.isArray(res.subRooms)) return 'Room ' + (arrayIndex + 1);
-        const sr = res.subRooms[arrayIndex];
-        return sr ? sr.name : 'Room ' + (arrayIndex + 1);
-    }
-
-    // Format date as YYYY-MM-DD for comparison
-    function formatDateISO(d) {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
+    // NOTE: getClosureReason, migrateClosureDates, getClosuresForYear, getAllClosures,
+    // migrateSubRooms, getActiveSubRooms, getSubRoomName, and formatDateISO
+    // are now defined in utils.js (loaded before this file).
 
     function renderGrid() {
         hideBookingPopover();
@@ -565,6 +473,7 @@ const firebaseConfig = {
         
         // Track slot elements for positioning bookings later
         const slotElements = {}; // key: "colIndex-slotIndex" -> element
+        const printLabelsAdded = new Set(); // Track which bookings have print labels
         
         for (let i = 0; i < totalSlots; i++) {
             const timeVal = minH + (i * 0.5);
@@ -609,6 +518,21 @@ const firebaseConfig = {
                     if (booking) {
                         slot.classList.add('has-booking');
                         slot.dataset.bid = booking.id;
+                        // Carry booking color to the slot for print styling
+                        const printColorIdx = bookingColorMap[booking.id];
+                        if (printColorIdx !== undefined) slot.classList.add(`print-color-${printColorIdx}`);
+                        // Add inline print label on the first slot of each booking
+                        if (!printLabelsAdded.has(booking.id)) {
+                            printLabelsAdded.add(booking.id);
+                            const anon = isBookingAnonymized(activeWeekKey, booking.dayIndex, res);
+                            const printLabel = document.createElement('div');
+                            printLabel.className = 'print-booking-label';
+                            const bookingDayEnd = res.hours[(booking.dayIndex * 2) + 1];
+                            const cosmeticMin = res.cosmeticCloseMinutes || 0;
+                            const printName = anon ? 'Past Booking' : booking.data.name;
+                            printLabel.textContent = printName + ' (' + formatTime(booking.start) + '-' + formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin) + ')';
+                            slot.appendChild(printLabel);
+                        }
                     }
 
                     // Set up interactions if slot is empty OR has partial availability in quarter-hour mode
@@ -619,7 +543,8 @@ const firebaseConfig = {
                         const canEdit = canEditResource(res);
 
                         // Always show time tooltip on hover
-                        slot.setAttribute('data-time', `${displayTime} - ${formatTime(timeVal + 0.5)}`);
+                        const slotCosmeticMin = res.cosmeticCloseMinutes || 0;
+                        slot.setAttribute('data-time', `${displayTime} - ${formatCosmeticTime(timeVal + 0.5, dayEnd, slotCosmeticMin)}`);
 
                         // For quarter-hour mode, update tooltip and highlight dynamically
                         if (res.useQuarterHour) {
@@ -638,7 +563,7 @@ const firebaseConfig = {
                                     slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom', 'drag-over-valid', 'drag-over-invalid');
                                     slot.setAttribute('data-time', '');
                                 } else {
-                                    slot.setAttribute('data-time', `${formatTime(adjustedStart)} - ${formatTime(adjustedStart + 0.5)}`);
+                                    slot.setAttribute('data-time', `${formatTime(adjustedStart)} - ${formatCosmeticTime(adjustedStart + 0.5, dayEnd, slotCosmeticMin)}`);
                                     // Update half-highlight
                                     if (offset > 0) {
                                         slot.classList.remove('quarter-hover-top');
@@ -780,7 +705,9 @@ const firebaseConfig = {
                 const displayName = anon ? 'Past Booking' : escapeHtml(booking.data.name);
                 const seriesIcon = booking.data.seriesId ? '<span class="series-indicator" title="Recurring series">🔁</span> ' : '';
                 bookingEl.innerHTML = `<span class="slot-name">${seriesIcon}${displayName}</span>`;
-                bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatTime(booking.end)} (${booking.data.duration}h)</span>`;
+                const bookingDayEnd = res.hours[(booking.dayIndex * 2) + 1];
+                const cosmeticMin = res.cosmeticCloseMinutes || 0;
+                bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin)} (${booking.data.duration}h)</span>`;
                 
                 if (booking.data.hasStaff) {
                     bookingEl.innerHTML += `<span class="slot-staff">w/ ${escapeHtml(booking.data.staffName)}</span>`;
@@ -798,8 +725,8 @@ const firebaseConfig = {
                 
                 const canEdit = canEditResource(res);
                 
-                // Add resize handle only if user can edit
-                if (canEdit) {
+                // Add resize handle only if user can edit and booking is not anonymized
+                if (canEdit && !anon) {
                     const resizeHandle = document.createElement('div');
                     resizeHandle.className = 'resize-handle';
                     resizeHandle.onmousedown = (e) => startResize(e, booking, col, res, activeWeekKey, bookingEl);
@@ -836,8 +763,8 @@ const firebaseConfig = {
                     openBookingModal(booking.id, booking.data, col.subIndex);
                 };
                 
-                // DRAG-AND-DROP (only if user can edit)
-                if (canEdit) {
+                // DRAG-AND-DROP (only if user can edit and booking is not anonymized)
+                if (canEdit && !anon) {
                     bookingEl.draggable = true;
                     bookingEl.ondragstart = (e) => handleDragStart(e, booking.id, booking.data);
                     bookingEl.ondragend = handleDragEnd;
@@ -872,6 +799,8 @@ const firebaseConfig = {
     }
 
     // --- DRAG-AND-DROP HANDLERS ---
+    // Moving existing bookings to new time slots via HTML5 drag-and-drop.
+    // Includes validation, conflict checking, and move confirmation modal.
     function handleDragStart(e, bookingId, bookingData) {
         // Don't start drag from resize handle
         if (e.target.classList.contains('resize-handle')) {
@@ -1008,7 +937,9 @@ const firebaseConfig = {
             const rect = slot.getBoundingClientRect();
             const tooltip = document.createElement('div');
             tooltip.className = 'drag-tooltip';
-            tooltip.innerText = `${formatTime(adjustedTime)} - ${formatTime(adjustedTime + 0.25)}`;
+            const dragDayEnd = res.hours[(parseInt(dayIndex) * 2) + 1];
+            const dragCosmeticMin = res.cosmeticCloseMinutes || 0;
+            tooltip.innerText = `${formatTime(adjustedTime)} - ${formatCosmeticTime(adjustedTime + 0.25, dragDayEnd, dragCosmeticMin)}`;
             tooltip.style.left = (rect.left + rect.width / 2) + 'px';
             tooltip.style.top = (rect.top - 35) + 'px';
             tooltip.style.transform = 'translateX(-50%)';
@@ -1143,7 +1074,9 @@ const firebaseConfig = {
         dragState.highlightElement.style.height = Math.max(highlightHeight, 10) + 'px';
 
         // Create or update floating tooltip - position above the highlight
-        const tooltipText = `${formatTime(targetTime)} - ${formatTime(targetTime + increment)}`;
+        const bsDayEnd = res.hours[(col.dayIndex * 2) + 1];
+        const bsCosmeticMin = res.cosmeticCloseMinutes || 0;
+        const tooltipText = `${formatTime(targetTime)} - ${formatCosmeticTime(targetTime + increment, bsDayEnd, bsCosmeticMin)}`;
         if (!dragState.tooltipElement) {
             const tooltip = document.createElement('div');
             tooltip.className = 'drag-tooltip';
@@ -1307,12 +1240,7 @@ const firebaseConfig = {
                sourceSub === targetSub;
     }
 
-    function normalizeSubIndex(val) {
-        if (val === null || val === undefined || val === '' || val === 'null' || val === 'undefined') {
-            return null;
-        }
-        return parseInt(val);
-    }
+    // NOTE: normalizeSubIndex is now defined in utils.js
 
     function validateDropTarget(targetSlotId) {
         const res = resources.find(r => r.id === currentResId);
@@ -1486,8 +1414,11 @@ const firebaseConfig = {
         const sourceDayName = DAYS[sourceDay];
         const targetDayName = DAYS[targetDay];
         
-        const sourceFormatted = `${sourceDayName} ${sourceDate.getMonth()+1}/${sourceDate.getDate()}, ${formatTime(sourceTime)} - ${formatTime(sourceTime + duration)}`;
-        const targetFormatted = `${targetDayName} ${targetDate.getMonth()+1}/${targetDate.getDate()}, ${formatTime(targetTime)} - ${formatTime(targetTime + duration)}`;
+        const moveCosmeticMin = res.cosmeticCloseMinutes || 0;
+        const sourceDayEnd = res.hours[(sourceDay * 2) + 1];
+        const targetDayEnd = res.hours[(targetDay * 2) + 1];
+        const sourceFormatted = `${sourceDayName} ${sourceDate.getMonth()+1}/${sourceDate.getDate()}, ${formatTime(sourceTime)} - ${formatCosmeticTime(sourceTime + duration, sourceDayEnd, moveCosmeticMin)}`;
+        const targetFormatted = `${targetDayName} ${targetDate.getMonth()+1}/${targetDate.getDate()}, ${formatTime(targetTime)} - ${formatCosmeticTime(targetTime + duration, targetDayEnd, moveCosmeticMin)}`;
         
         // Populate modal
         document.getElementById('moveSourceId').value = sourceId;
@@ -1501,6 +1432,8 @@ const firebaseConfig = {
     }
 
     // --- DRAG-TO-CREATE HANDLERS ---
+    // Creating new bookings by clicking and dragging on empty time slots.
+    // Shows a visual overlay during selection, then opens the booking modal.
     function startSelection(e, slotId, timeVal, col, res, activeWeekKey, slotElement) {
         // Only start on left click, not during other operations
         if (e.button !== 0) return;
@@ -1602,7 +1535,8 @@ const firebaseConfig = {
             overlayElement: null,
             labelElement: null,
             useQuarterHour: res.useQuarterHour || false,
-            quarterOffset: quarterOffset
+            quarterOffset: quarterOffset,
+            dayEnd: dayEnd
         };
 
         // Find which slot index we're starting in
@@ -1631,7 +1565,8 @@ const firebaseConfig = {
         // Add centered label inside overlay
         const label = document.createElement('div');
         label.className = 'overlay-label';
-        label.innerText = `${formatTime(adjustedTimeVal)} - ${formatTime(adjustedTimeVal + minDuration)} (${minDuration}h)`;
+        const selCosmeticMin = res.cosmeticCloseMinutes || 0;
+        label.innerText = `${formatTime(adjustedTimeVal)} - ${formatCosmeticTime(adjustedTimeVal + minDuration, dayEnd, selCosmeticMin)} (${minDuration}h)`;
         overlay.appendChild(label);
         selectionState.labelElement = label;
 
@@ -1704,7 +1639,9 @@ const firebaseConfig = {
 
         if (selectionState.labelElement) {
             const endTime = selectionState.startTime + newDuration;
-            selectionState.labelElement.innerText = `${formatTime(selectionState.startTime)} - ${formatTime(endTime)} (${newDuration}h)`;
+            const selDayEnd = selectionState.dayEnd;
+            const selCosmetic = (selectionState.res && selectionState.res.cosmeticCloseMinutes) || 0;
+            selectionState.labelElement.innerText = `${formatTime(selectionState.startTime)} - ${formatCosmeticTime(endTime, selDayEnd, selCosmetic)} (${newDuration}h)`;
         }
     }
     
@@ -1805,7 +1742,8 @@ const firebaseConfig = {
             const opt = document.createElement('option');
             opt.value = val;
             const endVal = start + val;
-            opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (${formatTime(start)} - ${formatTime(endVal)})`;
+            const dragModalCosmeticMin = res.cosmeticCloseMinutes || 0;
+            opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (${formatTime(start)} - ${formatCosmeticTime(endVal, dayEnd, dragModalCosmeticMin)})`;
             if (val === presetDuration) opt.selected = true;
             durSel.appendChild(opt);
         }
@@ -1878,6 +1816,8 @@ const firebaseConfig = {
     }
 
     // --- RESIZE HANDLERS ---
+    // Changing booking duration by dragging the bottom edge of a booking element.
+    // Shows overlay during resize, then shows confirmation modal.
     function startResize(e, booking, col, res, activeWeekKey, slotElement) {
         e.preventDefault();
         e.stopPropagation();
@@ -1982,7 +1922,9 @@ const firebaseConfig = {
         // Add centered label inside overlay
         const label = document.createElement('div');
         label.className = 'overlay-label';
-        label.innerText = `${formatTime(booking.start)} - ${formatTime(booking.start + booking.data.duration)} (${booking.data.duration}h)`;
+        const resizeDayEnd = res.hours[(col.dayIndex * 2) + 1];
+        const resizeCosmeticMin = res.cosmeticCloseMinutes || 0;
+        label.innerText = `${formatTime(booking.start)} - ${formatCosmeticTime(booking.start + booking.data.duration, resizeDayEnd, resizeCosmeticMin)} (${booking.data.duration}h)`;
         overlay.appendChild(label);
         resizeState.labelElement = label;
         
@@ -2020,7 +1962,9 @@ const firebaseConfig = {
         // Update tooltip
         if (resizeState.labelElement) {
             const newEndTime = resizeState.bookingStart + newDuration;
-            resizeState.labelElement.innerText = `${formatTime(resizeState.bookingStart)} - ${formatTime(newEndTime)} (${newDuration}h)`;
+            const rDayEnd = resizeState.res.hours[(resizeState.col.dayIndex * 2) + 1];
+            const rCosmeticMin = resizeState.res.cosmeticCloseMinutes || 0;
+            resizeState.labelElement.innerText = `${formatTime(resizeState.bookingStart)} - ${formatCosmeticTime(newEndTime, rDayEnd, rCosmeticMin)} (${newDuration}h)`;
         }
     }
     
@@ -2082,14 +2026,18 @@ const firebaseConfig = {
         document.getElementById('resizeBookingId').value = bookingId;
         document.getElementById('resizeNewDuration').value = newDuration;
         document.getElementById('resizePatronName').innerText = bookingData.name;
-        
+
         const oldEnd = bookingStart + oldDuration;
         const newEnd = bookingStart + newDuration;
-        
-        document.getElementById('resizeFromDuration').innerText = 
-            `${formatTime(bookingStart)} - ${formatTime(oldEnd)} (${oldDuration} hour${oldDuration === 1 ? '' : 's'})`;
-        document.getElementById('resizeToDuration').innerText = 
-            `${formatTime(bookingStart)} - ${formatTime(newEnd)} (${newDuration} hour${newDuration === 1 ? '' : 's'})`;
+        const resizeRes = resources.find(r => r.id === currentResId);
+        const parsed = parseSlotId(bookingId, currentResId);
+        const resizeDayEnd = resizeRes ? resizeRes.hours[(parsed.dayIndex * 2) + 1] : 0;
+        const resizeCosmeticMin = resizeRes ? (resizeRes.cosmeticCloseMinutes || 0) : 0;
+
+        document.getElementById('resizeFromDuration').innerText =
+            `${formatTime(bookingStart)} - ${formatCosmeticTime(oldEnd, resizeDayEnd, resizeCosmeticMin)} (${oldDuration} hour${oldDuration === 1 ? '' : 's'})`;
+        document.getElementById('resizeToDuration').innerText =
+            `${formatTime(bookingStart)} - ${formatCosmeticTime(newEnd, resizeDayEnd, resizeCosmeticMin)} (${newDuration} hour${newDuration === 1 ? '' : 's'})`;
         
         // Store booking data for the execute function
         document.getElementById('resizeModal').dataset.bookingData = JSON.stringify(bookingData);
@@ -2179,7 +2127,9 @@ const firebaseConfig = {
         }
     }
 
-    // --- RESCHEDULE MODE (uses main calendar) ---
+    // --- RESCHEDULE MODE ---
+    // Multi-step rescheduling: user enters reschedule mode from a booking modal,
+    // navigates to the target day/week, then clicks an empty slot to place the booking.
     const DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     let rescheduleMode = {
         active: false,
@@ -2355,10 +2305,13 @@ const firebaseConfig = {
         document.getElementById('rescheduleConfirmPatron').textContent = patronName;
         const sourceRoomSuffix = sourceRoomName ? ` (${sourceRoomName})` : '';
         const targetRoomSuffix = targetRoomName ? ` (${targetRoomName})` : '';
+        const reschCosmeticMin = res.cosmeticCloseMinutes || 0;
+        const srcDayEnd = res.hours[(rescheduleMode.sourceDayIdx * 2) + 1];
+        const tgtDayEnd = res.hours[(targetDayIdx * 2) + 1];
         document.getElementById('rescheduleConfirmFrom').textContent =
-            `${sourceDateStr}, ${formatTime(rescheduleMode.sourceStartTime)} - ${formatTime(rescheduleMode.sourceStartTime + originalDuration)}${sourceRoomSuffix}`;
+            `${sourceDateStr}, ${formatTime(rescheduleMode.sourceStartTime)} - ${formatCosmeticTime(rescheduleMode.sourceStartTime + originalDuration, srcDayEnd, reschCosmeticMin)}${sourceRoomSuffix}`;
         document.getElementById('rescheduleConfirmTo').textContent =
-            `${targetDateStr}, ${formatTime(targetTime)} - ${formatTime(targetTime + newDuration)}${targetRoomSuffix}`;
+            `${targetDateStr}, ${formatTime(targetTime)} - ${formatCosmeticTime(targetTime + newDuration, tgtDayEnd, reschCosmeticMin)}${targetRoomSuffix}`;
 
         const warningEl = document.getElementById('rescheduleConfirmWarning');
         const durationRowEl = document.getElementById('rescheduleConfirmDurationRow');
@@ -2417,6 +2370,8 @@ const firebaseConfig = {
     }
 
     // --- MODAL & SAVE ---
+    // Booking modal: form population, validation, saveBooking() for single bookings,
+    // saveRecurringBooking() for repeating series, and recurring date pattern logic.
     function openBookingModal(slotId, data, subIdx) {
         const modal = document.getElementById('bookingModal');
         const res = resources.find(r => r.id === currentResId);
@@ -2491,14 +2446,13 @@ const firebaseConfig = {
             const opt = document.createElement('option');
             opt.value = val;
 
-            // --- UPDATED: Range Format (Option 2) ---
             const endVal = start + val;
             const startString = formatTime(start);
-            const endString = formatTime(endVal);
+            const modalCosmeticMin = res.cosmeticCloseMinutes || 0;
+            const endString = formatCosmeticTime(endVal, dayEnd, modalCosmeticMin);
 
-            // Result: "1.5 Hours (2:00pm - 3:30pm)"
+            // Result: "1.5 Hours (2:00pm - 3:30pm)" (end time adjusted by cosmetic close if applicable)
             opt.innerText = `${val} ${val === 1 ? "Hour" : "Hours"} (${startString} - ${endString})`;
-            // ----------------------------------------
 
             if(data && data.duration == val) opt.selected = true;
             durSel.appendChild(opt);
@@ -2892,28 +2846,13 @@ const firebaseConfig = {
         showLoading(false);
     }
     
-    // Helper: get Nth occurrence of a weekday in a month (0-indexed month)
-    function getNthWeekdayOfMonth(year, month, weekday, n) {
-        const first = new Date(year, month, 1);
-        let dayOffset = weekday - first.getDay();
-        if (dayOffset < 0) dayOffset += 7;
-        const firstOccurrence = 1 + dayOffset;
-        const target = firstOccurrence + (n - 1) * 7;
-        // Check if target day is still in this month
-        const result = new Date(year, month, target);
-        if (result.getMonth() !== month) return null; // e.g., 5th Wednesday doesn't exist
-        return result;
-    }
-    
-    // Helper: get last occurrence of a weekday in a month
-    function getLastWeekdayOfMonth(year, month, weekday) {
-        const lastDay = new Date(year, month + 1, 0); // last day of month
-        let dayOffset = lastDay.getDay() - weekday;
-        if (dayOffset < 0) dayOffset += 7;
-        return new Date(year, month, lastDay.getDate() - dayOffset);
-    }
+    // NOTE: getNthWeekdayOfMonth, getLastWeekdayOfMonth are now defined in utils.js
 
-    function openAdminPanel() { 
+    // --- ADMIN PANEL ---
+    // Admin settings UI: resource management (create/delete/duplicate), operating
+    // hours, sub-room configuration, booking rules, color palettes, and saveAllSettings().
+
+    function openAdminPanel() {
         document.getElementById('adminPassInput').value = '';
         document.getElementById('adminPassModal').style.display = 'flex';
         setTimeout(() => document.getElementById('adminPassInput').focus(), 100);
@@ -2962,6 +2901,9 @@ const firebaseConfig = {
         document.getElementById('editAdvanceLimitDays').value = r.advanceLimitDays !== undefined ? r.advanceLimitDays : 1;
         document.getElementById('editAdvanceLimitAdminBypass').checked = r.advanceLimitAdminBypass || false;
         toggleAdvanceLimitConfig();
+
+        // Load Cosmetic Close Minutes
+        document.getElementById('editCosmeticCloseMinutes').value = r.cosmeticCloseMinutes || 0;
 
         // Load Color Palette
         const palette = r.colorPalette || 'default';
@@ -3289,6 +3231,8 @@ const firebaseConfig = {
     }
 
     // --- CLOSURE DATE MANAGEMENT ---
+    // Adding/removing closure dates (holidays), year-based storage, rendering the
+    // closure list in admin panel, and applying closures across multiple resources.
     function renderClosureList(res) {
         // If called without argument, get current resource
         if (!res || typeof res !== 'object') {
@@ -3621,6 +3565,8 @@ const firebaseConfig = {
     }
 
     // --- NEW RESOURCE WITH IMPORT OPTION ---
+    // Creating new resources with the option to clone settings (hours, closures,
+    // all config) from an existing resource.
     async function addNewResource() {
         const name = prompt("Name for new resource?");
         if(!name) return;
@@ -3875,6 +3821,9 @@ const firebaseConfig = {
         target.advanceLimitDays = parseInt(document.getElementById('editAdvanceLimitDays').value) || 0;
         target.advanceLimitAdminBypass = document.getElementById('editAdvanceLimitAdminBypass').checked;
         
+        // Save Cosmetic Close Minutes
+        target.cosmeticCloseMinutes = Math.min(15, Math.max(0, parseInt(document.getElementById('editCosmeticCloseMinutes').value) || 0));
+
         // Save Color Palette
         target.colorPalette = document.getElementById('editColorPalette').value || 'default';
 
@@ -3909,10 +3858,12 @@ const firebaseConfig = {
 
         loadBookingsForCurrentView();
     }
+    // --- BOOKING POPOVER & HIGHLIGHTS ---
+    // Hover popover showing booking details, highlight effects, and deleteBooking()
+    // with series-aware deletion (single vs. entire series).
+
     function highlightBooking(id) { document.querySelectorAll(`.booking-float[data-bid="${id}"]`).forEach(s => s.classList.add('booking-hover-effect')); }
     function unhighlightBooking(id) { document.querySelectorAll(`.booking-float[data-bid="${id}"]`).forEach(s => s.classList.remove('booking-hover-effect')); }
-    
-    // Popover for booking details
     let activePopover = null;
     
     function showBookingPopover(e, booking) {
@@ -3922,8 +3873,12 @@ const firebaseConfig = {
         popover.className = 'booking-popover';
         const anon = booking.anonymized;
         
+        const res = resources.find(r => r.id === currentResId);
+        const popDayEnd = res ? res.hours[(booking.dayIndex * 2) + 1] : 0;
+        const popCosmeticMin = res ? (res.cosmeticCloseMinutes || 0) : 0;
+
         let html = `<div class="popover-name">${anon ? 'Past Booking' : escapeHtml(booking.data.name)}</div>`;
-        html += `<div class="popover-time">${formatTime(booking.start)} - ${formatTime(booking.end)} (${booking.data.duration}h)</div>`;
+        html += `<div class="popover-time">${formatTime(booking.start)} - ${formatCosmeticTime(booking.end, popDayEnd, popCosmeticMin)} (${booking.data.duration}h)</div>`;
         
         if (booking.data.hasStaff && booking.data.staffName) {
             html += `<div class="popover-staff">w/ ${escapeHtml(booking.data.staffName)}</div>`;
@@ -4042,6 +3997,10 @@ const firebaseConfig = {
         pendingSeriesDeleteSeriesId = null;
     }
     
+    // --- UTILITY FUNCTIONS ---
+    // Shared helpers: modal management, DOM creation, time formatting,
+    // date helpers, advance limit checking, recurring booking toggles.
+
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     // Global Escape key handler: closes the topmost visible modal
@@ -4159,53 +4118,8 @@ const firebaseConfig = {
         return { allowed: true };
     }
 
-    function isBookingAnonymized(weekKey, dayIndex, res) {
-        // Compute the booking's actual date
-        const [y, m, d] = weekKey.split('-').map(Number);
-        const bookingDate = new Date(y, m - 1, d);
-        bookingDate.setDate(bookingDate.getDate() + dayIndex);
-        bookingDate.setHours(0, 0, 0, 0);
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (res.viewMode === 'day') {
-            // Day view: anonymize everything before today
-            return bookingDate < today;
-        } else {
-            // Week view: anonymize everything before the current week (Sunday)
-            const day = today.getDay();
-            const thisWeekStart = new Date(today);
-            thisWeekStart.setDate(today.getDate() - day);
-            return bookingDate < thisWeekStart;
-        }
-    }
-
-    function getWeekKey(d) {
-        const d2 = new Date(d);
-        const day = d2.getDay();
-        const diff = d2.getDate() - day;
-        const s = new Date(d2.setDate(diff));
-        return `${s.getFullYear()}-${String(s.getMonth()+1).padStart(2,'0')}-${String(s.getDate()).padStart(2,'0')}`;
-    }
-    function formatDateShort(d) { return (d.getMonth()+1) + "/" + d.getDate(); }
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-    }
-    function formatTime(val) {
-        const h = Math.floor(val);
-        const frac = val % 1;
-        let m;
-        if (frac === 0) m = '00';
-        else if (frac === 0.25) m = '15';
-        else if (frac === 0.5) m = '30';
-        else if (frac === 0.75) m = '45';
-        else m = String(Math.round(frac * 60)).padStart(2, '0');
-        const suffix = h >= 12 ? 'pm' : 'am';
-        const h12 = h % 12 || 12;
-        return `${h12}:${m}${suffix}`;
-    }
+    // NOTE: isBookingAnonymized, getWeekKey, formatDateShort, escapeHtml, formatTime
+    // are now defined in utils.js (loaded before this file).
 
     function getQuarterHourOffset(e, slotElement, res) {
         if (!res.useQuarterHour) return 0;
@@ -4215,15 +4129,11 @@ const firebaseConfig = {
     }
 
     // --- STATS FUNCTIONS ---
+    // Statistics modal: heatmap calendar, dashboard charts (utilization, peak hours,
+    // duration distribution, day-of-week analysis), summary metrics, and CSV export.
     let statsData = {}; // Cache for loaded stats
-    
-    function getWeekStart(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day;
-        return new Date(d.setDate(diff));
-    }
-    
+    // NOTE: getWeekStart is now defined in utils.js
+
     // Update stats metadata when a booking is saved
     async function updateStatsYearMeta(resId, slotId) {
         try {
@@ -4402,6 +4312,7 @@ const firebaseConfig = {
                     
                     dailyStats[dateStr] = {
                         hours: 0,
+                        bookingCount: 0,
                         closed: (dayStart === dayEnd) || closureReason !== null,
                         reason: closureReason || (dayStart === dayEnd ? 'Closed' : ''),
                         dayOfWeek: dayOfWeek
@@ -4431,6 +4342,7 @@ const firebaseConfig = {
                     const dateStr = formatDateISO(bookingDate);
                     if (dailyStats[dateStr]) {
                         dailyStats[dateStr].hours += booking.duration || 0;
+                        dailyStats[dateStr].bookingCount++;
                     }
                 }
             });
@@ -4796,8 +4708,10 @@ const firebaseConfig = {
         // Build rows (days 1-31)
         let html = '';
         const monthlyTotals = new Array(12).fill(0);
+        const monthlyBookingCounts = new Array(12).fill(0);
         const monthlyAvailable = new Array(12).fill(0);
         let grandTotal = 0;
+        let grandBookingCount = 0;
         let totalAvailable = 0;
         let totalDaysBookable = 0;
         
@@ -4883,9 +4797,11 @@ const firebaseConfig = {
                     const dateTooltip = dayOfWeekNames[date.getDay()] + ', ' + formatDateWithOrdinal(month, day, year);
                     const hours = stat.hours;
                     
-                    // Always count hours in totals (fix: closed days with bookings still count)
+                    // Always count hours and bookings in totals (fix: closed days with bookings still count)
                     monthlyTotals[month] += hours;
+                    monthlyBookingCounts[month] += stat.bookingCount;
                     grandTotal += hours;
+                    grandBookingCount += stat.bookingCount;
                     
                     if (stat.closed) {
                         const shortReason = stat.reason.length > 8 ? stat.reason.substring(0, 7) + '\u2026' : stat.reason;
@@ -4919,7 +4835,8 @@ const firebaseConfig = {
                         const heatLevel = hours === 0 ? 0 : Math.min(8, Math.ceil((hours / maxHours) * 8));
                         const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : '';
                         const dayUtil = dayAvailable > 0 ? ((hours / dayAvailable) * 100).toFixed(1) : '0.0';
-                        const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'} (${dayUtil}% utilization)` : 'No bookings';
+                        const bc = stat.bookingCount;
+                        const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'}, ${bc} booking${bc === 1 ? '' : 's'} (${dayUtil}% utilization)` : 'No bookings';
                         rowHtml += `<td class="stats-heat-${heatLevel}" title="${dateTooltip} - ${hoursText}">${displayHours}</td>`;
                     }
                 }
@@ -4931,11 +4848,13 @@ const firebaseConfig = {
         
         tbody.innerHTML = html;
         
-        // Build footer (monthly totals with month names)
+        // Build footer (monthly totals with month names, hours, and booking counts)
         let footHtml = '<tr><td>Total</td>';
         monthlyTotals.forEach((t, i) => {
             const displayTotal = t > 0 ? parseFloat(t.toFixed(2)) + 'h' : '-';
-            footHtml += `<td><div style="color:#1565c0;font-weight:bold;">${MONTHS[i]}</div>${displayTotal}</td>`;
+            const bc = monthlyBookingCounts[i];
+            const countLabel = bc > 0 ? `<div style="font-size:0.85em;color:#555;font-weight:normal;">${bc} booking${bc === 1 ? '' : 's'}</div>` : '';
+            footHtml += `<td><div style="color:#1565c0;font-weight:bold;">${MONTHS[i]}</div>${displayTotal}${countLabel}</td>`;
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;

@@ -1,0 +1,13 @@
+{
+  "name": "library-reservations",
+  "private": true,
+  "description": "Library resource reservation/scheduling system",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:verbose": "jest --verbose"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
