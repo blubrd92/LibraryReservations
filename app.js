@@ -518,6 +518,9 @@ const firebaseConfig = {
                     if (booking) {
                         slot.classList.add('has-booking');
                         slot.dataset.bid = booking.id;
+                        // Carry booking color to the slot for print styling
+                        const printColorIdx = bookingColorMap[booking.id];
+                        if (printColorIdx !== undefined) slot.classList.add(`print-color-${printColorIdx}`);
                         // Add inline print label on the first slot of each booking
                         if (!printLabelsAdded.has(booking.id)) {
                             printLabelsAdded.add(booking.id);

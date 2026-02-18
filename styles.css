@@ -1157,12 +1157,13 @@ body.is-dragging .slot::after {
 
     /* Hide floating overlays; show inline print labels instead */
     .booking-float { display: none !important; }
-    .slot.has-booking { background: #d6e9f8 !important; }
+    .slot.has-booking.print-color-0 { background: var(--app-color-1) !important; }
+    .slot.has-booking.print-color-1 { background: var(--app-color-2) !important; }
     .print-booking-label {
         display: block;
         font-size: 0.75em;
         font-weight: 600;
-        color: #1a3a5c;
+        color: #fff;
         word-wrap: break-word;
         overflow: hidden;
         line-height: 1.2;
