@@ -543,7 +543,8 @@ const firebaseConfig = {
                         const canEdit = canEditResource(res);
 
                         // Always show time tooltip on hover
-                        slot.setAttribute('data-time', `${displayTime} - ${formatTime(timeVal + 0.5)}`);
+                        const slotCosmeticMin = res.cosmeticCloseMinutes || 0;
+                        slot.setAttribute('data-time', `${displayTime} - ${formatCosmeticTime(timeVal + 0.5, dayEnd, slotCosmeticMin)}`);
 
                         // For quarter-hour mode, update tooltip and highlight dynamically
                         if (res.useQuarterHour) {
@@ -562,7 +563,7 @@ const firebaseConfig = {
                                     slot.classList.remove('quarter-hover-top', 'quarter-hover-bottom', 'drag-over-valid', 'drag-over-invalid');
                                     slot.setAttribute('data-time', '');
                                 } else {
-                                    slot.setAttribute('data-time', `${formatTime(adjustedStart)} - ${formatTime(adjustedStart + 0.5)}`);
+                                    slot.setAttribute('data-time', `${formatTime(adjustedStart)} - ${formatCosmeticTime(adjustedStart + 0.5, dayEnd, slotCosmeticMin)}`);
                                     // Update half-highlight
                                     if (offset > 0) {
                                         slot.classList.remove('quarter-hover-top');
@@ -936,7 +937,9 @@ const firebaseConfig = {
             const rect = slot.getBoundingClientRect();
             const tooltip = document.createElement('div');
             tooltip.className = 'drag-tooltip';
-            tooltip.innerText = `${formatTime(adjustedTime)} - ${formatTime(adjustedTime + 0.25)}`;
+            const dragDayEnd = res.hours[(parseInt(dayIndex) * 2) + 1];
+            const dragCosmeticMin = res.cosmeticCloseMinutes || 0;
+            tooltip.innerText = `${formatTime(adjustedTime)} - ${formatCosmeticTime(adjustedTime + 0.25, dragDayEnd, dragCosmeticMin)}`;
             tooltip.style.left = (rect.left + rect.width / 2) + 'px';
             tooltip.style.top = (rect.top - 35) + 'px';
             tooltip.style.transform = 'translateX(-50%)';
@@ -1071,7 +1074,9 @@ const firebaseConfig = {
         dragState.highlightElement.style.height = Math.max(highlightHeight, 10) + 'px';
 
         // Create or update floating tooltip - position above the highlight
-        const tooltipText = `${formatTime(targetTime)} - ${formatTime(targetTime + increment)}`;
+        const bsDayEnd = res.hours[(col.dayIndex * 2) + 1];
+        const bsCosmeticMin = res.cosmeticCloseMinutes || 0;
+        const tooltipText = `${formatTime(targetTime)} - ${formatCosmeticTime(targetTime + increment, bsDayEnd, bsCosmeticMin)}`;
         if (!dragState.tooltipElement) {
             const tooltip = document.createElement('div');
             tooltip.className = 'drag-tooltip';
@@ -1530,7 +1535,8 @@ const firebaseConfig = {
             overlayElement: null,
             labelElement: null,
             useQuarterHour: res.useQuarterHour || false,
-            quarterOffset: quarterOffset
+            quarterOffset: quarterOffset,
+            dayEnd: dayEnd
         };
 
         // Find which slot index we're starting in
@@ -1559,7 +1565,8 @@ const firebaseConfig = {
         // Add centered label inside overlay
         const label = document.createElement('div');
         label.className = 'overlay-label';
-        label.innerText = `${formatTime(adjustedTimeVal)} - ${formatTime(adjustedTimeVal + minDuration)} (${minDuration}h)`;
+        const selCosmeticMin = res.cosmeticCloseMinutes || 0;
+        label.innerText = `${formatTime(adjustedTimeVal)} - ${formatCosmeticTime(adjustedTimeVal + minDuration, dayEnd, selCosmeticMin)} (${minDuration}h)`;
         overlay.appendChild(label);
         selectionState.labelElement = label;
 
@@ -1632,7 +1639,9 @@ const firebaseConfig = {
 
         if (selectionState.labelElement) {
             const endTime = selectionState.startTime + newDuration;
-            selectionState.labelElement.innerText = `${formatTime(selectionState.startTime)} - ${formatTime(endTime)} (${newDuration}h)`;
+            const selDayEnd = selectionState.dayEnd;
+            const selCosmetic = (selectionState.res && selectionState.res.cosmeticCloseMinutes) || 0;
+            selectionState.labelElement.innerText = `${formatTime(selectionState.startTime)} - ${formatCosmeticTime(endTime, selDayEnd, selCosmetic)} (${newDuration}h)`;
         }
     }
     
@@ -1912,7 +1921,9 @@ const firebaseConfig = {
         // Add centered label inside overlay
         const label = document.createElement('div');
         label.className = 'overlay-label';
-        label.innerText = `${formatTime(booking.start)} - ${formatTime(booking.start + booking.data.duration)} (${booking.data.duration}h)`;
+        const resizeDayEnd = res.hours[(col.dayIndex * 2) + 1];
+        const resizeCosmeticMin = res.cosmeticCloseMinutes || 0;
+        label.innerText = `${formatTime(booking.start)} - ${formatCosmeticTime(booking.start + booking.data.duration, resizeDayEnd, resizeCosmeticMin)} (${booking.data.duration}h)`;
         overlay.appendChild(label);
         resizeState.labelElement = label;
         
@@ -1950,7 +1961,9 @@ const firebaseConfig = {
         // Update tooltip
         if (resizeState.labelElement) {
             const newEndTime = resizeState.bookingStart + newDuration;
-            resizeState.labelElement.innerText = `${formatTime(resizeState.bookingStart)} - ${formatTime(newEndTime)} (${newDuration}h)`;
+            const rDayEnd = resizeState.res.hours[(resizeState.col.dayIndex * 2) + 1];
+            const rCosmeticMin = resizeState.res.cosmeticCloseMinutes || 0;
+            resizeState.labelElement.innerText = `${formatTime(resizeState.bookingStart)} - ${formatCosmeticTime(newEndTime, rDayEnd, rCosmeticMin)} (${newDuration}h)`;
         }
     }
     
