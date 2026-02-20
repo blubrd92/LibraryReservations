@@ -173,6 +173,28 @@ body.is-dragging .slot::after {
 .slot.booked-body { display: none; }
 .print-booking-label { display: none; }
 
+/* Current Time Indicator (day view only) */
+.time-indicator-line {
+    position: absolute;
+    left: 85px;  /* skip the time column */
+    right: 0;
+    height: 2px;
+    background: #e53935;
+    z-index: 9;  /* below booking-float (10), above slots */
+    pointer-events: none;
+}
+.time-indicator-dot {
+    position: absolute;
+    left: 77px;  /* centered on the time column border */
+    width: 10px;
+    height: 10px;
+    background: #e53935;
+    border-radius: 50%;
+    transform: translateY(-4px); /* center the dot on the line */
+    z-index: 9;
+    pointer-events: none;
+}
+
 /* Floating booking elements (absolutely positioned) */
 .booking-float {
     position: absolute;
@@ -1146,7 +1168,8 @@ body.is-dragging .slot::after {
     #loginOverlay, #status-bar, #loading, #toast-container,
     .modal, #rescheduleBanner, .info-sidebar,
     .booking-popover, .drag-tooltip, .drag-slot-highlight,
-    .selection-overlay, .resize-overlay { display: none !important; }
+    .selection-overlay, .resize-overlay,
+    .time-indicator-line, .time-indicator-dot { display: none !important; }
 
     /* Header: show title/range, hide controls */
     header { margin-bottom: 10px; }

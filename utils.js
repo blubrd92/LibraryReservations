@@ -377,6 +377,22 @@ function checkTimeConflict(startTime, duration, dayIndex, subRoomIndex, allBooki
 }
 
 // ============================================================
+// CURRENT TIME HELPER
+// ============================================================
+
+/**
+ * Get the current time as a float hour value.
+ * Example: 2:30 PM → 14.5, 9:15 AM → 9.25
+ *
+ * @param {Date} [now] - Override "now" for testing (defaults to new Date())
+ * @returns {number}
+ */
+function getCurrentTimeFloat(now) {
+    if (!now) now = new Date();
+    return now.getHours() + now.getMinutes() / 60;
+}
+
+// ============================================================
 // COSMETIC CLOSING TIME
 // ============================================================
 
@@ -427,6 +443,7 @@ if (typeof module !== 'undefined' && module.exports) {
         getLastWeekdayOfMonth,
         isBookingAnonymized,
         checkTimeConflict,
-        formatCosmeticTime
+        formatCosmeticTime,
+        getCurrentTimeFloat
     };
 }

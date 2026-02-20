@@ -53,6 +53,7 @@ const firebaseConfig = {
     let dailyMap = []; 
     let bookingColorMap = {};
     let activeListenerUnsub = null;
+    let timeIndicatorIntervalId = null;
 
     // Pending new resource data (for import closures flow)
     let pendingNewResource = null;
@@ -150,6 +151,11 @@ const firebaseConfig = {
                 document.getElementById('status-bar').innerHTML = "<span class='offline'>Locked</span>";
             }
         });
+
+        // Update current time indicator every 60 seconds
+        if (!timeIndicatorIntervalId) {
+            timeIndicatorIntervalId = setInterval(placeTimeIndicator, 60000);
+        }
     }
 
     // --- AUTH ACTIONS ---
@@ -795,7 +801,76 @@ const firebaseConfig = {
                     });
                 });
             });
+
+            // Position current time indicator (day view, today only)
+            setupTimeIndicator(container, isDayView, minH, maxH, slotElements);
         });
+    }
+
+    // --- CURRENT TIME INDICATOR (day view) ---
+    // A horizontal red line showing the current time, visible only when the
+    // day view is displaying today's date.
+
+    let timeIndicatorCtx = null; // stored context for interval-based updates
+
+    /**
+     * Set up the current time indicator after grid layout is complete.
+     * Called from the requestAnimationFrame callback inside renderGrid().
+     */
+    function setupTimeIndicator(container, isDayView, minH, maxH, slotElements) {
+        // Remove any existing indicator elements
+        container.querySelectorAll('.time-indicator-line, .time-indicator-dot').forEach(el => el.remove());
+        timeIndicatorCtx = null;
+
+        if (!isDayView) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const viewDate = new Date(currentDayDate);
+        viewDate.setHours(0, 0, 0, 0);
+        if (viewDate.getTime() !== today.getTime()) return;
+
+        // Store context so the interval can reposition the line
+        timeIndicatorCtx = { container, minH, maxH, slotElements };
+        placeTimeIndicator();
+    }
+
+    /**
+     * Create (or reposition) the time indicator line and dot.
+     * Called on initial render and every 60 seconds by the interval.
+     */
+    function placeTimeIndicator() {
+        if (!timeIndicatorCtx) return;
+        const { container, minH, maxH, slotElements } = timeIndicatorCtx;
+
+        // Remove existing before re-placing
+        container.querySelectorAll('.time-indicator-line, .time-indicator-dot').forEach(el => el.remove());
+
+        const nowFloat = getCurrentTimeFloat();
+        if (nowFloat < minH || nowFloat >= maxH) return;
+
+        const rawSlotIndex = (nowFloat - minH) * 2;
+        const slotIndex = Math.floor(rawSlotIndex);
+        const offsetFraction = rawSlotIndex - slotIndex;
+
+        // Measure position from the first column's slot at this row
+        const refSlot = slotElements[`0-${slotIndex}`];
+        if (!refSlot) return;
+
+        const slotRect = refSlot.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const slotH = slotRect.height;
+        const topPos = slotRect.top - containerRect.top + container.scrollTop + (offsetFraction * slotH);
+
+        const line = document.createElement('div');
+        line.className = 'time-indicator-line';
+        line.style.top = topPos + 'px';
+        container.appendChild(line);
+
+        const dot = document.createElement('div');
+        dot.className = 'time-indicator-dot';
+        dot.style.top = topPos + 'px';
+        container.appendChild(dot);
     }
 
     // --- DRAG-AND-DROP HANDLERS ---
