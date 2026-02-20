@@ -1492,8 +1492,17 @@ const firebaseConfig = {
         const moveCosmeticMin = res.cosmeticCloseMinutes || 0;
         const sourceDayEnd = res.hours[(sourceDay * 2) + 1];
         const targetDayEnd = res.hours[(targetDay * 2) + 1];
-        const sourceFormatted = `${sourceDayName} ${sourceDate.getMonth()+1}/${sourceDate.getDate()}, ${formatTime(sourceTime)} - ${formatCosmeticTime(sourceTime + duration, sourceDayEnd, moveCosmeticMin)}`;
-        const targetFormatted = `${targetDayName} ${targetDate.getMonth()+1}/${targetDate.getDate()}, ${formatTime(targetTime)} - ${formatCosmeticTime(targetTime + duration, targetDayEnd, moveCosmeticMin)}`;
+
+        // Include sub-room name for day-view resources
+        const sourceSubIdx = sourceParts[3] || '';
+        const targetSubIdx = targetParts[3] || '';
+        const sourceRoomName = sourceSubIdx !== '' ? getSubRoomName(res, parseInt(sourceSubIdx)) : '';
+        const targetRoomName = targetSubIdx !== '' ? getSubRoomName(res, parseInt(targetSubIdx)) : '';
+        const sourceRoomSuffix = sourceRoomName ? ` (${sourceRoomName})` : '';
+        const targetRoomSuffix = targetRoomName ? ` (${targetRoomName})` : '';
+
+        const sourceFormatted = `${sourceDayName} ${sourceDate.getMonth()+1}/${sourceDate.getDate()}, ${formatTime(sourceTime)} - ${formatCosmeticTime(sourceTime + duration, sourceDayEnd, moveCosmeticMin)}${sourceRoomSuffix}`;
+        const targetFormatted = `${targetDayName} ${targetDate.getMonth()+1}/${targetDate.getDate()}, ${formatTime(targetTime)} - ${formatCosmeticTime(targetTime + duration, targetDayEnd, moveCosmeticMin)}${targetRoomSuffix}`;
         
         // Populate modal
         document.getElementById('moveSourceId').value = sourceId;
