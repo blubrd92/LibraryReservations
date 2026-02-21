@@ -4534,7 +4534,7 @@ const firebaseConfig = {
             const srTotal = srKeys.reduce((sum, k) => sum + srCounts[k], 0);
             if (srTotal > 0) {
                 // Build conic-gradient slices
-                const PIE_COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#9c755f'];
+                const PIE_COLORS = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#edc948', '#76b7b2', '#9c755f'];
                 let cumPct = 0;
                 let gradientParts = [];
                 let legendItems = [];
