@@ -19,7 +19,8 @@ const {
     getLastWeekdayOfMonth,
     isBookingAnonymized,
     checkTimeConflict,
-    formatCosmeticTime
+    formatCosmeticTime,
+    getCurrentTimeFloat
 } = require('./utils');
 
 // ============================================================
@@ -607,5 +608,42 @@ describe('formatCosmeticTime', () => {
     test('does not affect times before closing', () => {
         expect(formatCosmeticTime(14.5, 18, 10)).toBe('2:30pm');
         expect(formatCosmeticTime(9, 18, 10)).toBe('9:00am');
+    });
+});
+
+// ============================================================
+// getCurrentTimeFloat
+// ============================================================
+
+describe('getCurrentTimeFloat', () => {
+    test('converts midnight to 0', () => {
+        expect(getCurrentTimeFloat(new Date(2025, 0, 1, 0, 0))).toBe(0);
+    });
+
+    test('converts whole hours', () => {
+        expect(getCurrentTimeFloat(new Date(2025, 0, 1, 9, 0))).toBe(9);
+        expect(getCurrentTimeFloat(new Date(2025, 0, 1, 14, 0))).toBe(14);
+    });
+
+    test('converts half hours', () => {
+        expect(getCurrentTimeFloat(new Date(2025, 0, 1, 10, 30))).toBe(10.5);
+    });
+
+    test('converts quarter hours', () => {
+        expect(getCurrentTimeFloat(new Date(2025, 0, 1, 10, 15))).toBe(10.25);
+        expect(getCurrentTimeFloat(new Date(2025, 0, 1, 14, 45))).toBe(14.75);
+    });
+
+    test('converts arbitrary minutes', () => {
+        // 10:07 → 10 + 7/60 ≈ 10.1167
+        const result = getCurrentTimeFloat(new Date(2025, 0, 1, 10, 7));
+        expect(result).toBeCloseTo(10.1167, 3);
+    });
+
+    test('defaults to current time when no argument', () => {
+        const result = getCurrentTimeFloat();
+        expect(typeof result).toBe('number');
+        expect(result).toBeGreaterThanOrEqual(0);
+        expect(result).toBeLessThan(24);
     });
 });
