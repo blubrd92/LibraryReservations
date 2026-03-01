@@ -30,10 +30,14 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 
 /* Controls */
 button { cursor: pointer; padding: 8px 14px; border: 1px solid #ccc; border-radius: 4px; background: var(--light); transition: 0.2s; font-weight: 600; }
-button:hover { background: #e2e6ea; }
-.btn-primary { background: var(--primary); color: white; border: none; }
+button:not(.btn-primary):not(.btn-success):not(.btn-danger):hover { background: #e2e6ea; }
+.btn-primary { background: var(--primary); color: white; border: none; transition: transform 0.15s, box-shadow 0.15s, filter 0.15s; }
+.btn-primary:hover { filter: brightness(1.2); transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.25); }
+.btn-primary.btn-stats { background: #7b1fa2; }
+.btn-primary.btn-today { background: #1565c0; }
 .btn-success { background: var(--success); color: white; border: none; }
-.btn-danger { background: white; color: var(--danger); border: 1px solid var(--danger); }
+.btn-danger { background: white; color: var(--danger); border: 1px solid var(--danger); transition: transform 0.15s, box-shadow 0.15s, filter 0.15s; }
+.btn-danger:hover { filter: brightness(0.95); transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
 .btn-nav { font-weight: bold; width: 40px; text-align: center; }
 select, input[type="date"], input[type="text"], input[type="number"], input[type="password"] { padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 1rem; }
 
@@ -113,6 +117,18 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
 
 .slot:not(.has-booking):not(.booked-body):not(.closed):not(.quarter-hour-slot):hover { background-color: #e3f2fd; }
 
+/* Quarter-hour mode: midline on open slots */
+.slot.quarter-hour-slot:not(.closed):not(.booked-body)::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(50% - 0.5px);
+    border-top: 1px dashed #ccc;
+    pointer-events: none;
+    z-index: 1;
+}
+
 /* Quarter-hour mode: highlight only top or bottom half (preserve row-alt banding) */
 .slot.quarter-hour-slot.quarter-hover-top:not(.closed) {
     background: linear-gradient(to bottom, #e3f2fd 50%, transparent 50%);
@@ -146,11 +162,38 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     font-size: 0.85em; white-space: nowrap; pointer-events: none; z-index: 20;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
+/* Suppress slot tooltips during drag-to-create and resize */
+body.is-dragging .slot::after {
+    display: none !important;
+}
 
 .slot.closed { background-color: #cccccc !important; border-color: #cccccc; cursor: not-allowed; opacity: 1; pointer-events: none; }
 
 /* Merged Cell Styles */
-.slot.booked-body { display: none; } 
+.slot.booked-body { display: none; }
+.print-booking-label { display: none; }
+
+/* Current Time Indicator (day view only) */
+.time-indicator-line {
+    position: absolute;
+    left: 85px;  /* skip the time column */
+    right: 0;
+    height: 2px;
+    background: #e53935;
+    z-index: 9;  /* below booking-float (10), above slots */
+    pointer-events: none;
+}
+.time-indicator-dot {
+    position: absolute;
+    left: 77px;  /* centered on the time column border */
+    width: 10px;
+    height: 10px;
+    background: #e53935;
+    border-radius: 50%;
+    transform: translateY(-4px); /* center the dot on the line */
+    z-index: 9;
+    pointer-events: none;
+}
 
 /* Floating booking elements (absolutely positioned) */
 .booking-float {
@@ -233,7 +276,6 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
 }
 
 .booking-popover .popover-staff {
-    color: #e67e22;
     font-weight: 500;
     margin-bottom: 6px;
 }
@@ -380,10 +422,7 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     background: rgba(255,255,255,0.3);
 }
 
-/* Slots under bookings - subtle indicator */
-.slot.has-booking {
-    /* Can leave empty or add subtle background */
-}
+/* Slots under bookings - no additional styles needed */
 
 .booking-hover-effect {
     opacity: 1 !important;
@@ -529,12 +568,44 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     border-color: var(--danger);
 }
 .slot.drag-over-valid { 
-    background-color: rgba(39, 174, 96, 0.3) !important; 
+    background: rgba(39, 174, 96, 0.3) !important; 
     box-shadow: inset 0 0 0 2px var(--success);
 }
+.slot.drag-over-valid.quarter-hover-top {
+    background: linear-gradient(to bottom, rgba(39, 174, 96, 0.3) 50%, transparent 50%) !important;
+    box-shadow: none;
+}
+.slot.drag-over-valid.quarter-hover-bottom {
+    background: linear-gradient(to bottom, transparent 50%, rgba(39, 174, 96, 0.3) 50%) !important;
+    box-shadow: none;
+}
+.slot.row-alt.drag-over-valid.quarter-hover-top {
+    background: linear-gradient(to bottom, rgba(39, 174, 96, 0.3) 50%, #f0f0f0 50%) !important;
+    box-shadow: none;
+}
+.slot.row-alt.drag-over-valid.quarter-hover-bottom {
+    background: linear-gradient(to bottom, #f0f0f0 50%, rgba(39, 174, 96, 0.3) 50%) !important;
+    box-shadow: none;
+}
 .slot.drag-over-invalid { 
-    background-color: rgba(192, 57, 43, 0.3) !important; 
+    background: rgba(192, 57, 43, 0.3) !important; 
     box-shadow: inset 0 0 0 2px var(--danger);
+}
+.slot.drag-over-invalid.quarter-hover-top {
+    background: linear-gradient(to bottom, rgba(192, 57, 43, 0.3) 50%, transparent 50%) !important;
+    box-shadow: none;
+}
+.slot.drag-over-invalid.quarter-hover-bottom {
+    background: linear-gradient(to bottom, transparent 50%, rgba(192, 57, 43, 0.3) 50%) !important;
+    box-shadow: none;
+}
+.slot.row-alt.drag-over-invalid.quarter-hover-top {
+    background: linear-gradient(to bottom, rgba(192, 57, 43, 0.3) 50%, #f0f0f0 50%) !important;
+    box-shadow: none;
+}
+.slot.row-alt.drag-over-invalid.quarter-hover-bottom {
+    background: linear-gradient(to bottom, #f0f0f0 50%, rgba(192, 57, 43, 0.3) 50%) !important;
+    box-shadow: none;
 }
 /* Keep tooltip visible during drag on empty slots */
 .slot:not(.has-booking).drag-over-valid::after,
@@ -571,17 +642,21 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     border-radius: 4px;
     pointer-events: none;
     z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
 }
-.selection-tooltip {
-    position: fixed;
+.overlay-label {
     background: #333;
     color: #fff;
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-radius: 4px;
-    font-size: 0.9em;
+    font-size: 0.85em;
+    font-weight: 600;
     white-space: nowrap;
-    z-index: 101;
     pointer-events: none;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 /* Resize Handle */
@@ -607,23 +682,13 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     border-radius: 4px;
     pointer-events: none;
     z-index: 100;
-}
-.resize-tooltip {
-    position: fixed;
-    background: #333;
-    color: #fff;
-    padding: 6px 10px;
-    border-radius: 4px;
-    font-size: 0.9em;
-    white-space: nowrap;
-    z-index: 101;
-    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
 }
 
-/* Closure Date Cell Styles */
-.slot.closed.closure-day {
-    /* Same as regular closed cells */
-}
+/* Closure Date Cell Styles - inherits from .slot.closed */
 
 /* Middle cell with closure reason text */
 .slot.closed.closure-day.has-reason {
@@ -729,11 +794,11 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 0.85em;
+    font-size: 0.82em;
 }
 .stats-table th, .stats-table td {
     border: 1px solid #ddd;
-    padding: 6px 8px;
+    padding: 4px 6px;
     text-align: center;
     min-width: 65px;
     cursor: default;
@@ -794,6 +859,9 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
 .stats-heat-8 { background: #1976d2; color: white; }
 
 /* Stats Chart Styles */
+.stats-box { background: white; padding: 0; width: 1260px; max-width: 97%; max-height: 90vh; overflow: hidden; border-radius: 8px; display: flex; flex-direction: column; }
+.stats-toolbar { padding: 15px 20px 10px 20px; flex-shrink: 0; border-bottom: 1px solid #e0e0e0; }
+.stats-body { padding: 15px 20px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .stats-view-toggle {
     display: inline-flex;
     border: 1px solid #ccc;
@@ -813,73 +881,327 @@ select, input[type="date"], input[type="text"], input[type="number"], input[type
     color: white;
 }
 .stats-chart-container {
-    padding: 30px 10px 20px 10px;
+    padding: 0;
+    background: transparent;
+}
+
+/* Dashboard Chart Panels */
+.dash-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.dash-row.dash-row-thirds {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+.dash-panel {
     background: #fafafa;
-    border-radius: 4px;
-    border: 1px solid #eee;
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    padding: 16px;
 }
-.stats-chart {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-around;
-    height: 300px;
-    padding: 0 10px;
+.dash-panel-title {
+    font-size: 0.9em;
+    font-weight: 700;
+    color: #444;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
-.stats-bar-col {
+
+/* Utilization Ring */
+.dash-ring-container {
     display: flex;
     flex-direction: column;
     align-items: center;
-    flex: 1;
-    max-width: 85px;
+    gap: 12px;
 }
-.stats-bar-track {
+.dash-ring {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.dash-ring-inner {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.dash-ring-pct {
+    font-size: 1.6em;
+    font-weight: 700;
+    color: #333;
+    line-height: 1.2;
+}
+.dash-ring-sub {
+    font-size: 0.7em;
+    color: #888;
+    margin-top: 2px;
+}
+.dash-ring-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    justify-content: center;
+}
+.dash-ring-legend-item {
+    font-size: 0.75em;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.dash-ring-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+/* Pie Chart */
+.dash-pie-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.dash-pie {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.dash-pie-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.dash-pie-legend-item {
+    font-size: 0.78em;
+    color: #555;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Vertical bar chart (monthly) */
+.dash-vbar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 180px;
+    padding-top: 10px;
+}
+.dash-vbar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+}
+.dash-vbar-wrap {
     width: 70%;
     background: #e3f2fd;
-    border-radius: 3px;
-    height: 220px;
+    border-radius: 3px 3px 0 0;
     position: relative;
-    border: 1px solid #bbdefb;
+    min-height: 2px;
+    transition: height 0.3s ease;
 }
-.stats-bar-fill {
+.dash-vbar-fill {
     width: 100%;
     background: linear-gradient(180deg, #1976d2, #42a5f5);
-    border-radius: 0 0 2px 2px;
+    border-radius: 3px 3px 0 0;
     position: absolute;
     bottom: 0;
     left: 0;
     transition: height 0.3s ease;
 }
-.stats-bar-track:hover .stats-bar-fill {
-    opacity: 0.85;
-}
-.stats-bar-label {
-    font-size: 1em;
-    margin-top: 8px;
+.dash-vbar-pct {
+    font-size: 0.7em;
     color: #555;
-    font-weight: bold;
+    margin-bottom: 2px;
+    font-weight: 600;
 }
-.stats-bar-detail {
+.dash-vbar-label {
+    font-size: 0.75em;
+    color: #666;
+    margin-top: 4px;
+    font-weight: 600;
+}
+.dash-vbar-hint {
+    text-align: center;
+    font-size: 0.78em;
+    color: #888;
+    font-style: italic;
+    font-weight: 500;
+    margin-top: 6px;
+}
+
+/* Horizontal bar chart (duration, day-of-week, hourly) */
+.dash-hbar-chart {
     display: flex;
     flex-direction: column;
+    gap: 6px;
+}
+.dash-hbar-row {
+    display: flex;
     align-items: center;
-    margin-top: 4px;
-    line-height: 1.3;
+    gap: 8px;
 }
-.stats-bar-booked {
-    font-size: 0.95em;
-    font-weight: bold;
-    color: #1976d2;
-}
-.stats-bar-outof {
+.dash-hbar-label {
+    width: 40px;
     font-size: 0.8em;
-    color: #999;
-}
-.stats-bar-avail {
-    font-size: 0.85em;
+    font-weight: 600;
     color: #555;
+    text-align: right;
+    flex-shrink: 0;
 }
-.stats-bar-util {
+.dash-hbar-track {
+    flex: 1;
+    height: 22px;
+    background: #e8f5e9;
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+.dash-hbar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2e7d32, #66bb6a);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+.dash-hbar-fill.hourly {
+    background: linear-gradient(90deg, #e65100, #ff9800);
+}
+.dash-hbar-fill.duration {
+    background: linear-gradient(90deg, #5c6bc0, #9fa8da);
+}
+.dash-hbar-fill.unused {
+    background: linear-gradient(90deg, #78909c, #b0bec5);
+}
+.dash-hbar-value {
+    font-size: 0.78em;
+    color: #555;
+    min-width: 50px;
+    flex-shrink: 0;
+}
+
+/* Weekly Heatmap */
+.dash-heatmap {
+    display: grid;
+    gap: 2px;
+    font-size: 0.72em;
+}
+.dash-hm-hdr {
+    text-align: center;
+    font-weight: 600;
+    color: #666;
+    padding: 2px 0;
     font-size: 0.9em;
+}
+.dash-hm-day {
+    font-weight: 600;
+    color: #555;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 4px;
+}
+.dash-hm-cell {
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    font-weight: 600;
+    color: transparent;
+    cursor: default;
+    transition: opacity 0.15s;
+}
+.dash-hm-cell:hover {
+    opacity: 0.8;
+    color: inherit;
+}
+.dash-hm-closed {
+    background: repeating-linear-gradient(45deg, #e0e0e0, #e0e0e0 3px, #eee 3px, #eee 6px) !important;
+}
+.dash-hm-lvl-0 { background: #f5f5f5; }
+.dash-hm-lvl-1 { background: #e3f2fd; color: #555; }
+.dash-hm-lvl-2 { background: #bbdefb; color: #444; }
+.dash-hm-lvl-3 { background: #90caf9; color: #333; }
+.dash-hm-lvl-4 { background: #64b5f6; color: #fff; }
+.dash-hm-lvl-5 { background: #42a5f5; color: #fff; }
+.dash-hm-lvl-6 { background: #2196f3; color: #fff; }
+.dash-hm-lvl-7 { background: #1e88e5; color: #fff; }
+.dash-hm-lvl-8 { background: #1565c0; color: #fff; }
+.dash-hm-scale {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    justify-content: flex-end;
+    margin-top: 8px;
+    font-size: 0.78em;
     color: #888;
-    margin-top: 2px;
+}
+
+@media (max-width: 800px) {
+    .dash-row, .dash-row.dash-row-thirds { grid-template-columns: 1fr; }
+    .dash-pie-container { flex-direction: column; align-items: center; }
+}
+
+/* Print Styles */
+@media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+    body { padding: 0; height: auto; overflow: visible; }
+
+    /* Hide non-essential UI */
+    #loginOverlay, #status-bar, #loading, #toast-container,
+    .modal, #rescheduleBanner, .info-sidebar,
+    .booking-popover, .drag-tooltip, .drag-slot-highlight,
+    .selection-overlay, .resize-overlay,
+    .time-indicator-line, .time-indicator-dot { display: none !important; }
+
+    /* Header: show title/range, hide controls */
+    header { margin-bottom: 10px; }
+    header .flex.gap select,
+    header .flex.gap .btn-nav,
+    header .flex.gap .date-picker-wrapper,
+    header .flex.gap .btn-primary,
+    header .flex.gap .btn-danger,
+    header .flex.gap > div[style*="width: 1px"] { display: none !important; }
+
+    /* Grid fills the page with content-sized rows */
+    .layout-wrapper { overflow: visible; height: auto; }
+    .grid-container { overflow: visible !important; height: auto !important; border: 2px solid #333; grid-auto-rows: auto; }
+
+    /* Sticky headers become static for print */
+    .header-cell { position: static; }
+    .time-cell { position: static; }
+
+    /* Hide floating overlays; show inline print labels instead */
+    .booking-float { display: none !important; }
+    .slot.has-booking.print-color-0 { background: var(--app-color-1) !important; }
+    .slot.has-booking.print-color-1 { background: var(--app-color-2) !important; }
+    .print-booking-label {
+        display: block;
+        font-size: 0.75em;
+        font-weight: 600;
+        color: #fff;
+        word-wrap: break-word;
+        overflow: hidden;
+        line-height: 1.2;
+    }
+
+    /* Page break handling */
+    .grid-container { page-break-inside: avoid; }
 }

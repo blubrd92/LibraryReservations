@@ -42,9 +42,10 @@
             <input type="date" id="datePicker" onchange="handleDatePick()">
         </div>
         <button class="btn-nav" onclick="navigateTime(1)">&#8594;</button>
-        
+        <button class="btn-primary btn-today" onclick="goToToday()">Today</button>
+
         <div style="width: 1px; height: 30px; background: #ccc; margin: 0 10px;"></div>
-        <button class="btn-primary" onclick="openStatsModal()" style="background: #7b1fa2;">📊 Stats</button>
+        <button class="btn-primary btn-stats" onclick="openStatsModal()">📊 Stats</button>
         <button id="btnAdminSettings" class="btn-primary" onclick="openAdminPanel()">⚙ Admin</button>
         <button class="btn-danger" onclick="doLogout()">Logout</button>
     </div>
@@ -472,6 +473,15 @@
                         <div class="closure-actions" style="margin-top: 10px;">
                             <button onclick="openApplyHoursModal()" style="font-size:0.85em;">Apply Hours to Other Resources...</button>
                         </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
+                            <label style="font-weight:bold; display:block; margin-bottom:4px;">Cosmetic Closing Time</label>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span>Show closing time as</span>
+                                <input type="number" id="editCosmeticCloseMinutes" min="0" max="15" step="1" value="0" style="width: 60px;">
+                                <span>minutes before actual close</span>
+                            </div>
+                            <small style="color:#666; display:block; margin-top:4px;">Set to 0 to disable (15 minutes max). This only changes the displayed closing time, booking durations and data are not affected.</small>
+                        </div>
                     </div>
                     <div style="border-top: 1px solid #eee; margin-top: 15px; padding-top: 15px;">
                         <label style="font-weight:bold; display:block; margin-bottom:10px;">Closure Dates (Holidays/Closures)</label>
@@ -506,60 +516,62 @@
 
 <!-- Stats Modal -->
 <div id="statsModal" class="modal">
-    <div class="modal-content" style="max-width: 1200px; width: 95%;">
-        <div class="modal-header">
+    <div class="stats-box">
+        <div class="settings-header">
             <span>📊 Usage Statistics</span>
         </div>
-        
-        <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
-            <div>
-                <label style="font-weight: bold;">Resource:</label>
-                <select id="statsResourceSelect" onchange="handleStatsResourceChange()"></select>
+        <div class="stats-toolbar">
+            <div style="display: flex; gap: 15px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;">
+                <div>
+                    <label style="font-weight: bold;">Resource:</label>
+                    <select id="statsResourceSelect" onchange="handleStatsResourceChange()"></select>
+                </div>
+                <div>
+                    <label style="font-weight: bold;">Year:</label>
+                    <select id="statsYearSelect" onchange="loadStatsData()"></select>
+                </div>
+                <button class="btn-success" onclick="exportStatsCSV()">📥 Export CSV</button>
             </div>
-            <div>
-                <label style="font-weight: bold;">Year:</label>
-                <select id="statsYearSelect" onchange="loadStatsData()"></select>
+            
+            <div id="statsSummary" style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid #e0e0e0;">
+                <div style="display: flex; flex-wrap: wrap; background: #f5f7fa; padding: 8px 15px; gap: 6px 16px; border-bottom: 1px solid #e0e0e0;">
+                    <div><strong>Total Hours:</strong> <span id="statsTotalHours">0</span></div>
+                    <div><strong>Bookings:</strong> <span id="statsBookingCount">0</span></div>
+                    <div><strong>Utilization (YTD):</strong> <span id="statsUtilization">0%</span></div>
+                    <div><strong>Avg Hours/Day (YTD):</strong> <span id="statsAvgHours">0</span></div>
+                    <div><strong>Avg Duration:</strong> <span id="statsAvgDuration">0</span></div>
+                    <div id="statsStaffSection" style="display:none;"><strong>Staff Assisted:</strong> <span id="statsStaffAssisted">-</span></div>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; background: #fafafa; padding: 8px 15px; gap: 6px 16px;">
+                    <div><strong>Busiest Month:</strong> <span id="statsBusiestMonth">-</span></div>
+                    <div><strong>Busiest Day:</strong> <span id="statsBusiestDay">-</span></div>
+                    <div><strong>Quietest Day:</strong> <span id="statsQuietestDay">-</span></div>
+                    <div><strong>Peak Hour:</strong> <span id="statsPeakHour">-</span></div>
+                </div>
             </div>
-            <button class="btn-success" onclick="exportStatsCSV()">📥 Export CSV</button>
-        </div>
-        
-        <div id="statsSummary" style="margin-bottom: 15px; border-radius: 6px; overflow: hidden; border: 1px solid #e0e0e0;">
-            <div style="display: flex; flex-wrap: wrap; background: #f5f7fa; padding: 10px 15px; gap: 8px 24px; border-bottom: 1px solid #e0e0e0;">
-                <div><strong>Total Hours:</strong> <span id="statsTotalHours">0</span></div>
-                <div><strong>Bookings:</strong> <span id="statsBookingCount">0</span></div>
-                <div><strong>Utilization (YTD):</strong> <span id="statsUtilization">0%</span></div>
-                <div><strong>Avg Hours/Day (YTD):</strong> <span id="statsAvgHours">0</span></div>
-                <div><strong>Avg Duration:</strong> <span id="statsAvgDuration">0</span></div>
-                <div id="statsStaffSection" style="display:none;"><strong>Staff Assisted:</strong> <span id="statsStaffAssisted">-</span></div>
-            </div>
-            <div style="display: flex; flex-wrap: wrap; background: #fafafa; padding: 10px 15px; gap: 8px 24px;">
-                <div><strong>Busiest Month:</strong> <span id="statsBusiestMonth">-</span></div>
-                <div><strong>Busiest Day:</strong> <span id="statsBusiestDay">-</span></div>
-                <div><strong>Quietest Day:</strong> <span id="statsQuietestDay">-</span></div>
-                <div><strong>Peak Hour:</strong> <span id="statsPeakHour">-</span></div>
-            </div>
-        </div>
 
-        <div style="margin-bottom: 10px;">
-            <div class="stats-view-toggle">
-                <button id="statsViewChart" onclick="toggleStatsView('chart')">📊 Chart</button>
-                <button id="statsViewGrid" class="active" onclick="toggleStatsView('grid')">📋 Grid</button>
+            <div>
+                <div class="stats-view-toggle">
+                    <button id="statsViewChart" onclick="toggleStatsView('chart')">📊 Dashboard</button>
+                    <button id="statsViewGrid" class="active" onclick="toggleStatsView('grid')">📋 Grid</button>
+                </div>
             </div>
         </div>
-
-        <div id="statsChartContainer" class="stats-chart-container" style="display: none;">
-            <div id="statsChart" class="stats-chart"></div>
+        <div class="stats-body">
+            <div id="statsChartContainer" class="stats-chart-container" style="display: none;">
+                <div id="statsChart"></div>
+            </div>
+            
+            <div id="statsGridContainer" style="overflow-x: auto; overflow-y: auto; flex: 1; min-height: 0;">
+                <table id="statsGrid" class="stats-table">
+                    <thead id="statsGridHead"></thead>
+                    <tbody id="statsGridBody"></tbody>
+                    <tfoot id="statsGridFoot"></tfoot>
+                </table>
+            </div>
         </div>
-        
-        <div id="statsGridContainer" style="overflow-x: auto; max-height: 60vh; overflow-y: auto;">
-            <table id="statsGrid" class="stats-table">
-                <thead id="statsGridHead"></thead>
-                <tbody id="statsGridBody"></tbody>
-                <tfoot id="statsGridFoot"></tfoot>
-            </table>
-        </div>
-        
-        <div style="margin-top: 15px; text-align: right;">
+        <div class="settings-footer">
+            <span></span>
             <button onclick="closeModal('statsModal')">Close</button>
         </div>
     </div>
@@ -625,13 +637,14 @@
         <p style="margin: 15px 0;">This booking is part of a recurring series. What would you like to do?</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
             <button class="btn-danger" onclick="confirmSeriesDelete('one')">Delete Just This One</button>
-            <button class="btn-danger" onclick="confirmSeriesDelete('all')" style="background: #b71c1c;">Delete Entire Series</button>
+            <button class="btn-danger" onclick="confirmSeriesDelete('all')" style="background: #b71c1c; color: white;">Delete Entire Series</button>
             <button onclick="closeModal('seriesDeleteModal')">Cancel</button>
         </div>
     </div>
 </div>
 <div id="toast-container"></div>
 
+<script src="utils.js"></script>
 <script src="app.js"></script>
 </body>
 
