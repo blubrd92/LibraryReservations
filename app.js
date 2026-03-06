@@ -4534,6 +4534,7 @@ const firebaseConfig = {
         const res = statsData.res;
 
         let html = '';
+        html += '<div style="font-size: 0.8em; color: #888; margin-bottom: 8px;">All charts reflect year-to-date data except Monthly Usage, which includes future bookings.</div>';
 
         // === ROW 1: Utilization Ring + Duration Distribution + Sub-Room Pie (conditional) ===
         const hasSubRooms = res.viewMode === 'day' && Array.isArray(res.subRooms) && getActiveSubRooms(res).length > 1;
@@ -4541,7 +4542,7 @@ const firebaseConfig = {
 
         // Utilization Ring
         html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">YTD Utilization</div>';
+        html += '<div class="dash-panel-title">Utilization</div>';
         const utilVal = s.utilization !== null ? s.utilization : 0;
         const ringColor = utilVal >= 75 ? '#c62828' : utilVal >= 50 ? '#e65100' : utilVal >= 25 ? '#1976d2' : '#2e7d32';
         html += '<div class="dash-ring-container">';
@@ -4681,59 +4682,8 @@ const firebaseConfig = {
 
         html += '</div>'; // end row 2
 
-        // === ROW 3: Utilization Trend + Weekly Rhythm ===
-        html += '<div class="dash-row">';
-
-        // Monthly Utilization Trend Line
-        const ms = statsData.monthlySummary || [];
-        html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Utilization Trend (YTD)</div>';
-        if (ms.length >= 2) {
-            const MONTHS_MAP = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
-            const points = ms.map(m => ({ label: m.month, util: m.utilization, idx: MONTHS_MAP[m.month] }));
-            // SVG line chart
-            const svgW = 500, svgH = 160, padL = 40, padR = 15, padT = 20, padB = 30;
-            const chartW = svgW - padL - padR;
-            const chartH = svgH - padT - padB;
-            const maxUtil = Math.max(100, ...points.map(p => p.util));
-            const xStep = chartW / points.length;
-
-            html += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" style="width:100%;height:auto;" xmlns="http://www.w3.org/2000/svg">';
-            // Grid lines
-            for (let g = 0; g <= 4; g++) {
-                const gy = padT + chartH - (chartH * (g * 25) / maxUtil);
-                const label = (g * 25) + '%';
-                html += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (svgW - padR) + '" y2="' + gy + '" stroke="#e0e0e0" stroke-width="1"/>';
-                html += '<text x="' + (padL - 5) + '" y="' + (gy + 4) + '" text-anchor="end" fill="#999" font-size="10">' + label + '</text>';
-            }
-            // Build path
-            let pathD = '';
-            const dotPositions = [];
-            points.forEach((p, i) => {
-                const x = padL + (i + 0.5) * xStep;
-                const y = padT + chartH - (chartH * p.util / maxUtil);
-                dotPositions.push({ x, y, label: p.label, util: p.util });
-                pathD += (i === 0 ? 'M' : 'L') + x + ',' + y;
-            });
-            // Area fill
-            const lastDot = dotPositions[dotPositions.length - 1];
-            const firstDot = dotPositions[0];
-            const areaD = pathD + ' L' + lastDot.x + ',' + (padT + chartH) + ' L' + firstDot.x + ',' + (padT + chartH) + ' Z';
-            html += '<path d="' + areaD + '" fill="rgba(25,118,210,0.1)"/>';
-            html += '<path d="' + pathD + '" fill="none" stroke="#1976d2" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
-            // Dots and labels
-            dotPositions.forEach(d => {
-                html += '<circle cx="' + d.x + '" cy="' + d.y + '" r="4" fill="#1976d2" stroke="#fff" stroke-width="1.5"/>';
-                html += '<text x="' + d.x + '" y="' + (d.y - 8) + '" text-anchor="middle" fill="#333" font-size="10" font-weight="600">' + d.util + '%</text>';
-                html += '<text x="' + d.x + '" y="' + (padT + chartH + 15) + '" text-anchor="middle" fill="#777" font-size="10">' + d.label + '</text>';
-            });
-            html += '</svg>';
-        } else if (ms.length === 1) {
-            html += '<div style="text-align:center;padding:20px;color:#555;">Only one month of data (' + ms[0].month + ': ' + ms[0].utilization + '% utilization). Trend will appear with more months.</div>';
-        } else {
-            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
-        }
-        html += '</div>';
+        // === ROW 3: Weekly Rhythm (full width) ===
+        html += '<div class="dash-row" style="grid-template-columns: 1fr;">';
 
         // Weekly Rhythm Heatmap
         html += '<div class="dash-panel">';
