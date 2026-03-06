@@ -4585,9 +4585,12 @@ const firebaseConfig = {
         if (toggle.checked && !priorYearStatsData) {
             toggle.disabled = true;
             showLoading(true);
-            await loadPriorYearData();
-            showLoading(false);
-            toggle.disabled = false;
+            try {
+                await loadPriorYearData();
+            } finally {
+                showLoading(false);
+                toggle.disabled = false;
+            }
         }
         renderStatsChart();
     }
