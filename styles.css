@@ -1092,7 +1092,7 @@ body.is-dragging .slot::after {
 .dash-hbar-value {
     font-size: 0.78em;
     color: #555;
-    min-width: 50px;
+    width: 75px;
     flex-shrink: 0;
 }
 
