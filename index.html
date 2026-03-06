@@ -531,14 +531,15 @@
                     <select id="statsYearSelect" onchange="loadStatsData()"></select>
                 </div>
                 <button class="btn-success" onclick="exportStatsCSV()">📥 Export CSV</button>
+                <button id="statsRecalcBtn" onclick="recalculateStats()" style="display:none;" title="Refresh cached data from bookings">🔄 Recalculate</button>
             </div>
             
             <div id="statsSummary" style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid #e0e0e0;">
                 <div style="display: flex; flex-wrap: wrap; background: #f5f7fa; padding: 8px 15px; gap: 6px 16px; border-bottom: 1px solid #e0e0e0;">
                     <div><strong>Total Hours:</strong> <span id="statsTotalHours">0</span></div>
                     <div><strong>Bookings:</strong> <span id="statsBookingCount">0</span></div>
-                    <div><strong>Utilization (YTD):</strong> <span id="statsUtilization">0%</span></div>
-                    <div><strong>Avg Hours/Day (YTD):</strong> <span id="statsAvgHours">0</span></div>
+                    <div><strong>Utilization:</strong> <span id="statsUtilization">0%</span></div>
+                    <div><strong>Avg Hours/Day:</strong> <span id="statsAvgHours">0</span></div>
                     <div><strong>Avg Duration:</strong> <span id="statsAvgDuration">0</span></div>
                     <div id="statsStaffSection" style="display:none;"><strong>Staff Assisted:</strong> <span id="statsStaffAssisted">-</span></div>
                 </div>
@@ -548,6 +549,7 @@
                     <div><strong>Quietest Day:</strong> <span id="statsQuietestDay">-</span></div>
                     <div><strong>Peak Hour:</strong> <span id="statsPeakHour">-</span></div>
                 </div>
+                <div style="padding: 4px 15px 6px; font-size: 0.8em; color: #555; background: #fafafa;">All metrics above reflect year-to-date. Future bookings are excluded as they may still change.</div>
             </div>
 
             <div>

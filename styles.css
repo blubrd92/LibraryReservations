@@ -1046,6 +1046,7 @@ body.is-dragging .slot::after {
     margin-top: 6px;
 }
 
+
 /* Horizontal bar chart (duration, day-of-week, hourly) */
 .dash-hbar-chart {
     display: flex;

@@ -209,19 +209,29 @@ const firebaseConfig = {
     // Data loading (Firestore real-time listeners), date navigation, UI controls,
     // and the main renderGrid() function that builds the entire scheduling grid.
     let loadVersion = 0; // Track which load request is current
-    
-    function loadBookingsForCurrentView() {
-        if (activeListenerUnsub) {
-            activeListenerUnsub();
-            activeListenerUnsub = null;
-        }
+    let activeQueryPrefix = null; // Track the current listener's query prefix
 
+    function loadBookingsForCurrentView() {
         const res = resources.find(r => r.id === currentResId);
         if (!res) return;
 
-        const activeWeekKey = getWeekKey(currentWeekStart); 
+        const activeWeekKey = getWeekKey(currentWeekStart);
         const queryPrefix = `${res.id}_${activeWeekKey}`;
-        
+
+        // If the listener is already watching this exact prefix, just re-render
+        if (activeListenerUnsub && queryPrefix === activeQueryPrefix) {
+            renderGrid();
+            return;
+        }
+
+        if (activeListenerUnsub) {
+            activeListenerUnsub();
+            activeListenerUnsub = null;
+            activeQueryPrefix = null;
+        }
+
+        activeQueryPrefix = queryPrefix;
+
         // Increment version for this load request
         loadVersion++;
         const thisVersion = loadVersion;
@@ -4329,117 +4339,168 @@ const firebaseConfig = {
         loadStatsData();
     }
     
-    async function loadStatsData() {
+    async function fetchBookingsForYear(resId, year) {
+        const startDate = new Date(year, 0, 1);
+        const endDate = new Date(year, 11, 31);
+
+        const weekKeys = new Set();
+        let d = new Date(startDate);
+        while (d <= endDate) {
+            const weekStart = getWeekStart(d);
+            weekKeys.add(getWeekKey(weekStart));
+            d.setDate(d.getDate() + 7);
+        }
+
+        const bookings = {};
+        const promises = [];
+
+        weekKeys.forEach(weekKey => {
+            const prefix = `${resId}_${weekKey}`;
+            const promise = db.collection('appointments')
+                .where('__name__', '>=', prefix)
+                .where('__name__', '<', prefix + '\uffff')
+                .get()
+                .then(snapshot => {
+                    snapshot.forEach(doc => {
+                        bookings[doc.id] = doc.data();
+                    });
+                });
+            promises.push(promise);
+        });
+
+        await Promise.all(promises);
+        return bookings;
+    }
+
+    function buildDailyStats(resId, year, res, bookings) {
+        const dailyStats = {};
+
+        for (let month = 0; month < 12; month++) {
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dateStr = formatDateISO(date);
+                const dayOfWeek = date.getDay();
+
+                const dayStart = res.hours[dayOfWeek * 2];
+                const dayEnd = res.hours[dayOfWeek * 2 + 1];
+                const closureReason = getClosureReason(res, date);
+
+                dailyStats[dateStr] = {
+                    hours: 0,
+                    bookingCount: 0,
+                    closed: (dayStart === dayEnd) || closureReason !== null,
+                    reason: closureReason || (dayStart === dayEnd ? 'Closed' : ''),
+                    dayOfWeek: dayOfWeek
+                };
+            }
+        }
+
+        const prefix = resId + '_';
+        Object.keys(bookings).forEach(key => {
+            const booking = bookings[key];
+            const suffix = key.substring(prefix.length);
+            const parts = suffix.split('_');
+            const weekKey = parts[0];
+            const dayIndex = parseInt(parts[1]);
+
+            const [wy, wm, wd] = weekKey.split('-').map(Number);
+            const weekStart = new Date(wy, wm - 1, wd);
+            const bookingDate = new Date(weekStart);
+            bookingDate.setDate(bookingDate.getDate() + dayIndex);
+
+            if (bookingDate.getFullYear() === year) {
+                const dateStr = formatDateISO(bookingDate);
+                if (dailyStats[dateStr]) {
+                    dailyStats[dateStr].hours += booking.duration || 0;
+                    dailyStats[dateStr].bookingCount++;
+                }
+            }
+        });
+
+        return dailyStats;
+    }
+
+    function getStatsCacheDocId(resId, year) {
+        return `stats_cache_${resId}_${year}`;
+    }
+
+    // Strip bookings down to only the fields needed for stats (duration, hasStaff)
+    // to keep the cache document small
+    function slimBookingsForCache(bookings) {
+        const slim = {};
+        Object.keys(bookings).forEach(key => {
+            const b = bookings[key];
+            slim[key] = { duration: b.duration || 0 };
+            if (b.hasStaff) slim[key].hasStaff = true;
+        });
+        return slim;
+    }
+
+    async function loadStatsData(forceRefresh) {
         const resId = document.getElementById('statsResourceSelect').value;
         const year = parseInt(document.getElementById('statsYearSelect').value);
         const res = resources.find(r => r.id === resId);
-        
+
         if (!res) return;
-        
+
         showLoading(true);
-        
+        const currentYear = new Date().getFullYear();
+        const isPastYear = year < currentYear;
+
+        // Show recalculate button only for past years (cached data)
+        const recalcBtn = document.getElementById('statsRecalcBtn');
+        if (recalcBtn) recalcBtn.style.display = isPastYear ? '' : 'none';
+
         try {
-            // Query all bookings for this resource in the selected year
-            const startDate = new Date(year, 0, 1);
-            const endDate = new Date(year, 11, 31);
-            
-            // Build week keys for the entire year
-            const weekKeys = new Set();
-            let d = new Date(startDate);
-            while (d <= endDate) {
-                const weekStart = getWeekStart(d);
-                weekKeys.add(getWeekKey(weekStart));
-                d.setDate(d.getDate() + 7);
-            }
-            
-            // Load bookings for all weeks
-            const bookings = {};
-            const promises = [];
-            
-            weekKeys.forEach(weekKey => {
-                const prefix = `${resId}_${weekKey}`;
-                const promise = db.collection('appointments')
-                    .where('__name__', '>=', prefix)
-                    .where('__name__', '<', prefix + '\uffff')
-                    .get()
-                    .then(snapshot => {
-                        snapshot.forEach(doc => {
-                            bookings[doc.id] = doc.data();
-                        });
-                    });
-                promises.push(promise);
-            });
-            
-            await Promise.all(promises);
-            
-            // If we found bookings for this year, ensure stats_meta is updated (self-healing)
-            if (Object.keys(bookings).length > 0) {
-                updateStatsYearMeta(resId, Object.keys(bookings)[0]);
-            }
-            
-            // Process bookings into daily totals
-            const dailyStats = {}; // { 'YYYY-MM-DD': { hours: X, closed: bool, reason: '' } }
-            const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            
-            // Initialize all days of the year
-            for (let month = 0; month < 12; month++) {
-                const daysInMonth = new Date(year, month + 1, 0).getDate();
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const date = new Date(year, month, day);
-                    const dateStr = formatDateISO(date);
-                    const dayOfWeek = date.getDay();
-                    
-                    // Check if closed (operating hours or closure date)
-                    const dayStart = res.hours[dayOfWeek * 2];
-                    const dayEnd = res.hours[dayOfWeek * 2 + 1];
-                    const closureReason = getClosureReason(res, date);
-                    
-                    dailyStats[dateStr] = {
-                        hours: 0,
-                        bookingCount: 0,
-                        closed: (dayStart === dayEnd) || closureReason !== null,
-                        reason: closureReason || (dayStart === dayEnd ? 'Closed' : ''),
-                        dayOfWeek: dayOfWeek
-                    };
+            let bookings;
+
+            // For past years, try loading from cache first (1 read instead of ~53)
+            if (isPastYear && !forceRefresh) {
+                const cacheDocId = getStatsCacheDocId(resId, year);
+                const cacheDoc = await db.collection('system').doc(cacheDocId).get();
+                if (cacheDoc.exists) {
+                    bookings = cacheDoc.data().bookings || {};
                 }
             }
-            
-            // Tally hours from bookings
-            Object.keys(bookings).forEach(key => {
-                const booking = bookings[key];
-                // Remove resource ID prefix first
-                const prefix = resId + '_';
-                const suffix = key.substring(prefix.length);
-                const parts = suffix.split('_');
-                // Key format after prefix removal: weekKey_dayIndex_startTime[_subIndex]
-                const weekKey = parts[0];
-                const dayIndex = parseInt(parts[1]);
-                
-                // Calculate actual date from week key and day index
-                const [wy, wm, wd] = weekKey.split('-').map(Number);
-                const weekStart = new Date(wy, wm - 1, wd);
-                const bookingDate = new Date(weekStart);
-                bookingDate.setDate(bookingDate.getDate() + dayIndex);
-                
-                // Only count if in the selected year
-                if (bookingDate.getFullYear() === year) {
-                    const dateStr = formatDateISO(bookingDate);
-                    if (dailyStats[dateStr]) {
-                        dailyStats[dateStr].hours += booking.duration || 0;
-                        dailyStats[dateStr].bookingCount++;
-                    }
+
+            // If no cache hit, fetch from individual appointment documents
+            if (!bookings) {
+                bookings = await fetchBookingsForYear(resId, year);
+
+                // If we found bookings for this year, ensure stats_meta is updated
+                if (Object.keys(bookings).length > 0) {
+                    updateStatsYearMeta(resId, Object.keys(bookings)[0]);
                 }
-            });
-            
+
+                // Cache past year data for future reads
+                if (isPastYear) {
+                    const cacheDocId = getStatsCacheDocId(resId, year);
+                    const slim = slimBookingsForCache(bookings);
+                    db.collection('system').doc(cacheDocId).set({
+                        bookings: slim,
+                        resourceId: resId,
+                        year: year,
+                        cachedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }).catch(err => console.error('Failed to cache stats:', err));
+                }
+            }
+
+            const dailyStats = buildDailyStats(resId, year, res, bookings);
             renderStatsGrid(dailyStats, year, res, bookings);
-            
+
         } catch (err) {
             showToast('Error loading stats: ' + err.message, 'error');
         }
-        
+
         showLoading(false);
     }
-    
+
+    function recalculateStats() {
+        loadStatsData(true);
+    }
+
+
     function toggleStatsView(view) {
         const chartBtn = document.getElementById('statsViewChart');
         const gridBtn = document.getElementById('statsViewGrid');
@@ -4469,11 +4530,12 @@ const firebaseConfig = {
         }
 
         const s = statsData.summary;
-        const mTotals = statsData.monthlyTotals || [];
-        const mAvail = statsData.monthlyAvailable || [];
+        const mTotals = statsData.monthlyTotalsYtd || [];
+        const mAvail = statsData.monthlyAvailableYtd || [];
         const res = statsData.res;
 
         let html = '';
+        html += '<div style="font-size: 0.8em; color: #555; margin-bottom: 8px;">All charts reflect year-to-date. Future bookings are excluded as they may still change.</div>';
 
         // === ROW 1: Utilization Ring + Duration Distribution + Sub-Room Pie (conditional) ===
         const hasSubRooms = res.viewMode === 'day' && Array.isArray(res.subRooms) && getActiveSubRooms(res).length > 1;
@@ -4481,7 +4543,7 @@ const firebaseConfig = {
 
         // Utilization Ring
         html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">YTD Utilization</div>';
+        html += '<div class="dash-panel-title">Utilization</div>';
         const utilVal = s.utilization !== null ? s.utilization : 0;
         const ringColor = utilVal >= 75 ? '#c62828' : utilVal >= 50 ? '#e65100' : utilVal >= 25 ? '#1976d2' : '#2e7d32';
         html += '<div class="dash-ring-container">';
@@ -4607,6 +4669,7 @@ const firebaseConfig = {
             const pct = avail > 0 ? Math.round((booked / avail) * 100) : 0;
             const fillPct = avail > 0 ? Math.min(100, (booked / avail) * 100) : 0;
             const title = MONTHS[i] + ': ' + parseFloat(booked.toFixed(1)) + 'h / ' + parseFloat(avail.toFixed(1)) + 'h (' + pct + '%)';
+
             html += '<div class="dash-vbar-col">';
             html += '  <div class="dash-vbar-pct">' + (avail > 0 ? pct + '%' : '') + '</div>';
             html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
@@ -4621,59 +4684,8 @@ const firebaseConfig = {
 
         html += '</div>'; // end row 2
 
-        // === ROW 3: Utilization Trend + Weekly Rhythm ===
-        html += '<div class="dash-row">';
-
-        // Monthly Utilization Trend Line
-        const ms = statsData.monthlySummary || [];
-        html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Utilization Trend (YTD)</div>';
-        if (ms.length >= 2) {
-            const MONTHS_MAP = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
-            const points = ms.map(m => ({ label: m.month, util: m.utilization, idx: MONTHS_MAP[m.month] }));
-            // SVG line chart
-            const svgW = 500, svgH = 160, padL = 40, padR = 15, padT = 20, padB = 30;
-            const chartW = svgW - padL - padR;
-            const chartH = svgH - padT - padB;
-            const maxUtil = Math.max(100, ...points.map(p => p.util));
-            const xStep = chartW / points.length;
-
-            html += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" style="width:100%;height:auto;" xmlns="http://www.w3.org/2000/svg">';
-            // Grid lines
-            for (let g = 0; g <= 4; g++) {
-                const gy = padT + chartH - (chartH * (g * 25) / maxUtil);
-                const label = (g * 25) + '%';
-                html += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (svgW - padR) + '" y2="' + gy + '" stroke="#e0e0e0" stroke-width="1"/>';
-                html += '<text x="' + (padL - 5) + '" y="' + (gy + 4) + '" text-anchor="end" fill="#999" font-size="10">' + label + '</text>';
-            }
-            // Build path
-            let pathD = '';
-            const dotPositions = [];
-            points.forEach((p, i) => {
-                const x = padL + (i + 0.5) * xStep;
-                const y = padT + chartH - (chartH * p.util / maxUtil);
-                dotPositions.push({ x, y, label: p.label, util: p.util });
-                pathD += (i === 0 ? 'M' : 'L') + x + ',' + y;
-            });
-            // Area fill
-            const lastDot = dotPositions[dotPositions.length - 1];
-            const firstDot = dotPositions[0];
-            const areaD = pathD + ' L' + lastDot.x + ',' + (padT + chartH) + ' L' + firstDot.x + ',' + (padT + chartH) + ' Z';
-            html += '<path d="' + areaD + '" fill="rgba(25,118,210,0.1)"/>';
-            html += '<path d="' + pathD + '" fill="none" stroke="#1976d2" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
-            // Dots and labels
-            dotPositions.forEach(d => {
-                html += '<circle cx="' + d.x + '" cy="' + d.y + '" r="4" fill="#1976d2" stroke="#fff" stroke-width="1.5"/>';
-                html += '<text x="' + d.x + '" y="' + (d.y - 8) + '" text-anchor="middle" fill="#333" font-size="10" font-weight="600">' + d.util + '%</text>';
-                html += '<text x="' + d.x + '" y="' + (padT + chartH + 15) + '" text-anchor="middle" fill="#777" font-size="10">' + d.label + '</text>';
-            });
-            html += '</svg>';
-        } else if (ms.length === 1) {
-            html += '<div style="text-align:center;padding:20px;color:#555;">Only one month of data (' + ms[0].month + ': ' + ms[0].utilization + '% utilization). Trend will appear with more months.</div>';
-        } else {
-            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
-        }
-        html += '</div>';
+        // === ROW 3: Weekly Rhythm (full width) ===
+        html += '<div class="dash-row" style="grid-template-columns: 1fr;">';
 
         // Weekly Rhythm Heatmap
         html += '<div class="dash-panel">';
@@ -4928,7 +4940,7 @@ const firebaseConfig = {
         tfoot.innerHTML = footHtml;
 
         // Update summary
-        document.getElementById('statsTotalHours').innerText = parseFloat(grandTotal.toFixed(2)) + ' hours';
+        document.getElementById('statsTotalHours').innerText = parseFloat(ytdTotal.toFixed(2)) + ' hours';
         
         // Booking count
         document.getElementById('statsBookingCount').innerText = totalBookingCount;
@@ -5028,7 +5040,7 @@ const firebaseConfig = {
         });
         
         statsData = {
-            dailyStats, year, res, monthlyTotals, monthlyAvailable, grandTotal, totalAvailable, ytdAvailable, ytdTotal,
+            dailyStats, year, res, monthlyTotals, monthlyAvailable, monthlyTotalsYtd, monthlyAvailableYtd, grandTotal, totalAvailable, ytdAvailable, ytdTotal,
             summary: {
                 totalHours: parseFloat(grandTotal.toFixed(2)),
                 totalBookings: totalBookingCount,
