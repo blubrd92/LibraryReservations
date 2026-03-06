@@ -4339,115 +4339,165 @@ const firebaseConfig = {
         loadStatsData();
     }
     
-    async function loadStatsData() {
+    async function fetchBookingsForYear(resId, year) {
+        const startDate = new Date(year, 0, 1);
+        const endDate = new Date(year, 11, 31);
+
+        const weekKeys = new Set();
+        let d = new Date(startDate);
+        while (d <= endDate) {
+            const weekStart = getWeekStart(d);
+            weekKeys.add(getWeekKey(weekStart));
+            d.setDate(d.getDate() + 7);
+        }
+
+        const bookings = {};
+        const promises = [];
+
+        weekKeys.forEach(weekKey => {
+            const prefix = `${resId}_${weekKey}`;
+            const promise = db.collection('appointments')
+                .where('__name__', '>=', prefix)
+                .where('__name__', '<', prefix + '\uffff')
+                .get()
+                .then(snapshot => {
+                    snapshot.forEach(doc => {
+                        bookings[doc.id] = doc.data();
+                    });
+                });
+            promises.push(promise);
+        });
+
+        await Promise.all(promises);
+        return bookings;
+    }
+
+    function buildDailyStats(resId, year, res, bookings) {
+        const dailyStats = {};
+
+        for (let month = 0; month < 12; month++) {
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dateStr = formatDateISO(date);
+                const dayOfWeek = date.getDay();
+
+                const dayStart = res.hours[dayOfWeek * 2];
+                const dayEnd = res.hours[dayOfWeek * 2 + 1];
+                const closureReason = getClosureReason(res, date);
+
+                dailyStats[dateStr] = {
+                    hours: 0,
+                    bookingCount: 0,
+                    closed: (dayStart === dayEnd) || closureReason !== null,
+                    reason: closureReason || (dayStart === dayEnd ? 'Closed' : ''),
+                    dayOfWeek: dayOfWeek
+                };
+            }
+        }
+
+        const prefix = resId + '_';
+        Object.keys(bookings).forEach(key => {
+            const booking = bookings[key];
+            const suffix = key.substring(prefix.length);
+            const parts = suffix.split('_');
+            const weekKey = parts[0];
+            const dayIndex = parseInt(parts[1]);
+
+            const [wy, wm, wd] = weekKey.split('-').map(Number);
+            const weekStart = new Date(wy, wm - 1, wd);
+            const bookingDate = new Date(weekStart);
+            bookingDate.setDate(bookingDate.getDate() + dayIndex);
+
+            if (bookingDate.getFullYear() === year) {
+                const dateStr = formatDateISO(bookingDate);
+                if (dailyStats[dateStr]) {
+                    dailyStats[dateStr].hours += booking.duration || 0;
+                    dailyStats[dateStr].bookingCount++;
+                }
+            }
+        });
+
+        return dailyStats;
+    }
+
+    function getStatsCacheDocId(resId, year) {
+        return `stats_cache_${resId}_${year}`;
+    }
+
+    // Strip bookings down to only the fields needed for stats (duration, hasStaff)
+    // to keep the cache document small
+    function slimBookingsForCache(bookings) {
+        const slim = {};
+        Object.keys(bookings).forEach(key => {
+            const b = bookings[key];
+            slim[key] = { duration: b.duration || 0 };
+            if (b.hasStaff) slim[key].hasStaff = true;
+        });
+        return slim;
+    }
+
+    async function loadStatsData(forceRefresh) {
         const resId = document.getElementById('statsResourceSelect').value;
         const year = parseInt(document.getElementById('statsYearSelect').value);
         const res = resources.find(r => r.id === resId);
-        
+
         if (!res) return;
-        
+
         showLoading(true);
-        
+        const currentYear = new Date().getFullYear();
+        const isPastYear = year < currentYear;
+
+        // Show recalculate button only for past years (cached data)
+        const recalcBtn = document.getElementById('statsRecalcBtn');
+        if (recalcBtn) recalcBtn.style.display = isPastYear ? '' : 'none';
+
         try {
-            // Query all bookings for this resource in the selected year
-            const startDate = new Date(year, 0, 1);
-            const endDate = new Date(year, 11, 31);
-            
-            // Build week keys for the entire year
-            const weekKeys = new Set();
-            let d = new Date(startDate);
-            while (d <= endDate) {
-                const weekStart = getWeekStart(d);
-                weekKeys.add(getWeekKey(weekStart));
-                d.setDate(d.getDate() + 7);
-            }
-            
-            // Load bookings for all weeks
-            const bookings = {};
-            const promises = [];
-            
-            weekKeys.forEach(weekKey => {
-                const prefix = `${resId}_${weekKey}`;
-                const promise = db.collection('appointments')
-                    .where('__name__', '>=', prefix)
-                    .where('__name__', '<', prefix + '\uffff')
-                    .get()
-                    .then(snapshot => {
-                        snapshot.forEach(doc => {
-                            bookings[doc.id] = doc.data();
-                        });
-                    });
-                promises.push(promise);
-            });
-            
-            await Promise.all(promises);
-            
-            // If we found bookings for this year, ensure stats_meta is updated (self-healing)
-            if (Object.keys(bookings).length > 0) {
-                updateStatsYearMeta(resId, Object.keys(bookings)[0]);
-            }
-            
-            // Process bookings into daily totals
-            const dailyStats = {}; // { 'YYYY-MM-DD': { hours: X, closed: bool, reason: '' } }
-            const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            
-            // Initialize all days of the year
-            for (let month = 0; month < 12; month++) {
-                const daysInMonth = new Date(year, month + 1, 0).getDate();
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const date = new Date(year, month, day);
-                    const dateStr = formatDateISO(date);
-                    const dayOfWeek = date.getDay();
-                    
-                    // Check if closed (operating hours or closure date)
-                    const dayStart = res.hours[dayOfWeek * 2];
-                    const dayEnd = res.hours[dayOfWeek * 2 + 1];
-                    const closureReason = getClosureReason(res, date);
-                    
-                    dailyStats[dateStr] = {
-                        hours: 0,
-                        bookingCount: 0,
-                        closed: (dayStart === dayEnd) || closureReason !== null,
-                        reason: closureReason || (dayStart === dayEnd ? 'Closed' : ''),
-                        dayOfWeek: dayOfWeek
-                    };
+            let bookings;
+
+            // For past years, try loading from cache first (1 read instead of ~53)
+            if (isPastYear && !forceRefresh) {
+                const cacheDocId = getStatsCacheDocId(resId, year);
+                const cacheDoc = await db.collection('system').doc(cacheDocId).get();
+                if (cacheDoc.exists) {
+                    bookings = cacheDoc.data().bookings || {};
                 }
             }
-            
-            // Tally hours from bookings
-            Object.keys(bookings).forEach(key => {
-                const booking = bookings[key];
-                // Remove resource ID prefix first
-                const prefix = resId + '_';
-                const suffix = key.substring(prefix.length);
-                const parts = suffix.split('_');
-                // Key format after prefix removal: weekKey_dayIndex_startTime[_subIndex]
-                const weekKey = parts[0];
-                const dayIndex = parseInt(parts[1]);
-                
-                // Calculate actual date from week key and day index
-                const [wy, wm, wd] = weekKey.split('-').map(Number);
-                const weekStart = new Date(wy, wm - 1, wd);
-                const bookingDate = new Date(weekStart);
-                bookingDate.setDate(bookingDate.getDate() + dayIndex);
-                
-                // Only count if in the selected year
-                if (bookingDate.getFullYear() === year) {
-                    const dateStr = formatDateISO(bookingDate);
-                    if (dailyStats[dateStr]) {
-                        dailyStats[dateStr].hours += booking.duration || 0;
-                        dailyStats[dateStr].bookingCount++;
-                    }
+
+            // If no cache hit, fetch from individual appointment documents
+            if (!bookings) {
+                bookings = await fetchBookingsForYear(resId, year);
+
+                // If we found bookings for this year, ensure stats_meta is updated
+                if (Object.keys(bookings).length > 0) {
+                    updateStatsYearMeta(resId, Object.keys(bookings)[0]);
                 }
-            });
-            
+
+                // Cache past year data for future reads
+                if (isPastYear) {
+                    const cacheDocId = getStatsCacheDocId(resId, year);
+                    const slim = slimBookingsForCache(bookings);
+                    db.collection('system').doc(cacheDocId).set({
+                        bookings: slim,
+                        resourceId: resId,
+                        year: year,
+                        cachedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }).catch(err => console.error('Failed to cache stats:', err));
+                }
+            }
+
+            const dailyStats = buildDailyStats(resId, year, res, bookings);
             renderStatsGrid(dailyStats, year, res, bookings);
-            
+
         } catch (err) {
             showToast('Error loading stats: ' + err.message, 'error');
         }
-        
+
         showLoading(false);
+    }
+
+    function recalculateStats() {
+        loadStatsData(true);
     }
     
     function toggleStatsView(view) {

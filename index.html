@@ -531,6 +531,7 @@
                     <select id="statsYearSelect" onchange="loadStatsData()"></select>
                 </div>
                 <button class="btn-success" onclick="exportStatsCSV()">📥 Export CSV</button>
+                <button id="statsRecalcBtn" onclick="recalculateStats()" style="display:none;" title="Refresh cached data from bookings">🔄 Recalculate</button>
             </div>
             
             <div id="statsSummary" style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid #e0e0e0;">
