@@ -4226,8 +4226,6 @@ const firebaseConfig = {
     // Statistics modal: heatmap calendar, dashboard charts (utilization, peak hours,
     // duration distribution, day-of-week analysis), summary metrics, and CSV export.
     let statsData = {}; // Cache for loaded stats
-    let priorYearStatsData = null; // Cached prior-year comparison data
-    let priorYearLoading = false;
     // NOTE: getWeekStart is now defined in utils.js
 
     // Update stats metadata when a booking is saved
@@ -4337,7 +4335,6 @@ const firebaseConfig = {
     }
     
     async function handleStatsResourceChange() {
-        priorYearStatsData = null;
         await populateYearDropdown();
         loadStatsData();
     }
@@ -4447,7 +4444,6 @@ const firebaseConfig = {
 
         if (!res) return;
 
-        priorYearStatsData = null;
         showLoading(true);
         const currentYear = new Date().getFullYear();
         const isPastYear = year < currentYear;
@@ -4502,97 +4498,6 @@ const firebaseConfig = {
 
     function recalculateStats() {
         loadStatsData(true);
-    }
-
-    async function loadPriorYearData() {
-        if (priorYearLoading) return;
-        const resId = document.getElementById('statsResourceSelect').value;
-        const year = parseInt(document.getElementById('statsYearSelect').value);
-        const priorYear = year - 1;
-        const res = resources.find(r => r.id === resId);
-        if (!res) return;
-
-        priorYearLoading = true;
-        try {
-            let bookings;
-            const currentYear = new Date().getFullYear();
-            const isPastYear = priorYear < currentYear;
-
-            // Try cache first for past years (1 read)
-            if (isPastYear) {
-                const cacheDocId = getStatsCacheDocId(resId, priorYear);
-                const cacheDoc = await db.collection('system').doc(cacheDocId).get();
-                if (cacheDoc.exists) {
-                    bookings = cacheDoc.data().bookings || {};
-                }
-            }
-
-            if (!bookings) {
-                bookings = await fetchBookingsForYear(resId, priorYear);
-                // Cache if past year
-                if (isPastYear && Object.keys(bookings).length > 0) {
-                    const cacheDocId = getStatsCacheDocId(resId, priorYear);
-                    const slim = slimBookingsForCache(bookings);
-                    db.collection('system').doc(cacheDocId).set({
-                        bookings: slim,
-                        resourceId: resId,
-                        year: priorYear,
-                        cachedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    }).catch(err => console.error('Failed to cache prior year stats:', err));
-                }
-            }
-
-            // Build monthly stats for the prior year
-            const dailyStats = buildDailyStats(resId, priorYear, res, bookings);
-            const activeSubRooms = getActiveSubRooms(res);
-            const roomMultiplier = activeSubRooms.length > 0 ? activeSubRooms.length : 1;
-            const today = new Date();
-
-            const monthlyTotalsYtd = new Array(12).fill(0);
-            const monthlyAvailableYtd = new Array(12).fill(0);
-
-            Object.keys(dailyStats).forEach(dateStr => {
-                const stat = dailyStats[dateStr];
-                const date = new Date(dateStr + 'T00:00:00');
-                const month = date.getMonth();
-                // For prior year, all days are "past" so include all
-                const dayOfWeek = date.getDay();
-                const dayStart = res.hours[dayOfWeek * 2];
-                const dayEnd = res.hours[dayOfWeek * 2 + 1];
-                if (!stat.closed && dayStart !== dayEnd) {
-                    const dayAvailable = (dayEnd - dayStart) * roomMultiplier;
-                    monthlyAvailableYtd[month] += dayAvailable;
-                }
-                monthlyTotalsYtd[month] += stat.hours;
-            });
-
-            priorYearStatsData = {
-                year: priorYear,
-                monthlyTotalsYtd,
-                monthlyAvailableYtd
-            };
-        } catch (err) {
-            console.error('Error loading prior year data:', err);
-            priorYearStatsData = null;
-        }
-        priorYearLoading = false;
-    }
-
-    async function toggleYoyComparison() {
-        const toggle = document.getElementById('statsYoyToggle');
-        if (!toggle) return;
-
-        if (toggle.checked && !priorYearStatsData) {
-            toggle.disabled = true;
-            showLoading(true);
-            try {
-                await loadPriorYearData();
-            } finally {
-                showLoading(false);
-                toggle.disabled = false;
-            }
-        }
-        renderStatsChart();
     }
 
 
@@ -4755,55 +4660,26 @@ const firebaseConfig = {
         html += '</div>';
 
         // Monthly utilization bar chart
-        const selectedYear = parseInt(document.getElementById('statsYearSelect').value);
-        const priorYear = selectedYear - 1;
-        const yoyToggle = document.getElementById('statsYoyToggle');
-        const showYoy = yoyToggle && yoyToggle.checked && priorYearStatsData && priorYearStatsData.year === priorYear;
-
         html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">';
-        html += 'Monthly Usage';
-        html += '<label class="dash-yoy-toggle"><input type="checkbox" id="statsYoyToggle" onchange="toggleYoyComparison()"' + (showYoy ? ' checked' : '') + '> Compare to ' + priorYear + '</label>';
-        html += '</div>';
+        html += '<div class="dash-panel-title">Monthly Usage</div>';
         html += '<div class="dash-vbar-chart">';
         for (let i = 0; i < 12; i++) {
             const booked = mTotals[i] || 0;
             const avail = mAvail[i] || 0;
             const pct = avail > 0 ? Math.round((booked / avail) * 100) : 0;
             const fillPct = avail > 0 ? Math.min(100, (booked / avail) * 100) : 0;
-            let title = MONTHS[i] + ': ' + parseFloat(booked.toFixed(1)) + 'h / ' + parseFloat(avail.toFixed(1)) + 'h (' + pct + '%)';
-
-            let priorPct = 0;
-            let priorFillPct = 0;
-            if (showYoy) {
-                const priorBooked = priorYearStatsData.monthlyTotalsYtd[i] || 0;
-                const priorAvail = priorYearStatsData.monthlyAvailableYtd[i] || 0;
-                priorPct = priorAvail > 0 ? Math.round((priorBooked / priorAvail) * 100) : 0;
-                priorFillPct = priorAvail > 0 ? Math.min(100, (priorBooked / priorAvail) * 100) : 0;
-                title += ' | ' + priorYear + ': ' + parseFloat(priorBooked.toFixed(1)) + 'h / ' + parseFloat(priorAvail.toFixed(1)) + 'h (' + priorPct + '%)';
-            }
+            const title = MONTHS[i] + ': ' + parseFloat(booked.toFixed(1)) + 'h / ' + parseFloat(avail.toFixed(1)) + 'h (' + pct + '%)';
 
             html += '<div class="dash-vbar-col">';
             html += '  <div class="dash-vbar-pct">' + (avail > 0 ? pct + '%' : '') + '</div>';
-            if (showYoy) {
-                html += '  <div class="dash-vbar-grouped" style="height:' + Math.max(fillPct, priorFillPct, 2) + '%;" title="' + title + '">';
-                html += '    <div class="dash-vbar-fill dash-vbar-current" style="height:' + (Math.max(fillPct, priorFillPct, 2) > 0 ? ((fillPct / Math.max(fillPct, priorFillPct, 2)) * 100) : 0) + '%;"></div>';
-                html += '    <div class="dash-vbar-fill dash-vbar-prior" style="height:' + (Math.max(fillPct, priorFillPct, 2) > 0 ? ((priorFillPct / Math.max(fillPct, priorFillPct, 2)) * 100) : 0) + '%;"></div>';
-                html += '  </div>';
-            } else {
-                html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
-                html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
-                html += '  </div>';
-            }
+            html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
+            html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
+            html += '  </div>';
             html += '  <div class="dash-vbar-label">' + MONTHS[i] + '</div>';
             html += '</div>';
         }
         html += '</div>';
-        if (showYoy) {
-            html += '<div class="dash-vbar-hint"><span class="dash-legend-swatch dash-legend-current"></span> ' + selectedYear + ' <span class="dash-legend-swatch dash-legend-prior"></span> ' + priorYear + '</div>';
-        } else {
-            html += '<div class="dash-vbar-hint">Hover over bars for details</div>';
-        }
+        html += '<div class="dash-vbar-hint">Hover over bars for details</div>';
         html += '</div>';
 
         html += '</div>'; // end row 2
