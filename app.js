@@ -209,19 +209,29 @@ const firebaseConfig = {
     // Data loading (Firestore real-time listeners), date navigation, UI controls,
     // and the main renderGrid() function that builds the entire scheduling grid.
     let loadVersion = 0; // Track which load request is current
-    
-    function loadBookingsForCurrentView() {
-        if (activeListenerUnsub) {
-            activeListenerUnsub();
-            activeListenerUnsub = null;
-        }
+    let activeQueryPrefix = null; // Track the current listener's query prefix
 
+    function loadBookingsForCurrentView() {
         const res = resources.find(r => r.id === currentResId);
         if (!res) return;
 
-        const activeWeekKey = getWeekKey(currentWeekStart); 
+        const activeWeekKey = getWeekKey(currentWeekStart);
         const queryPrefix = `${res.id}_${activeWeekKey}`;
-        
+
+        // If the listener is already watching this exact prefix, just re-render
+        if (activeListenerUnsub && queryPrefix === activeQueryPrefix) {
+            renderGrid();
+            return;
+        }
+
+        if (activeListenerUnsub) {
+            activeListenerUnsub();
+            activeListenerUnsub = null;
+            activeQueryPrefix = null;
+        }
+
+        activeQueryPrefix = queryPrefix;
+
         // Increment version for this load request
         loadVersion++;
         const thisVersion = loadVersion;
