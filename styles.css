@@ -1046,6 +1046,56 @@ body.is-dragging .slot::after {
     margin-top: 6px;
 }
 
+/* YoY comparison grouped bars */
+.dash-vbar-grouped {
+    width: 100%;
+    display: flex;
+    gap: 2px;
+    align-items: flex-end;
+    border-radius: 3px 3px 0 0;
+    margin: 0 auto;
+}
+.dash-vbar-grouped .dash-vbar-fill {
+    flex: 1;
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+}
+.dash-vbar-current {
+    background: linear-gradient(180deg, #1976d2, #42a5f5) !important;
+}
+.dash-vbar-prior {
+    background: linear-gradient(180deg, #b0bec5, #cfd8dc) !important;
+    opacity: 0.7;
+}
+.dash-yoy-toggle {
+    float: right;
+    font-size: 0.78em;
+    font-weight: normal;
+    color: #666;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.dash-yoy-toggle input {
+    cursor: pointer;
+}
+.dash-legend-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin: 0 2px;
+}
+.dash-legend-current {
+    background: #1976d2;
+}
+.dash-legend-prior {
+    background: #b0bec5;
+    opacity: 0.7;
+}
+
 /* Horizontal bar chart (duration, day-of-week, hourly) */
 .dash-hbar-chart {
     display: flex;
