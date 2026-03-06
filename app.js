@@ -4529,12 +4529,12 @@ const firebaseConfig = {
         }
 
         const s = statsData.summary;
-        const mTotals = statsData.monthlyTotals || [];
-        const mAvail = statsData.monthlyAvailable || [];
+        const mTotals = statsData.monthlyTotalsYtd || [];
+        const mAvail = statsData.monthlyAvailableYtd || [];
         const res = statsData.res;
 
         let html = '';
-        html += '<div style="font-size: 0.8em; color: #888; margin-bottom: 8px;">All charts reflect year-to-date data except Monthly Usage, which includes future bookings.</div>';
+        html += '<div style="font-size: 0.8em; color: #555; margin-bottom: 8px;">All charts reflect year-to-date. Future bookings are excluded as they may still change.</div>';
 
         // === ROW 1: Utilization Ring + Duration Distribution + Sub-Room Pie (conditional) ===
         const hasSubRooms = res.viewMode === 'day' && Array.isArray(res.subRooms) && getActiveSubRooms(res).length > 1;
@@ -4938,7 +4938,7 @@ const firebaseConfig = {
         tfoot.innerHTML = footHtml;
 
         // Update summary
-        document.getElementById('statsTotalHours').innerText = parseFloat(grandTotal.toFixed(2)) + ' hours';
+        document.getElementById('statsTotalHours').innerText = parseFloat(ytdTotal.toFixed(2)) + ' hours';
         
         // Booking count
         document.getElementById('statsBookingCount').innerText = totalBookingCount;
@@ -5038,7 +5038,7 @@ const firebaseConfig = {
         });
         
         statsData = {
-            dailyStats, year, res, monthlyTotals, monthlyAvailable, grandTotal, totalAvailable, ytdAvailable, ytdTotal,
+            dailyStats, year, res, monthlyTotals, monthlyAvailable, monthlyTotalsYtd, monthlyAvailableYtd, grandTotal, totalAvailable, ytdAvailable, ytdTotal,
             summary: {
                 totalHours: parseFloat(grandTotal.toFixed(2)),
                 totalBookings: totalBookingCount,
