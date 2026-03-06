@@ -4745,6 +4745,7 @@ const firebaseConfig = {
             }
             html += '<span>More</span>';
             html += '</div>';
+            html += '<div class="dash-vbar-hint">Bookings are grouped by their start hour</div>';
         } else {
             html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
         }
