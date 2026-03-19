@@ -3942,9 +3942,70 @@ const firebaseConfig = {
             await db.collection('system').doc('resources').set({ list: updatedList }); 
             showToast("Settings Saved!", "success"); 
             closeModal('settingsOverlay');
+            
+            // Run the lazy janitor in the background to scrub old bookings
+            runLazyJanitor(target);
         } 
         catch (e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
+    }
+
+    async function runLazyJanitor(res) {
+        if (!res) return;
+
+        try {
+            const today = new Date();
+            const currentWeekKey = getWeekKey(today);
+            
+            // Fetch past bookings for this resource up to the current week
+            const snapshot = await db.collection('appointments')
+                .where(firebase.firestore.FieldPath.documentId(), '>=', res.id + '_')
+                .where(firebase.firestore.FieldPath.documentId(), '<=', res.id + '_' + currentWeekKey + '\uf8ff')
+                .get();
+
+            let scrubCount = 0;
+            let batch = db.batch();
+            let batchCount = 0;
+
+            for (const doc of snapshot.docs) {
+                const data = doc.data();
+                if (data.isScrubbed || (data.name === "Anonymized Patron" && !data.notes)) {
+                    continue;
+                }
+
+                const prefix = res.id + "_";
+                const suffix = doc.id.substring(prefix.length);
+                const parts = suffix.split('_');
+                const weekKey = parts[0];
+                const dayIdx = parseInt(parts[1]);
+
+                if (isBookingAnonymized(weekKey, dayIdx, res, today)) {
+                    batch.update(doc.ref, {
+                        name: "Anonymized Patron",
+                        notes: "",
+                        isScrubbed: true
+                    });
+                    scrubCount++;
+                    batchCount++;
+
+                    if (batchCount === 500) {
+                        await batch.commit();
+                        batch = db.batch();
+                        batchCount = 0;
+                    }
+                }
+            }
+
+            if (batchCount > 0) {
+                await batch.commit();
+            }
+
+            if (scrubCount > 0) {
+                console.log(`Lazy Janitor scrubbed ${scrubCount} old bookings for resource ${res.name}.`);
+            }
+        } catch (err) {
+            console.error("Janitor error:", err);
+        }
     }
     
     function handleResourceChange() {
