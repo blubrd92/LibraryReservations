@@ -188,6 +188,8 @@ const firebaseConfig = {
         return !res.adminOnly; // staff can edit if not admin-only
     }
 
+    let hasCheckedJanitor = false;
+
     function setupRealtimeListeners() {
         db.collection('system').doc('resources').onSnapshot((doc) => {
             if (doc.exists) {
@@ -202,6 +204,11 @@ const firebaseConfig = {
                 db.collection('system').doc('resources').set({ list: resources });
             }
             handleResourceUpdate();
+            
+            if (!hasCheckedJanitor) {
+                hasCheckedJanitor = true;
+                checkAndRunJanitor();
+            }
         }, (err) => showToast("Permissions Error: " + err.message, "error"));
     }
 
@@ -3948,6 +3955,27 @@ const firebaseConfig = {
         } 
         catch (e) { showToast("Error: " + e.message, "error"); }
         showLoading(false);
+    }
+
+    async function checkAndRunJanitor() {
+        try {
+            const janitorDoc = await db.collection('system').doc('janitor').get();
+            const now = new Date();
+            const monthKey = now.getFullYear() + "-" + (now.getMonth() + 1);
+            
+            let lastRunMonth = "";
+            if (janitorDoc.exists) {
+                lastRunMonth = janitorDoc.data().lastRunMonth || "";
+            }
+            
+            // Run automatically if we haven't run for this month yet
+            if (lastRunMonth !== monthKey) {
+                await db.collection('system').doc('janitor').set({ lastRunMonth: monthKey }, { merge: true });
+                resources.forEach(res => runLazyJanitor(res));
+            }
+        } catch (e) {
+            console.error("Janitor check failed:", e);
+        }
     }
 
     async function runLazyJanitor(res) {
