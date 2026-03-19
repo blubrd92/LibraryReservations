@@ -435,13 +435,14 @@
                         <label for="editAdminOnly">&#128274; Admin Only (restrict editing to admin account)</label>
                     </div>
                     <div class="settings-option" style="flex-direction:column; align-items:flex-start;">
-                        <label style="margin-bottom:8px;">Anonymity Buffer (Mask Past Bookings)</label>
+                        <label style="margin-bottom:8px;">Patron Anonymity Buffer</label>
                         <select id="editAnonymityBuffer" style="width:100%;">
-                            <option value="0">0 Months (Strict/Immediate)</option>
+                            <option value="0">0 Months (Applies immediately after current day)</option>
                             <option value="1">1 Month</option>
                             <option value="2">2 Months</option>
                             <option value="3">3 Months</option>
                         </select>
+                        <small style="color:#666; display:block; margin-top:6px;">Automatically anonymizes patron names and notes on past bookings to protect privacy after the specified time period. Note: The buffer will only show up to the past 3 months of patron information; anything beyond that is always anonymized.</small>
                     </div>
                     <div class="settings-option" style="flex-direction:column; align-items:flex-start;">
                         <div style="display:flex; align-items:center; gap:8px;">
