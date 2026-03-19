@@ -717,7 +717,9 @@ const firebaseConfig = {
                 
                 // Content
                 const anon = isBookingAnonymized(activeWeekKey, booking.dayIndex, res);
+                const locked = isBookingLocked(activeWeekKey, booking.dayIndex, res);
                 booking.anonymized = anon;
+                booking.locked = locked;
                 const displayName = anon ? 'Past Booking' : escapeHtml(booking.data.name);
                 const seriesIcon = booking.data.seriesId ? '<span class="series-indicator" title="Recurring series">🔁</span> ' : '';
                 bookingEl.innerHTML = `<span class="slot-name">${seriesIcon}${displayName}</span>`;
@@ -741,8 +743,8 @@ const firebaseConfig = {
                 
                 const canEdit = canEditResource(res);
                 
-                // Add resize handle only if user can edit and booking is not anonymized
-                if (canEdit && !anon) {
+                // Add resize handle only if user can edit and booking is not locked
+                if (canEdit && !locked) {
                     const resizeHandle = document.createElement('div');
                     resizeHandle.className = 'resize-handle';
                     resizeHandle.onmousedown = (e) => startResize(e, booking, col, res, activeWeekKey, bookingEl);
@@ -779,8 +781,8 @@ const firebaseConfig = {
                     openBookingModal(booking.id, booking.data, col.subIndex);
                 };
                 
-                // DRAG-AND-DROP (only if user can edit and booking is not anonymized)
-                if (canEdit && !anon) {
+                // DRAG-AND-DROP (only if user can edit and booking is not locked)
+                if (canEdit && !locked) {
                     bookingEl.draggable = true;
                     bookingEl.ondragstart = (e) => handleDragStart(e, booking.id, booking.data);
                     bookingEl.ondragend = handleDragEnd;
@@ -2513,6 +2515,7 @@ const firebaseConfig = {
         document.getElementById('slotId').value = slotId;
         
         const anon = data ? isBookingAnonymized(activeWeekKey, dayIdx, res) : false;
+        const locked = data ? isBookingLocked(activeWeekKey, dayIdx, res) : false;
         
         document.getElementById('bookName').value = data ? (anon ? 'Past Booking' : data.name) : '';
         document.getElementById('bookNotes').value = data ? (anon ? 'Past notes anonymized for patron privacy' : data.notes) : '';
@@ -2555,23 +2558,23 @@ const firebaseConfig = {
         
         // Check permissions and show/hide edit controls
         const canEdit = canEditResource(res);
-        document.getElementById('btnSaveBooking').style.display = (canEdit && !anon) ? '' : 'none';
-        document.getElementById('btnDeleteBooking').style.display = (canEdit && data && !anon) ? '' : 'none';
-        // Show reschedule button only for existing bookings that user can edit (not anonymized)
-        if (canEdit && data && !anon) {
+        document.getElementById('btnSaveBooking').style.display = (canEdit && !locked) ? '' : 'none';
+        document.getElementById('btnDeleteBooking').style.display = (canEdit && data && !locked) ? '' : 'none';
+        // Show reschedule button only for existing bookings that user can edit (not locked)
+        if (canEdit && data && !locked) {
             document.getElementById('btnReschedule').classList.remove('hidden');
         } else {
             document.getElementById('btnReschedule').classList.add('hidden');
         }
         document.getElementById('readOnlyNotice').style.display = canEdit ? 'none' : '';
 
-        // Disable form fields if read-only or anonymized
-        document.getElementById('bookName').disabled = !canEdit || anon;
-        document.getElementById('bookDuration').disabled = !canEdit || anon;
-        document.getElementById('bookNotes').disabled = !canEdit || anon;
-        document.getElementById('bookShowNotes').disabled = !canEdit || anon;
-        document.getElementById('bookHasStaff').disabled = !canEdit || anon;
-        document.getElementById('bookStaffName').disabled = !canEdit || anon;
+        // Disable form fields if read-only or locked
+        document.getElementById('bookName').disabled = !canEdit || locked;
+        document.getElementById('bookDuration').disabled = !canEdit || locked;
+        document.getElementById('bookNotes').disabled = !canEdit || locked;
+        document.getElementById('bookShowNotes').disabled = !canEdit || locked;
+        document.getElementById('bookHasStaff').disabled = !canEdit || locked;
+        document.getElementById('bookStaffName').disabled = !canEdit || locked;
 
         // Show series info for recurring bookings
         const seriesEl = document.getElementById('seriesInfo');
@@ -2642,6 +2645,10 @@ const firebaseConfig = {
 
         const subIdx = parts[3] ? parseInt(parts[3]) : null;
         const weekKey = parts[0];
+
+        if (isBookingLocked(weekKey, dayIdx, res)) {
+            return showToast("Cannot edit a past booking.", "error");
+        }
 
         // Safety net: check advance booking limit (new bookings only)
         const isNewBooking = !allBookings[slotId];
@@ -2982,6 +2989,7 @@ const firebaseConfig = {
         renderSubRoomCards(r);
         document.getElementById('editDefaultShowNotes').checked = r.defaultShowNotes || false;
         document.getElementById('editAdminOnly').checked = r.adminOnly || false;
+        document.getElementById('editAnonymityBuffer').value = r.anonymityBufferMonths || 0;
         document.getElementById('editAllowRecurring').checked = r.allowRecurring || false;
         document.getElementById('editUseQuarterHour').checked = r.useQuarterHour || false;
 
@@ -3683,7 +3691,8 @@ const firebaseConfig = {
                 advanceLimitEnabled: false,
                 advanceLimitDays: 1,
                 advanceLimitAdminBypass: false,
-                allowRecurring: false
+                allowRecurring: false,
+                anonymityBufferMonths: 0
             };
             
             // Populate closure dates dropdown
@@ -3738,7 +3747,8 @@ const firebaseConfig = {
                 advanceLimitEnabled: false,
                 advanceLimitDays: 1,
                 advanceLimitAdminBypass: false,
-                allowRecurring: false
+                allowRecurring: false,
+                anonymityBufferMonths: 0
             };
             try { 
                 pendingSelectionId = newRes.id;
@@ -3782,6 +3792,7 @@ const firebaseConfig = {
                     : [];
                 pendingNewResource.adminOnly = source.adminOnly || false;
                 pendingNewResource.allowRecurring = source.allowRecurring || false;
+                pendingNewResource.anonymityBufferMonths = source.anonymityBufferMonths || 0;
                 pendingNewResource.colorPalette = source.colorPalette || 'default';
             }
         } else {
@@ -3903,6 +3914,7 @@ const firebaseConfig = {
         target.subRooms = readSubRoomCards(target);
         target.defaultShowNotes = document.getElementById('editDefaultShowNotes').checked;
         target.adminOnly = document.getElementById('editAdminOnly').checked;
+        target.anonymityBufferMonths = parseInt(document.getElementById('editAnonymityBuffer').value, 10) || 0;
         target.allowRecurring = document.getElementById('editAllowRecurring').checked;
         target.useQuarterHour = document.getElementById('editUseQuarterHour').checked;
 
@@ -4033,6 +4045,17 @@ const firebaseConfig = {
         const slotId = document.getElementById('slotId').value;
         const booking = allBookings[slotId];
         if(!booking) return closeModal('bookingModal');
+        
+        const res = resources.find(r => r.id === currentResId);
+        const prefix = res.id + "_";
+        const suffix = slotId.substring(prefix.length); 
+        const parts = suffix.split('_');
+        const weekKey = parts[0];
+        const dayIdx = parseInt(parts[1]);
+        
+        if (isBookingLocked(weekKey, dayIdx, res)) {
+            return showToast("Cannot delete a past booking.", "error");
+        }
         
         if (booking.seriesId) {
             // Series booking - show series delete modal
