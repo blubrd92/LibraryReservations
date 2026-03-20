@@ -3959,18 +3959,26 @@ const firebaseConfig = {
 
     async function checkAndRunJanitor() {
         try {
-            const janitorDoc = await db.collection('system').doc('janitor').get();
             const now = new Date();
             const monthKey = now.getFullYear() + "-" + (now.getMonth() + 1);
+            const janitorRef = db.collection('system').doc('janitor');
             
-            let lastRunMonth = "";
-            if (janitorDoc.exists) {
-                lastRunMonth = janitorDoc.data().lastRunMonth || "";
-            }
-            
-            // Run automatically if we haven't run for this month yet
-            if (lastRunMonth !== monthKey) {
-                await db.collection('system').doc('janitor').set({ lastRunMonth: monthKey }, { merge: true });
+            const shouldRun = await db.runTransaction(async (transaction) => {
+                const janitorDoc = await transaction.get(janitorRef);
+                let lastRunMonth = "";
+                if (janitorDoc.exists) {
+                    lastRunMonth = janitorDoc.data().lastRunMonth || "";
+                }
+                
+                // Run automatically if we haven't run for this month yet
+                if (lastRunMonth !== monthKey) {
+                    transaction.set(janitorRef, { lastRunMonth: monthKey }, { merge: true });
+                    return true;
+                }
+                return false;
+            });
+
+            if (shouldRun) {
                 resources.forEach(res => runLazyJanitor(res));
             }
         } catch (e) {
@@ -3983,53 +3991,97 @@ const firebaseConfig = {
 
         try {
             const today = new Date();
-            const currentWeekKey = getWeekKey(today);
+            const buffer = parseInt(res.anonymityBufferMonths || 0, 10);
             
-            // Fetch past bookings for this resource up to the current week
-            const snapshot = await db.collection('appointments')
-                .where(firebase.firestore.FieldPath.documentId(), '>=', res.id + '_')
-                .where(firebase.firestore.FieldPath.documentId(), '<=', res.id + '_' + currentWeekKey + '\uf8ff')
-                .get();
-
+            let cutoffDate = new Date(today);
+            if (buffer > 0) {
+                cutoffDate = new Date(today.getFullYear(), today.getMonth() - buffer, 1);
+            }
+            
+            const cutoffWeekKey = getWeekKey(cutoffDate);
+            const startWeekKey = res.lastScrubbedWeekKey || "";
+            
+            // If the bookmark is ahead of the cutoff (e.g. buffer was increased),
+            // everything up to the bookmark is already scrubbed. We can just wait
+            // for the cutoff to catch up to the bookmark in future months.
+            if (startWeekKey && startWeekKey > cutoffWeekKey) {
+                return;
+            }
+            
             let scrubCount = 0;
-            let batch = db.batch();
-            let batchCount = 0;
+            let lastDoc = null;
+            let hasMore = true;
 
-            for (const doc of snapshot.docs) {
-                const data = doc.data();
-                if (data.isScrubbed || (data.name === "Anonymized Patron" && !data.notes)) {
-                    continue;
+            while (hasMore) {
+                let query = db.collection('appointments')
+                    .where(firebase.firestore.FieldPath.documentId(), '>=', res.id + '_' + startWeekKey)
+                    .where(firebase.firestore.FieldPath.documentId(), '<=', res.id + '_' + cutoffWeekKey + '\uf8ff')
+                    .limit(500);
+
+                if (lastDoc) {
+                    query = query.startAfter(lastDoc);
                 }
 
-                const prefix = res.id + "_";
-                const suffix = doc.id.substring(prefix.length);
-                const parts = suffix.split('_');
-                const weekKey = parts[0];
-                const dayIdx = parseInt(parts[1]);
+                const snapshot = await query.get();
+                
+                if (snapshot.empty) {
+                    hasMore = false;
+                    break;
+                }
 
-                if (isBookingAnonymized(weekKey, dayIdx, res, today)) {
-                    batch.update(doc.ref, {
-                        name: "Anonymized Patron",
-                        notes: "",
-                        isScrubbed: true
-                    });
-                    scrubCount++;
-                    batchCount++;
+                lastDoc = snapshot.docs[snapshot.docs.length - 1];
+                let batch = db.batch();
+                let batchCount = 0;
 
-                    if (batchCount === 500) {
-                        await batch.commit();
-                        batch = db.batch();
-                        batchCount = 0;
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    if (data.isScrubbed || (data.name === "Anonymized Patron" && !data.notes)) {
+                        continue;
+                    }
+
+                    const prefix = res.id + "_";
+                    const suffix = doc.id.substring(prefix.length);
+                    const parts = suffix.split('_');
+                    const weekKey = parts[0];
+                    const dayIdx = parseInt(parts[1]);
+
+                    if (isBookingAnonymized(weekKey, dayIdx, res, today)) {
+                        batch.update(doc.ref, {
+                            name: "Anonymized Patron",
+                            notes: "",
+                            isScrubbed: true
+                        });
+                        scrubCount++;
+                        batchCount++;
                     }
                 }
-            }
 
-            if (batchCount > 0) {
-                await batch.commit();
+                if (batchCount > 0) {
+                    await batch.commit();
+                }
+
+                if (snapshot.docs.length < 500) {
+                    hasMore = false;
+                }
             }
 
             if (scrubCount > 0) {
                 console.log(`Lazy Janitor scrubbed ${scrubCount} old bookings for resource ${res.name}.`);
+            }
+            
+            // Update the checkpoint so we don't re-read these weeks next month
+            if (res.lastScrubbedWeekKey !== cutoffWeekKey) {
+                const systemRef = db.collection('system').doc('resources');
+                const systemDoc = await systemRef.get();
+                if (systemDoc.exists) {
+                    const list = systemDoc.data().list;
+                    const rIndex = list.findIndex(r => r.id === res.id);
+                    if (rIndex !== -1) {
+                        list[rIndex].lastScrubbedWeekKey = cutoffWeekKey;
+                        await systemRef.update({ list });
+                        res.lastScrubbedWeekKey = cutoffWeekKey;
+                    }
+                }
             }
         } catch (err) {
             console.error("Janitor error:", err);
