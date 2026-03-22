@@ -4542,35 +4542,17 @@ const firebaseConfig = {
     }
     
     async function fetchBookingsForYear(resId, year) {
-        const startDate = new Date(year, 0, 1);
-        const endDate = new Date(year, 11, 31);
-
-        const weekKeys = new Set();
-        let d = new Date(startDate);
-        while (d <= endDate) {
-            const weekStart = getWeekStart(d);
-            weekKeys.add(getWeekKey(weekStart));
-            d.setDate(d.getDate() + 7);
-        }
-
+        // Single range query instead of ~53 per-week queries.
+        // Slightly wider range catches boundary weeks that span year edges.
+        // buildDailyStats() filters by exact year, so over-fetched docs are harmless.
+        const lowerBound = `${resId}_${year - 1}-12-25`;
+        const upperBound = `${resId}_${year + 1}-01-08`;
+        const snapshot = await db.collection('appointments')
+            .where('__name__', '>=', lowerBound)
+            .where('__name__', '<', upperBound)
+            .get();
         const bookings = {};
-        const promises = [];
-
-        weekKeys.forEach(weekKey => {
-            const prefix = `${resId}_${weekKey}`;
-            const promise = db.collection('appointments')
-                .where('__name__', '>=', prefix)
-                .where('__name__', '<', prefix + '\uffff')
-                .get()
-                .then(snapshot => {
-                    snapshot.forEach(doc => {
-                        bookings[doc.id] = doc.data();
-                    });
-                });
-            promises.push(promise);
-        });
-
-        await Promise.all(promises);
+        snapshot.forEach(doc => { bookings[doc.id] = doc.data(); });
         return bookings;
     }
 
