@@ -54,6 +54,9 @@ const firebaseConfig = {
     let bookingColorMap = {};
     let activeListenerUnsub = null;
     let timeIndicatorIntervalId = null;
+    let statsBookingsCache = {};  // key: `${resId}_${year}`, value: { bookings, fetchedAt }
+    let statsMetaCache = null;    // cached stats_meta document data
+    const STATS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
     // Pending new resource data (for import closures flow)
     let pendingNewResource = null;
@@ -222,8 +225,12 @@ const firebaseConfig = {
         const res = resources.find(r => r.id === currentResId);
         if (!res) return;
 
-        const activeWeekKey = getWeekKey(currentWeekStart);
-        const queryPrefix = `${res.id}_${activeWeekKey}`;
+        const isDayView = res.viewMode === 'day';
+        const activeWeekKey = getWeekKey(isDayView ? currentDayDate : currentWeekStart);
+        // For day-view resources, narrow query to just the displayed day
+        const queryPrefix = isDayView
+            ? `${res.id}_${activeWeekKey}_${currentDayDate.getDay()}_`
+            : `${res.id}_${activeWeekKey}`;
 
         // If the listener is already watching this exact prefix, just re-render
         if (activeListenerUnsub && queryPrefix === activeQueryPrefix) {
@@ -2719,8 +2726,9 @@ const firebaseConfig = {
 
         showLoading(true);
         try { 
-            await db.collection('appointments').doc(slotId).set(data); 
+            await db.collection('appointments').doc(slotId).set(data);
             updateStatsYearMeta(res.id, slotId); // Update stats metadata
+            delete statsBookingsCache[`${res.id}_${new Date().getFullYear()}`];
             closeModal('bookingModal'); 
         } 
         catch(e) { showToast("Error: " + e.message, "error"); }
@@ -2838,19 +2846,26 @@ const firebaseConfig = {
         
         showLoading(true);
         
-        // Query all needed weeks' bookings in parallel
+        // Query all needed weeks' bookings in parallel, reusing in-memory cache for current week
         const weekBookings = {};
+        const currentWk = getWeekKey(currentWeekStart);
+        // Pre-seed from the active listener's cached data to avoid re-fetching current week
+        if (weekKeysNeeded.has(currentWk)) {
+            Object.keys(allBookings).forEach(id => { weekBookings[id] = allBookings[id]; });
+        }
         try {
-            const queries = [...weekKeysNeeded].map(wk => {
-                const qPrefix = `${res.id}_${wk}`;
-                return db.collection('appointments')
-                    .where(firebase.firestore.FieldPath.documentId(), '>=', qPrefix)
-                    .where(firebase.firestore.FieldPath.documentId(), '<', qPrefix + '\uf8ff')
-                    .get()
-                    .then(snapshot => {
-                        snapshot.forEach(doc => { weekBookings[doc.id] = doc.data(); });
-                    });
-            });
+            const queries = [...weekKeysNeeded]
+                .filter(wk => wk !== currentWk)
+                .map(wk => {
+                    const qPrefix = `${res.id}_${wk}`;
+                    return db.collection('appointments')
+                        .where(firebase.firestore.FieldPath.documentId(), '>=', qPrefix)
+                        .where(firebase.firestore.FieldPath.documentId(), '<', qPrefix + '\uf8ff')
+                        .get()
+                        .then(snapshot => {
+                            snapshot.forEach(doc => { weekBookings[doc.id] = doc.data(); });
+                        });
+                });
             await Promise.all(queries);
         } catch (e) {
             showLoading(false);
@@ -3462,19 +3477,34 @@ const firebaseConfig = {
         let totalConflicts = 0;
         const conflictDates = [];
         try {
-            const queries = affectedDates.map(date => {
+            // Group affected dates by week key to batch queries (1 per week instead of 1 per day)
+            const weekGroups = {};
+            affectedDates.forEach(date => {
                 const weekKey = getWeekKey(date);
-                const dayIdx = date.getDay();
-                const prefix = `${editId}_${weekKey}_${dayIdx}_`;
+                const groupKey = `${editId}_${weekKey}`;
+                if (!weekGroups[groupKey]) weekGroups[groupKey] = [];
+                weekGroups[groupKey].push(date);
+            });
+            const queries = Object.entries(weekGroups).map(([groupPrefix, dates]) => {
+                const dayIndices = new Set(dates.map(d => d.getDay()));
                 return db.collection('appointments')
-                    .where(firebase.firestore.FieldPath.documentId(), '>=', prefix)
-                    .where(firebase.firestore.FieldPath.documentId(), '<', prefix + '\uf8ff')
+                    .where(firebase.firestore.FieldPath.documentId(), '>=', groupPrefix)
+                    .where(firebase.firestore.FieldPath.documentId(), '<', groupPrefix + '\uf8ff')
                     .get()
                     .then(snapshot => {
-                        if (!snapshot.empty) {
-                            totalConflicts += snapshot.size;
-                            conflictDates.push(date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
-                        }
+                        snapshot.forEach(doc => {
+                            // Parse day index from document ID to check if it's an affected day
+                            const idParts = doc.id.substring(groupPrefix.length + 1).split('_');
+                            const docDayIdx = parseInt(idParts[0]);
+                            if (dayIndices.has(docDayIdx)) {
+                                totalConflicts++;
+                                const matchDate = dates.find(d => d.getDay() === docDayIdx);
+                                if (matchDate) {
+                                    const dateStr = matchDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                                    if (!conflictDates.includes(dateStr)) conflictDates.push(dateStr);
+                                }
+                            }
+                        });
                     });
             });
             await Promise.all(queries);
@@ -4227,6 +4257,7 @@ const firebaseConfig = {
             showLoading(true);
             try {
                 await db.collection('appointments').doc(pendingSeriesDeleteSlotId).delete();
+                delete statsBookingsCache[`${currentResId}_${new Date().getFullYear()}`];
                 closeModal('bookingModal');
                 showToast('Booking deleted.', 'success');
             } catch (e) {
@@ -4243,6 +4274,7 @@ const firebaseConfig = {
                 const batch = db.batch();
                 snapshot.forEach(doc => batch.delete(doc.ref));
                 await batch.commit();
+                delete statsBookingsCache[`${currentResId}_${new Date().getFullYear()}`];
                 closeModal('bookingModal');
                 showToast(snapshot.size + ' booking(s) in series deleted.', 'success');
             } catch (e) {
@@ -4418,6 +4450,7 @@ const firebaseConfig = {
                 meta[resId].push(year);
                 meta[resId].sort((a, b) => b - a); // Sort descending
                 await metaRef.set(meta);
+                statsMetaCache = meta; // Update in-memory cache
             }
         } catch (err) {
             console.error('Error updating stats meta:', err);
@@ -4452,13 +4485,18 @@ const firebaseConfig = {
         yearSel.innerHTML = '<option>Loading...</option>';
         
         try {
-            // Read from stats_meta document (single read)
-            const metaDoc = await db.collection('system').doc('stats_meta').get();
-            
+            // Use in-memory cache if available, otherwise read from Firestore
+            let metaData = statsMetaCache;
+            if (!metaData) {
+                const metaDoc = await db.collection('system').doc('stats_meta').get();
+                metaData = metaDoc.exists ? metaDoc.data() : {};
+                statsMetaCache = metaData;
+            }
+
             const yearsWithData = new Set();
-            
-            if (metaDoc.exists && metaDoc.data()[resId]) {
-                metaDoc.data()[resId].forEach(y => yearsWithData.add(y));
+
+            if (metaData[resId]) {
+                metaData[resId].forEach(y => yearsWithData.add(y));
             }
             
             // Always include current and next year
@@ -4618,13 +4656,23 @@ const firebaseConfig = {
 
         try {
             let bookings;
+            const memoryCacheKey = `${resId}_${year}`;
 
-            // For past years, try loading from cache first (1 read instead of ~53)
-            if (isPastYear && !forceRefresh) {
+            // Check in-memory session cache first (avoids all reads on repeated opens)
+            if (!forceRefresh && statsBookingsCache[memoryCacheKey]) {
+                const cached = statsBookingsCache[memoryCacheKey];
+                if (Date.now() - cached.fetchedAt < STATS_CACHE_TTL) {
+                    bookings = cached.bookings;
+                }
+            }
+
+            // For past years, try loading from Firestore cache (1 read instead of ~53)
+            if (!bookings && isPastYear && !forceRefresh) {
                 const cacheDocId = getStatsCacheDocId(resId, year);
                 const cacheDoc = await db.collection('system').doc(cacheDocId).get();
                 if (cacheDoc.exists) {
                     bookings = cacheDoc.data().bookings || {};
+                    statsBookingsCache[memoryCacheKey] = { bookings, fetchedAt: Date.now() };
                 }
             }
 
@@ -4637,7 +4685,10 @@ const firebaseConfig = {
                     updateStatsYearMeta(resId, Object.keys(bookings)[0]);
                 }
 
-                // Cache past year data for future reads
+                // Store in session memory cache
+                statsBookingsCache[memoryCacheKey] = { bookings, fetchedAt: Date.now() };
+
+                // Cache past year data in Firestore for future sessions
                 if (isPastYear) {
                     const cacheDocId = getStatsCacheDocId(resId, year);
                     const slim = slimBookingsForCache(bookings);
