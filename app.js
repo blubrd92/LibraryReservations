@@ -5274,7 +5274,7 @@ const firebaseConfig = {
                         });
                     }
                     html += '  </div>';
-                    html += '  <div class="dash-stacked-label">' + MONTHS[i] + '</div>';
+                    html += '  <div class="dash-stacked-label' + hlMonth + '">' + MONTHS[i] + '</div>';
                     html += '</div>';
                 }
                 html += '</div>';
@@ -5320,11 +5320,21 @@ const firebaseConfig = {
             for (let h = minH; h <= maxH; h++) allHeatHours.push(h);
 
             const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            // Pre-compute hour totals for highlighting
+            const hourTotals = {};
+            let maxHourTotal = 0;
+            allHeatHours.forEach(h => {
+                let total = 0;
+                for (let d = 0; d < 7; d++) total += (heatmap[d] || {})[h] || 0;
+                hourTotals[h] = total;
+                if (total > maxHourTotal) maxHourTotal = total;
+            });
             html += '<div class="dash-heatmap" style="grid-template-columns: 36px repeat(' + allHeatHours.length + ', 1fr);">';
             // Header row
             html += '<div class="dash-hm-corner"></div>';
             allHeatHours.forEach(h => {
-                html += '<div class="dash-hm-hdr">' + formatTime(h) + '</div>';
+                const hl = hourTotals[h] > 0 && hourTotals[h] === maxHourTotal ? ' dash-highlight' : '';
+                html += '<div class="dash-hm-hdr' + hl + '">' + formatTime(h) + '</div>';
             });
             // Data rows
             for (let d = 0; d < 7; d++) {
@@ -5348,14 +5358,6 @@ const firebaseConfig = {
                 });
             }
             // Totals row
-            const hourTotals = {};
-            let maxHourTotal = 0;
-            allHeatHours.forEach(h => {
-                let total = 0;
-                for (let d = 0; d < 7; d++) total += (heatmap[d] || {})[h] || 0;
-                hourTotals[h] = total;
-                if (total > maxHourTotal) maxHourTotal = total;
-            });
             html += '<div class="dash-hm-day" style="font-weight:600;">Total</div>';
             allHeatHours.forEach(h => {
                 const total = hourTotals[h];
