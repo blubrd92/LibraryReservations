@@ -1844,6 +1844,7 @@ const firebaseConfig = {
         let dragOptions = '<option value="">-- Select --</option>';
         dragNames.forEach(n => { dragOptions += '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>'; });
         staffSelDrag.innerHTML = dragOptions;
+        document.getElementById('staffNameEmptyHint').classList.toggle('hidden', dragNames.length > 0);
         document.getElementById('bookHasStaff').checked = false;
         staffSelDrag.value = '';
         toggleStaffInput();
@@ -2557,6 +2558,7 @@ const firebaseConfig = {
             staffOptions += '<option value="' + escapeHtml(existingName) + '">' + escapeHtml(existingName) + ' (unlisted)</option>';
         }
         staffSelect.innerHTML = staffOptions;
+        document.getElementById('staffNameEmptyHint').classList.toggle('hidden', configuredNames.length > 0 || !!existingName);
         if(data) {
              document.getElementById('bookHasStaff').checked = data.hasStaff;
              staffSelect.value = existingName;
