@@ -4919,7 +4919,7 @@ const firebaseConfig = {
 
                 html += '<div class="dash-row" style="grid-template-columns: 1fr;">';
                 html += '<div class="dash-panel">';
-                html += '<div class="dash-panel-title">Staff Assistance</div>';
+                html += '<div class="dash-panel-title">Staff Assisted Sessions</div>';
                 html += '<div class="dash-stacked-chart">';
                 for (let i = 0; i < 12; i++) {
                     let monthTotal = 0;
