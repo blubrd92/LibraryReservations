@@ -3484,17 +3484,21 @@ const firebaseConfig = {
             }
             
             const removeKey = c.endDate ? `${c.date}|${c.endDate}` : c.date;
-            
+            const lastDate = new Date((c.endDate || c.date) + 'T00:00');
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const isPast = lastDate < today;
+
             return `
-                <div class="closure-item">
+                <div class="closure-item${isPast ? ' closure-item-past' : ''}">
                     <div class="closure-item-info">
                         <span class="closure-item-date">${dateDisplay}</span>
                         <span class="closure-item-reason">${escapeHtml(c.reason || 'No reason specified')}</span>
                     </div>
-                    <div class="closure-item-actions">
+                    ${isPast ? '' : `<div class="closure-item-actions">
                         <button onclick="editClosureDate('${removeKey}')">Edit</button>
                         <button class="btn-danger" onclick="removeClosureDate('${removeKey}')">Remove</button>
-                    </div>
+                    </div>`}
                 </div>
             `;
         }).join('');

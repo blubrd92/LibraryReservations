@@ -743,6 +743,9 @@ textarea { resize: vertical; }
     padding: 4px 8px;
     font-size: 0.8em;
 }
+.closure-item-past {
+    opacity: 0.6;
+}
 .closure-empty {
     padding: 15px;
     text-align: center;
