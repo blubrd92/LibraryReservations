@@ -94,7 +94,9 @@
             </div>
             <div id="staffInputContainer" class="hidden" style="margin-top: 10px;">
                 <label style="font-size:0.8em; color:#666;">Assigned Staff/Volunteer <span class="required-asterisk">*</span></label>
-                <input type="text" id="bookStaffName" placeholder="e.g. John" onkeydown="handleBookingEnter(event)">
+                <select id="bookStaffName" onkeydown="handleBookingEnter(event)">
+                    <option value="">-- Select --</option>
+                </select>
             </div>
         </div>
         
@@ -391,9 +393,23 @@
                         <input type="checkbox" id="editUseQuarterHour" style="width:auto;">
                         <label for="editUseQuarterHour">Enable 15-Minute Scheduling</label>
                     </div>
-                    <div class="settings-option">
-                        <input type="checkbox" id="editResOrientation" style="width:auto;">
-                        <label for="editResOrientation">Enable "Staff Assistance" Fields</label>
+                    <div class="settings-option" style="flex-direction:column; align-items:flex-start;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="checkbox" id="editResOrientation" onchange="toggleStaffNamesConfig()" style="width:auto;">
+                            <label for="editResOrientation">Enable "Staff Assistance" Fields</label>
+                        </div>
+                        <div id="staffNamesConfig" class="hidden" style="width:100%; margin-top:10px; padding-top:10px; border-top:1px solid #eee;">
+                            <label style="font-weight:bold; display:block; margin-bottom:8px;">Staff/Volunteer Names</label>
+                            <div class="closure-add-row">
+                                <input type="text" id="newStaffName" placeholder="Enter name" style="flex:1; min-width:150px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addStaffName();}">
+                                <button class="btn-success" id="staffNameAddBtn" onclick="addStaffName()">Add</button>
+                                <a href="#" id="staffNameCancelEditLink" onclick="cancelStaffNameEdit();return false;" style="display:none;align-self:center;font-size:0.85em;color:#c62828;">Cancel</a>
+                            </div>
+                            <div id="staffNameList" class="closure-list" style="max-height:150px;"></div>
+                            <div class="closure-actions">
+                                <button onclick="openApplyStaffNamesModal()" style="font-size:0.85em;">Apply Names to Other Resources...</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="settings-option">
                         <input type="checkbox" id="editDefaultShowNotes" style="width:auto;">
@@ -642,13 +658,33 @@
     <div class="modal-content" style="max-width: 480px;">
         <div class="modal-header">Apply Closures to Resources</div>
         <p id="applyClosuresDesc" style="margin: 10px 0; font-size: 0.9em; color: #555;"></p>
-        <div style="font-weight:600; font-size:0.85em; margin-bottom:4px;">Select closures to apply:</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <span style="font-weight:600; font-size:0.85em;">Select closures to apply:</span>
+            <a href="#" onclick="document.querySelectorAll('input[name=applyClosureDate]').forEach(c=>c.checked=!c.checked);return false;" style="font-size:0.8em;">Toggle all</a>
+        </div>
         <div id="applyClosuresDateCheckboxes" style="margin: 0 0 12px; max-height: 180px; overflow-y: auto; border:1px solid #e8e8e8; border-radius:4px; padding:4px 0;"></div>
         <div style="font-weight:600; font-size:0.85em; margin-bottom:4px;">Apply to:</div>
         <div id="applyClosuresCheckboxes" style="margin: 0 0 12px; max-height: 180px; overflow-y: auto; border:1px solid #e8e8e8; border-radius:4px; padding:4px 0;"></div>
         <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 15px;">
             <button onclick="closeModal('applyClosuresModal')">Cancel</button>
             <button class="btn-success" onclick="confirmApplyClosures()">Apply</button>
+        </div>
+    </div>
+</div>
+<div id="applyStaffNamesModal" class="modal">
+    <div class="modal-content" style="max-width: 480px;">
+        <div class="modal-header">Apply Staff Names to Resources</div>
+        <p id="applyStaffNamesDesc" style="margin: 10px 0; font-size: 0.9em; color: #555;"></p>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <span style="font-weight:600; font-size:0.85em;">Select names to apply:</span>
+            <a href="#" onclick="document.querySelectorAll('input[name=applyStaffName]').forEach(c=>c.checked=!c.checked);return false;" style="font-size:0.8em;">Toggle all</a>
+        </div>
+        <div id="applyStaffNameCheckboxes" style="margin: 0 0 12px; max-height: 180px; overflow-y: auto; border:1px solid #e8e8e8; border-radius:4px; padding:4px 0;"></div>
+        <div style="font-weight:600; font-size:0.85em; margin-bottom:4px;">Apply to:</div>
+        <div id="applyStaffNameTargetCheckboxes" style="margin: 0 0 12px; max-height: 180px; overflow-y: auto; border:1px solid #e8e8e8; border-radius:4px; padding:4px 0;"></div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 15px;">
+            <button onclick="closeModal('applyStaffNamesModal')">Cancel</button>
+            <button class="btn-success" onclick="confirmApplyStaffNames()">Apply</button>
         </div>
     </div>
 </div>

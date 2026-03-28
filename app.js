@@ -1838,8 +1838,14 @@ const firebaseConfig = {
 
         const showStaff = res.hasStaffField;
         document.getElementById('staffSection').style.display = showStaff ? 'block' : 'none';
+        // Populate staff dropdown
+        const staffSelDrag = document.getElementById('bookStaffName');
+        const dragNames = (res.staffNames || []).slice().sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        let dragOptions = '<option value="">-- Select --</option>';
+        dragNames.forEach(n => { dragOptions += '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>'; });
+        staffSelDrag.innerHTML = dragOptions;
         document.getElementById('bookHasStaff').checked = false;
-        document.getElementById('bookStaffName').value = '';
+        staffSelDrag.value = '';
         toggleStaffInput();
 
         const durSel = document.getElementById('bookDuration');
@@ -2538,12 +2544,30 @@ const firebaseConfig = {
 
         const showStaff = res.hasStaffField;
         document.getElementById('staffSection').style.display = showStaff ? 'block' : 'none';
+        // Populate staff dropdown
+        const staffSelect = document.getElementById('bookStaffName');
+        const configuredNames = (res.staffNames || []).slice().sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        let staffOptions = '<option value="">-- Select --</option>';
+        configuredNames.forEach(n => {
+            staffOptions += '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>';
+        });
+        // If editing and the existing staffName isn't in the configured list, add it
+        const existingName = data ? (data.staffName || '') : '';
+        if (existingName && !configuredNames.some(n => n.toLowerCase() === existingName.toLowerCase())) {
+            staffOptions += '<option value="' + escapeHtml(existingName) + '">' + escapeHtml(existingName) + ' (unlisted)</option>';
+        }
+        staffSelect.innerHTML = staffOptions;
         if(data) {
              document.getElementById('bookHasStaff').checked = data.hasStaff;
-             document.getElementById('bookStaffName').value = data.staffName || '';
+             staffSelect.value = existingName;
+             // If value didn't match (case difference), try case-insensitive match
+             if (!staffSelect.value && existingName) {
+                 const match = configuredNames.find(n => n.toLowerCase() === existingName.toLowerCase());
+                 if (match) staffSelect.value = match;
+             }
         } else {
              document.getElementById('bookHasStaff').checked = false;
-             document.getElementById('bookStaffName').value = '';
+             staffSelect.value = '';
         }
         toggleStaffInput();
 
@@ -3007,6 +3031,8 @@ const firebaseConfig = {
         document.getElementById('editResName').value = r.name;
         document.getElementById('editMaxDuration').value = r.maxDuration;
         document.getElementById('editResOrientation').checked = r.hasStaffField || false;
+        cancelStaffNameEdit();
+        toggleStaffNamesConfig();
         document.getElementById('editViewMode').value = r.viewMode || 'week';
         renderSubRoomCards(r);
         document.getElementById('editDefaultShowNotes').checked = r.defaultShowNotes || false;
@@ -3695,7 +3721,7 @@ const firebaseConfig = {
             }
             const key = c.endDate ? c.date + '|' + c.endDate : c.date;
             return `<label style="display:flex; align-items:center; gap:8px; padding:4px 8px; cursor:pointer; font-size:0.88em;">
-                <input type="checkbox" name="applyClosureDate" value="${key}" checked style="width:auto;">
+                <input type="checkbox" name="applyClosureDate" value="${key}" style="width:auto;">
                 <span><strong>${dateDisplay}</strong> <span style="color:#666;">${escapeHtml(c.reason || '')}</span></span>
             </label>`;
         }).join('');
@@ -3762,6 +3788,179 @@ const firebaseConfig = {
         try {
             await db.collection('system').doc('resources').set({ list: resources });
             showToast(`${closures.length} closure(s) applied to ${applied} resource(s).`, "success");
+        } catch (e) {
+            showToast("Error: " + e.message, "error");
+        }
+        showLoading(false);
+    }
+
+    // --- STAFF NAME LIST MANAGEMENT ---
+    let editingStaffNameIdx = null;
+
+    function toggleStaffNamesConfig() {
+        const show = document.getElementById('editResOrientation').checked;
+        document.getElementById('staffNamesConfig').style.display = show ? '' : 'none';
+        if (show) renderStaffNameList();
+    }
+
+    function renderStaffNameList() {
+        const editId = document.getElementById('settingResSelect').value;
+        const r = resources.find(x => x.id === editId);
+        if (!r) return;
+        const names = r.staffNames || [];
+        const container = document.getElementById('staffNameList');
+        if (names.length === 0) {
+            container.innerHTML = '<div class="closure-empty">No staff names configured</div>';
+            return;
+        }
+        const sorted = [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        container.innerHTML = sorted.map(name => {
+            return `<div class="closure-item">
+                <div class="closure-item-info"><span class="closure-item-date">${escapeHtml(name)}</span></div>
+                <div class="closure-item-actions">
+                    <button onclick="editStaffName('${escapeHtml(name).replace(/'/g, "\\'")}')">Edit</button>
+                    <button class="btn-danger" onclick="removeStaffName('${escapeHtml(name).replace(/'/g, "\\'")}')">Remove</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function addStaffName() {
+        const input = document.getElementById('newStaffName');
+        const name = input.value.trim();
+        if (!name) { showToast("Please enter a name.", "error"); return; }
+
+        const editId = document.getElementById('settingResSelect').value;
+        const r = resources.find(x => x.id === editId);
+        if (!r) return;
+        if (!r.staffNames) r.staffNames = [];
+
+        // Check for duplicates (case-insensitive)
+        const nameLower = name.toLowerCase();
+        const existingIdx = r.staffNames.findIndex(n => n.toLowerCase() === nameLower);
+
+        if (editingStaffNameIdx !== null) {
+            // Editing: check duplicate isn't a different entry
+            if (existingIdx >= 0 && existingIdx !== editingStaffNameIdx) {
+                showToast("This name already exists.", "error"); return;
+            }
+            r.staffNames[editingStaffNameIdx] = name;
+            editingStaffNameIdx = null;
+            document.getElementById('staffNameAddBtn').textContent = 'Add';
+            document.getElementById('staffNameCancelEditLink').style.display = 'none';
+            showToast("Staff name updated. Remember to save changes.", "success");
+        } else {
+            if (existingIdx >= 0) {
+                showToast("This name already exists.", "error"); return;
+            }
+            r.staffNames.push(name);
+            showToast("Staff name added. Remember to save changes.", "success");
+        }
+
+        input.value = '';
+        renderStaffNameList();
+    }
+
+    function editStaffName(name) {
+        const editId = document.getElementById('settingResSelect').value;
+        const r = resources.find(x => x.id === editId);
+        if (!r || !r.staffNames) return;
+        const idx = r.staffNames.indexOf(name);
+        if (idx < 0) return;
+
+        editingStaffNameIdx = idx;
+        document.getElementById('newStaffName').value = name;
+        document.getElementById('staffNameAddBtn').textContent = 'Update';
+        document.getElementById('staffNameCancelEditLink').style.display = '';
+    }
+
+    function cancelStaffNameEdit() {
+        editingStaffNameIdx = null;
+        document.getElementById('newStaffName').value = '';
+        document.getElementById('staffNameAddBtn').textContent = 'Add';
+        document.getElementById('staffNameCancelEditLink').style.display = 'none';
+    }
+
+    function removeStaffName(name) {
+        const editId = document.getElementById('settingResSelect').value;
+        const r = resources.find(x => x.id === editId);
+        if (!r || !r.staffNames) return;
+        r.staffNames = r.staffNames.filter(n => n !== name);
+        cancelStaffNameEdit();
+        renderStaffNameList();
+        showToast("Staff name removed. Remember to save changes.", "success");
+    }
+
+    function openApplyStaffNamesModal() {
+        const editId = document.getElementById('settingResSelect').value;
+        const sourceRes = resources.find(x => x.id === editId);
+        if (!sourceRes) return;
+
+        const names = sourceRes.staffNames || [];
+        if (names.length === 0) {
+            showToast("No staff names to apply.", "error"); return;
+        }
+
+        const otherResources = resources.filter(r => r.id !== editId && r.hasStaffField);
+        if (otherResources.length === 0) {
+            showToast("No other resources with staff fields enabled.", "error"); return;
+        }
+
+        document.getElementById('applyStaffNamesDesc').textContent =
+            `Apply staff names from "${sourceRes.name}":`;
+
+        const sorted = [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        document.getElementById('applyStaffNameCheckboxes').innerHTML = sorted.map(name => {
+            return `<label style="display:flex; align-items:center; gap:8px; padding:4px 8px; cursor:pointer; font-size:0.88em;">
+                <input type="checkbox" name="applyStaffName" value="${escapeHtml(name)}" style="width:auto;">
+                <span>${escapeHtml(name)}</span>
+            </label>`;
+        }).join('');
+
+        document.getElementById('applyStaffNameTargetCheckboxes').innerHTML = otherResources.map(r => {
+            const existing = (r.staffNames || []).length;
+            const note = existing > 0 ? ` (${existing} existing)` : '';
+            return `<label style="display:flex; align-items:center; gap:8px; padding:4px 8px; cursor:pointer; font-size:0.88em;">
+                <input type="checkbox" name="applyStaffNameTarget" value="${r.id}" checked style="width:auto;">
+                <span>${escapeHtml(r.name)}${note}</span>
+            </label>`;
+        }).join('');
+
+        document.getElementById('applyStaffNamesModal').style.display = 'flex';
+    }
+
+    async function confirmApplyStaffNames() {
+        const nameCheckboxes = document.querySelectorAll('input[name="applyStaffName"]:checked');
+        const selectedNames = [...nameCheckboxes].map(cb => cb.value);
+
+        if (selectedNames.length === 0) {
+            showToast("No names selected.", "error"); return;
+        }
+
+        const targetCheckboxes = document.querySelectorAll('input[name="applyStaffNameTarget"]:checked');
+        const targetIds = [...targetCheckboxes].map(cb => cb.value);
+
+        if (targetIds.length === 0) {
+            showToast("No resources selected.", "error"); return;
+        }
+
+        let applied = 0;
+        resources.forEach(r => {
+            if (!targetIds.includes(r.id)) return;
+            if (!r.staffNames) r.staffNames = [];
+            selectedNames.forEach(name => {
+                if (!r.staffNames.some(n => n.toLowerCase() === name.toLowerCase())) {
+                    r.staffNames.push(name);
+                }
+            });
+            applied++;
+        });
+
+        closeModal('applyStaffNamesModal');
+        showLoading(true);
+        try {
+            await db.collection('system').doc('resources').set({ list: resources });
+            showToast(`${selectedNames.length} name(s) applied to ${applied} resource(s).`, "success");
         } catch (e) {
             showToast("Error: " + e.message, "error");
         }
@@ -4066,6 +4265,7 @@ const firebaseConfig = {
         target.name = document.getElementById('editResName').value;
         target.maxDuration = parseFloat(document.getElementById('editMaxDuration').value) || 2;
         target.hasStaffField = document.getElementById('editResOrientation').checked;
+        target.staffNames = r.staffNames || [];
         const newViewMode = document.getElementById('editViewMode').value;
         if (newViewMode !== (r.viewMode || 'week')) {
             const modeLabel = newViewMode === 'day' ? 'Day View' : 'Week View';
