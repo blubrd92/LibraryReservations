@@ -995,6 +995,12 @@ textarea { resize: vertical; }
     gap: 4px;
 }
 
+/* Highlight for top performer in stats boxes */
+.dash-highlight {
+    color: #111 !important;
+    font-weight: 700 !important;
+}
+
 /* Stacked bar chart (staff assistance) */
 .dash-stacked-chart {
     display: flex;

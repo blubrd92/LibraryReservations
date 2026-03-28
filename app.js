@@ -4765,16 +4765,18 @@ const firebaseConfig = {
         const durBuckets = statsData.durationBuckets || {};
         const durKeys = Object.keys(durBuckets).map(Number).sort((a, b) => a - b);
         if (durKeys.length > 0) {
+            const maxDurCount = Math.max(...durKeys.map(d => durBuckets[d.toString()]));
             html += '<div class="dash-hbar-chart">';
             durKeys.forEach(d => {
                 const count = durBuckets[d.toString()];
                 const pct = s.totalBookings > 0 ? (count / s.totalBookings) * 100 : 0;
                 const label = d < 1 ? (d * 60) + 'm' : d + 'h';
                 const bookPct = s.totalBookings > 0 ? Math.round((count / s.totalBookings) * 100) : 0;
+                const hl = count === maxDurCount ? ' dash-highlight' : '';
                 html += '<div class="dash-hbar-row">';
-                html += '  <div class="dash-hbar-label">' + label + '</div>';
+                html += '  <div class="dash-hbar-label' + hl + '">' + label + '</div>';
                 html += '  <div class="dash-hbar-track" title="' + count + ' bookings (' + bookPct + '%)"><div class="dash-hbar-fill duration" style="width:' + pct + '%;"></div></div>';
-                html += '  <div class="dash-hbar-value">' + count + ' (' + bookPct + '%)</div>';
+                html += '  <div class="dash-hbar-value' + hl + '">' + count + ' (' + bookPct + '%)</div>';
                 html += '</div>';
             });
             html += '</div>';
@@ -4801,9 +4803,10 @@ const firebaseConfig = {
                     const pct = (count / srTotal) * 100;
                     const color = PIE_COLORS[i % PIE_COLORS.length];
                     const roomName = getSubRoomName(res, parseInt(k));
+                    const hl = i === 0 ? ' dash-highlight' : '';
                     gradientParts.push(color + ' ' + cumPct + '% ' + (cumPct + pct) + '%');
                     cumPct += pct;
-                    legendItems.push('<div class="dash-pie-legend-item"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + roomName + ': ' + count + ' (' + Math.round(pct) + '%)</div>');
+                    legendItems.push('<div class="dash-pie-legend-item' + hl + '"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + roomName + ': ' + count + ' (' + Math.round(pct) + '%)</div>');
                 });
                 html += '<div class="dash-pie-container">';
                 html += '  <div class="dash-pie" style="background: conic-gradient(' + gradientParts.join(', ') + ');"></div>';
@@ -4828,6 +4831,16 @@ const firebaseConfig = {
         const dowMap = {};
         dowData.forEach(d => { dowMap[d.day] = d; });
         const DOW_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        // Find peak day utilization for highlighting
+        let peakDowUtil = 0;
+        for (let i = 0; i < 7; i++) {
+            const dayStart = res.hours[i * 2];
+            const dayEnd = res.hours[i * 2 + 1];
+            if (dayStart !== dayEnd) {
+                const entry = dowMap[DOW_FULL[i]];
+                if (entry && entry.utilization > peakDowUtil) peakDowUtil = entry.utilization;
+            }
+        }
         html += '<div class="dash-vbar-chart">';
         for (let i = 0; i < 7; i++) {
             const entry = dowMap[DOW_FULL[i]];
@@ -4841,14 +4854,15 @@ const firebaseConfig = {
             const isClosed = dayStart === dayEnd;
             const pct = isClosed ? 0 : util;
             const fillPct = isClosed ? 0 : Math.min(100, pct);
+            const hl = !isClosed && util > 0 && util === peakDowUtil ? ' dash-highlight' : '';
             const title = isClosed ? DOW_LABELS[i] + ': Closed'
                 : DOW_LABELS[i] + ': avg ' + avgHrs + 'h/day, ' + parseFloat(totalHrs.toFixed(1)) + 'h total / ' + parseFloat(availHrs.toFixed(1)) + 'h avail (' + util + '%) over ' + openDays + ' days';
             html += '<div class="dash-vbar-col">';
-            html += '  <div class="dash-vbar-pct">' + (!isClosed && availHrs > 0 ? Math.round(pct) + '%' : '') + '</div>';
+            html += '  <div class="dash-vbar-pct' + hl + '">' + (!isClosed && availHrs > 0 ? Math.round(pct) + '%' : '') + '</div>';
             html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
             html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
             html += '  </div>';
-            html += '  <div class="dash-vbar-label">' + DOW_LABELS[i] + '</div>';
+            html += '  <div class="dash-vbar-label' + hl + '">' + DOW_LABELS[i] + '</div>';
             html += '</div>';
         }
         html += '</div>';
@@ -4858,20 +4872,28 @@ const firebaseConfig = {
         // Monthly utilization bar chart
         html += '<div class="dash-panel">';
         html += '<div class="dash-panel-title">Monthly Usage</div>';
+        // Find peak month utilization for highlighting
+        let peakMonthPct = 0;
+        for (let i = 0; i < 12; i++) {
+            const avail = mAvail[i] || 0;
+            const pct = avail > 0 ? Math.round((mTotals[i] / avail) * 100) : 0;
+            if (pct > peakMonthPct) peakMonthPct = pct;
+        }
         html += '<div class="dash-vbar-chart">';
         for (let i = 0; i < 12; i++) {
             const booked = mTotals[i] || 0;
             const avail = mAvail[i] || 0;
             const pct = avail > 0 ? Math.round((booked / avail) * 100) : 0;
             const fillPct = avail > 0 ? Math.min(100, (booked / avail) * 100) : 0;
+            const hl = pct > 0 && pct === peakMonthPct ? ' dash-highlight' : '';
             const title = MONTHS[i] + ': ' + parseFloat(booked.toFixed(1)) + 'h / ' + parseFloat(avail.toFixed(1)) + 'h (' + pct + '%)';
 
             html += '<div class="dash-vbar-col">';
-            html += '  <div class="dash-vbar-pct">' + (avail > 0 ? pct + '%' : '') + '</div>';
+            html += '  <div class="dash-vbar-pct' + hl + '">' + (avail > 0 ? pct + '%' : '') + '</div>';
             html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
             html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
             html += '  </div>';
-            html += '  <div class="dash-vbar-label">' + MONTHS[i] + '</div>';
+            html += '  <div class="dash-vbar-label' + hl + '">' + MONTHS[i] + '</div>';
             html += '</div>';
         }
         html += '</div>';
@@ -4905,7 +4927,8 @@ const firebaseConfig = {
                     const barPct = maxMonthTotal > 0 ? (monthTotal / maxMonthTotal) * 100 : 0;
 
                     html += '<div class="dash-stacked-col">';
-                    html += '  <div class="dash-stacked-count">' + (monthTotal > 0 ? monthTotal : '') + '</div>';
+                    const hlMonth = monthTotal > 0 && monthTotal === maxMonthTotal ? ' dash-highlight' : '';
+                    html += '  <div class="dash-stacked-count' + hlMonth + '">' + (monthTotal > 0 ? monthTotal : '') + '</div>';
                     html += '  <div class="dash-stacked-bar" style="height:' + Math.max(barPct, monthTotal > 0 ? 2 : 0) + '%;">';
                     if (monthTotal > 0) {
                         // Build segments bottom-up
@@ -4925,11 +4948,13 @@ const firebaseConfig = {
                 html += '</div>';
 
                 // Legend
+                const maxStaffTotal = Math.max(...staffNames.map(n => msc[n].reduce((s, c) => s + c, 0)));
                 html += '<div class="dash-stacked-legend">';
                 staffNames.forEach((n, si) => {
                     const total = msc[n].reduce((s, c) => s + c, 0);
                     const color = STAFF_COLORS[si % STAFF_COLORS.length];
-                    html += '<div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + n + ': ' + total + '</div>';
+                    const hl = total === maxStaffTotal ? ' dash-highlight' : '';
+                    html += '<div class="dash-ring-legend-item' + hl + '"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + n + ': ' + total + '</div>';
                 });
                 html += '</div>';
 
@@ -4990,6 +5015,21 @@ const firebaseConfig = {
                     html += '<div class="dash-hm-cell dash-hm-lvl-' + intensity + '" title="' + title + '">' + (count > 0 ? count : '') + '</div>';
                 });
             }
+            // Totals row
+            const hourTotals = {};
+            let maxHourTotal = 0;
+            allHeatHours.forEach(h => {
+                let total = 0;
+                for (let d = 0; d < 7; d++) total += (heatmap[d] || {})[h] || 0;
+                hourTotals[h] = total;
+                if (total > maxHourTotal) maxHourTotal = total;
+            });
+            html += '<div class="dash-hm-day" style="font-weight:600;">Total</div>';
+            allHeatHours.forEach(h => {
+                const total = hourTotals[h];
+                const hl = total > 0 && total === maxHourTotal ? ' dash-highlight' : '';
+                html += '<div class="dash-hm-cell' + hl + '" style="background:transparent;border:none;" title="Total at ' + formatTime(h) + ': ' + total + '">' + (total > 0 ? total : '') + '</div>';
+            });
             html += '</div>';
             // Heatmap scale legend
             html += '<div class="dash-hm-scale">';
