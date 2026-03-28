@@ -3799,7 +3799,7 @@ const firebaseConfig = {
 
     function toggleStaffNamesConfig() {
         const show = document.getElementById('editResOrientation').checked;
-        document.getElementById('staffNamesConfig').style.display = show ? '' : 'none';
+        document.getElementById('staffNamesConfig').classList.toggle('hidden', !show);
         if (show) renderStaffNameList();
     }
 
