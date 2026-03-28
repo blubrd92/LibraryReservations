@@ -4765,11 +4765,10 @@ const firebaseConfig = {
         const durBuckets = statsData.durationBuckets || {};
         const durKeys = Object.keys(durBuckets).map(Number).sort((a, b) => a - b);
         if (durKeys.length > 0) {
-            const maxDurCount = Math.max(...Object.values(durBuckets));
             html += '<div class="dash-hbar-chart">';
             durKeys.forEach(d => {
                 const count = durBuckets[d.toString()];
-                const pct = (count / maxDurCount) * 100;
+                const pct = s.totalBookings > 0 ? (count / s.totalBookings) * 100 : 0;
                 const label = d < 1 ? (d * 60) + 'm' : d + 'h';
                 const bookPct = s.totalBookings > 0 ? Math.round((count / s.totalBookings) * 100) : 0;
                 html += '<div class="dash-hbar-row">';
