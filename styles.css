@@ -971,26 +971,28 @@ textarea { resize: vertical; }
 /* Pie Chart */
 .dash-pie-container {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
 }
 .dash-pie {
-    width: 120px;
-    height: 120px;
+    width: 140px;
+    height: 140px;
     border-radius: 50%;
     flex-shrink: 0;
 }
 .dash-pie-legend {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    justify-content: center;
 }
 .dash-pie-legend-item {
-    font-size: 0.78em;
-    color: #555;
+    font-size: 0.75em;
+    color: #666;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
 }
 
 /* Vertical bar chart (monthly) */
@@ -1157,7 +1159,6 @@ textarea { resize: vertical; }
 
 @media (max-width: 800px) {
     .dash-row, .dash-row.dash-row-thirds { grid-template-columns: 1fr; }
-    .dash-pie-container { flex-direction: column; align-items: center; }
 }
 
 /* Print Styles */
