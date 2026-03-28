@@ -4616,7 +4616,7 @@ const firebaseConfig = {
         Object.keys(bookings).forEach(key => {
             const b = bookings[key];
             slim[key] = { duration: b.duration || 0 };
-            if (b.hasStaff) slim[key].hasStaff = true;
+            if (b.hasStaff) { slim[key].hasStaff = true; if (b.staffName) slim[key].staffName = b.staffName; }
         });
         return slim;
     }
@@ -4880,6 +4880,64 @@ const firebaseConfig = {
 
         html += '</div>'; // end row 2
 
+        // === STAFF ASSISTANCE (full width, conditional) ===
+        if (res.hasStaffField) {
+            const msc = statsData.monthlyStaffCounts || {};
+            const staffNames = Object.keys(msc).sort();
+            const hasStaffData = staffNames.some(n => msc[n].some(c => c > 0));
+            if (hasStaffData) {
+                const STAFF_COLORS = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#edc948', '#76b7b2', '#9c755f'];
+                // Find max monthly total for scaling
+                let maxMonthTotal = 0;
+                for (let i = 0; i < 12; i++) {
+                    let monthTotal = 0;
+                    staffNames.forEach(n => { monthTotal += msc[n][i]; });
+                    if (monthTotal > maxMonthTotal) maxMonthTotal = monthTotal;
+                }
+
+                html += '<div class="dash-row" style="grid-template-columns: 1fr;">';
+                html += '<div class="dash-panel">';
+                html += '<div class="dash-panel-title">Staff Assistance</div>';
+                html += '<div class="dash-stacked-chart">';
+                for (let i = 0; i < 12; i++) {
+                    let monthTotal = 0;
+                    staffNames.forEach(n => { monthTotal += msc[n][i]; });
+                    const barPct = maxMonthTotal > 0 ? (monthTotal / maxMonthTotal) * 100 : 0;
+
+                    html += '<div class="dash-stacked-col">';
+                    html += '  <div class="dash-stacked-count">' + (monthTotal > 0 ? monthTotal : '') + '</div>';
+                    html += '  <div class="dash-stacked-bar" style="height:' + Math.max(barPct, monthTotal > 0 ? 2 : 0) + '%;">';
+                    if (monthTotal > 0) {
+                        // Build segments bottom-up
+                        staffNames.forEach((n, si) => {
+                            const count = msc[n][i];
+                            if (count === 0) return;
+                            const segPct = (count / monthTotal) * 100;
+                            const color = STAFF_COLORS[si % STAFF_COLORS.length];
+                            const isTop = si === staffNames.reduce((last, name, idx) => msc[name][i] > 0 ? idx : last, 0);
+                            html += '<div class="dash-stacked-segment' + (isTop ? ' dash-stacked-segment-top' : '') + '" style="height:' + segPct + '%;background:' + color + ';" title="' + n + ': ' + count + '"></div>';
+                        });
+                    }
+                    html += '  </div>';
+                    html += '  <div class="dash-stacked-label">' + MONTHS[i] + '</div>';
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                // Legend
+                html += '<div class="dash-stacked-legend">';
+                staffNames.forEach((n, si) => {
+                    const total = msc[n].reduce((s, c) => s + c, 0);
+                    const color = STAFF_COLORS[si % STAFF_COLORS.length];
+                    html += '<div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + n + ': ' + total + '</div>';
+                });
+                html += '</div>';
+
+                html += '</div>'; // end panel
+                html += '</div>'; // end row
+            }
+        }
+
         // === ROW 3: Weekly Rhythm (full width) ===
         html += '<div class="dash-row" style="grid-template-columns: 1fr;">';
 
@@ -5012,7 +5070,8 @@ const firebaseConfig = {
         const durationBuckets = {}; // { '0.5': 3, '1': 8, ... }
         const dayHourHeatmap = Array.from({length: 7}, () => ({})); // [day][hour] = count
         const subRoomCounts = {}; // { '0': 12, '1': 8, ... }
-        
+        const monthlyStaffCounts = {}; // { 'John Smith': [0,0,3,...] } per-month counts
+
         // Analyze individual bookings for count, duration, peak hour, staff
         const resPrefix = res.id + '_';
         Object.keys(bookings).forEach(key => {
@@ -5041,7 +5100,12 @@ const firebaseConfig = {
             hourSlotCounts[hourKey] = (hourSlotCounts[hourKey] || 0) + 1;
             
             // Track staff assistance
-            if (booking.hasStaff) staffAssistedCount++;
+            if (booking.hasStaff) {
+                staffAssistedCount++;
+                const staffKey = normalizeStaffName(booking.staffName);
+                if (!monthlyStaffCounts[staffKey]) monthlyStaffCounts[staffKey] = new Array(12).fill(0);
+                monthlyStaffCounts[staffKey][bookingDate.getMonth()]++;
+            }
             
             // Duration distribution
             const durKey = dur.toString();
@@ -5254,7 +5318,8 @@ const firebaseConfig = {
             hourlyDist,
             durationBuckets,
             dayHourHeatmap,
-            subRoomCounts
+            subRoomCounts,
+            monthlyStaffCounts
         };
 
         // Render dashboard (must come after statsData is populated)
@@ -5309,7 +5374,20 @@ const firebaseConfig = {
             csv += `${h.hour},${h.bookings}\n`;
         });
         
-        // Section 5: Daily Breakdown
+        // Section 5: Staff Assistance by Month (conditional)
+        const msc = statsData.monthlyStaffCounts || {};
+        const staffCsvNames = Object.keys(msc).sort();
+        if (staffCsvNames.length > 0) {
+            csv += '\nSTAFF ASSISTANCE BY MONTH (YTD)\n';
+            csv += 'Staff Name,' + MONTHS.join(',') + ',Total\n';
+            staffCsvNames.forEach(name => {
+                const counts = msc[name];
+                const total = counts.reduce((s, c) => s + c, 0);
+                csv += name + ',' + counts.join(',') + ',' + total + '\n';
+            });
+        }
+
+        // Section 6: Daily Breakdown
         csv += '\nDAILY BREAKDOWN\n';
         csv += 'Day,' + MONTHS.join(',') + ',Total\n';
         
