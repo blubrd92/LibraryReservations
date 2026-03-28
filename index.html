@@ -497,11 +497,16 @@
                     <div style="border-top: 1px solid #eee; margin-top: 15px; padding-top: 15px;">
                         <label style="font-weight:bold; display:block; margin-bottom:10px;">Closure Dates (Holidays/Closures)</label>
                         <div class="closure-add-row">
-                            <input type="date" id="newClosureDate" title="Start Date">
-                            <span style="align-self: center; color: #666;">to</span>
-                            <input type="date" id="newClosureEndDate" title="End Date (optional, leave blank for single day)">
+                            <input type="date" id="newClosureDate" title="Date">
+                            <span id="closureEndDateSection" style="display:none; align-self:center;">
+                                <span style="color:#666; margin:0 2px;">to</span>
+                                <input type="date" id="newClosureEndDate" title="End Date">
+                                <button type="button" onclick="toggleClosureEndDate(false)" style="background:none;border:none;color:#999;cursor:pointer;font-size:1.1em;padding:0 4px;" title="Remove end date">&times;</button>
+                            </span>
+                            <a href="#" id="closureAddEndDateLink" onclick="toggleClosureEndDate(true);return false;" style="align-self:center;font-size:0.85em;white-space:nowrap;">+ End date</a>
                             <input type="text" id="newClosureReason" placeholder="Reason (e.g. Holiday)">
-                            <button class="btn-success" onclick="addClosureDate()">Add</button>
+                            <button class="btn-success" id="closureAddBtn" onclick="addClosureDate()">Add</button>
+                            <a href="#" id="closureCancelEditLink" onclick="cancelClosureEdit();return false;" style="display:none;align-self:center;font-size:0.85em;color:#c62828;">Cancel</a>
                         </div>
                         <div style="margin: 10px 0; display: flex; align-items: center; gap: 8px;">
                             <label style="font-size: 0.9em; font-weight: bold;">Viewing year:</label>
@@ -634,10 +639,13 @@
     </div>
 </div>
 <div id="applyClosuresModal" class="modal">
-    <div class="modal-content" style="max-width: 420px;">
+    <div class="modal-content" style="max-width: 480px;">
         <div class="modal-header">Apply Closures to Resources</div>
         <p id="applyClosuresDesc" style="margin: 10px 0; font-size: 0.9em; color: #555;"></p>
-        <div id="applyClosuresCheckboxes" style="margin: 12px 0; max-height: 300px; overflow-y: auto;"></div>
+        <div style="font-weight:600; font-size:0.85em; margin-bottom:4px;">Select closures to apply:</div>
+        <div id="applyClosuresDateCheckboxes" style="margin: 0 0 12px; max-height: 180px; overflow-y: auto; border:1px solid #e8e8e8; border-radius:4px; padding:4px 0;"></div>
+        <div style="font-weight:600; font-size:0.85em; margin-bottom:4px;">Apply to:</div>
+        <div id="applyClosuresCheckboxes" style="margin: 0 0 12px; max-height: 180px; overflow-y: auto; border:1px solid #e8e8e8; border-radius:4px; padding:4px 0;"></div>
         <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 15px;">
             <button onclick="closeModal('applyClosuresModal')">Cancel</button>
             <button class="btn-success" onclick="confirmApplyClosures()">Apply</button>

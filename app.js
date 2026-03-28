@@ -3056,6 +3056,7 @@ const firebaseConfig = {
         });
         
         // Load Closure Dates
+        cancelClosureEdit();
         renderClosureList(r);
     }
     
@@ -3357,6 +3358,54 @@ const firebaseConfig = {
     // --- CLOSURE DATE MANAGEMENT ---
     // Adding/removing closure dates (holidays), year-based storage, rendering the
     // closure list in admin panel, and applying closures across multiple resources.
+
+    let editingClosureKey = null; // Set when editing an existing closure
+
+    function toggleClosureEndDate(show) {
+        document.getElementById('closureEndDateSection').style.display = show ? '' : 'none';
+        document.getElementById('closureAddEndDateLink').style.display = show ? 'none' : '';
+        if (!show) document.getElementById('newClosureEndDate').value = '';
+    }
+
+    function cancelClosureEdit() {
+        editingClosureKey = null;
+        document.getElementById('newClosureDate').value = '';
+        document.getElementById('newClosureEndDate').value = '';
+        document.getElementById('newClosureReason').value = '';
+        toggleClosureEndDate(false);
+        document.getElementById('closureAddBtn').textContent = 'Add';
+        document.getElementById('closureCancelEditLink').style.display = 'none';
+    }
+
+    function editClosureDate(key) {
+        const editId = document.getElementById('settingResSelect').value;
+        const r = resources.find(x => x.id === editId);
+        if (!r || !r.closuresByYear) return;
+
+        const parts = key.split('|');
+        const startDate = parts[0];
+        const endDate = parts[1] || null;
+        const year = startDate.substring(0, 4);
+        if (!r.closuresByYear[year]) return;
+
+        const closure = r.closuresByYear[year].find(c => {
+            if (endDate) return c.date === startDate && c.endDate === endDate;
+            return c.date === startDate && !c.endDate;
+        });
+        if (!closure) return;
+
+        editingClosureKey = key;
+        document.getElementById('newClosureDate').value = closure.date;
+        if (closure.endDate && closure.endDate !== closure.date) {
+            toggleClosureEndDate(true);
+            document.getElementById('newClosureEndDate').value = closure.endDate;
+        } else {
+            toggleClosureEndDate(false);
+        }
+        document.getElementById('newClosureReason').value = closure.reason || '';
+        document.getElementById('closureAddBtn').textContent = 'Update';
+        document.getElementById('closureCancelEditLink').style.display = '';
+    }
     function renderClosureList(res) {
         // If called without argument, get current resource
         if (!res || typeof res !== 'object') {
@@ -3416,7 +3465,10 @@ const firebaseConfig = {
                         <span class="closure-item-date">${dateDisplay}</span>
                         <span class="closure-item-reason">${escapeHtml(c.reason || 'No reason specified')}</span>
                     </div>
-                    <button class="btn-danger" onclick="removeClosureDate('${removeKey}')">Remove</button>
+                    <div class="closure-item-actions">
+                        <button onclick="editClosureDate('${removeKey}')">Edit</button>
+                        <button class="btn-danger" onclick="removeClosureDate('${removeKey}')">Remove</button>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -3426,32 +3478,53 @@ const firebaseConfig = {
         const dateInput = document.getElementById('newClosureDate');
         const endDateInput = document.getElementById('newClosureEndDate');
         const reasonInput = document.getElementById('newClosureReason');
-        
+
         const startDate = dateInput.value;
-        const endDate = endDateInput.value;
+        // Only read end date if the range section is visible
+        const endDateVisible = document.getElementById('closureEndDateSection').style.display !== 'none';
+        const endDate = endDateVisible ? endDateInput.value : '';
         const reason = reasonInput.value.trim();
-        
+
         if (!startDate) {
-            showToast("Please select a start date.", "error");
+            showToast("Please select a date.", "error");
             return;
         }
-        
+
         if (endDate && endDate < startDate) {
             showToast("End date must be on or after start date.", "error");
             return;
         }
-        
+
         const editId = document.getElementById('settingResSelect').value;
         const r = resources.find(x => x.id === editId);
         if (!r) return;
-        
+
         if (!r.closuresByYear) r.closuresByYear = {};
         const year = startDate.substring(0, 4);
         if (!r.closuresByYear[year]) r.closuresByYear[year] = [];
-        
+
         const newStart = startDate;
         const newEnd = endDate || startDate;
-        
+
+        // If editing, temporarily remove old entry so overlap check doesn't flag itself
+        let removedEntry = null;
+        let removedYear = null;
+        if (editingClosureKey) {
+            const oldParts = editingClosureKey.split('|');
+            const oldStart = oldParts[0];
+            const oldEnd = oldParts[1] || null;
+            removedYear = oldStart.substring(0, 4);
+            if (r.closuresByYear[removedYear]) {
+                const idx = r.closuresByYear[removedYear].findIndex(c => {
+                    if (oldEnd) return c.date === oldStart && c.endDate === oldEnd;
+                    return c.date === oldStart && !c.endDate;
+                });
+                if (idx >= 0) removedEntry = r.closuresByYear[removedYear].splice(idx, 1)[0];
+                if (r.closuresByYear[removedYear].length === 0) delete r.closuresByYear[removedYear];
+            }
+            if (!r.closuresByYear[year]) r.closuresByYear[year] = [];
+        }
+
         // Check for overlapping closures across all years
         const allClosures = getAllClosures(r);
         const hasOverlap = allClosures.some(c => {
@@ -3459,87 +3532,103 @@ const firebaseConfig = {
             const existingEnd = c.endDate || c.date;
             return newStart <= existingEnd && newEnd >= existingStart;
         });
-        
+
         if (hasOverlap) {
+            // Restore old entry if editing
+            if (removedEntry) {
+                if (!r.closuresByYear[removedYear]) r.closuresByYear[removedYear] = [];
+                r.closuresByYear[removedYear].push(removedEntry);
+            }
             showToast("This date range overlaps with an existing closure.", "error");
             return;
         }
-        
-        // Check for existing bookings on the affected dates
-        const affectedDates = [];
-        let scanDate = new Date(newStart + 'T00:00:00');
-        const scanEnd = new Date(newEnd + 'T00:00:00');
-        while (scanDate <= scanEnd) {
-            affectedDates.push(new Date(scanDate));
-            scanDate.setDate(scanDate.getDate() + 1);
-        }
-        
-        let totalConflicts = 0;
-        const conflictDates = [];
-        try {
-            // Group affected dates by week key to batch queries (1 per week instead of 1 per day)
-            const weekGroups = {};
-            affectedDates.forEach(date => {
-                const weekKey = getWeekKey(date);
-                const groupKey = `${editId}_${weekKey}`;
-                if (!weekGroups[groupKey]) weekGroups[groupKey] = [];
-                weekGroups[groupKey].push(date);
-            });
-            const queries = Object.entries(weekGroups).map(([groupPrefix, dates]) => {
-                const dayIndices = new Set(dates.map(d => d.getDay()));
-                return db.collection('appointments')
-                    .where(firebase.firestore.FieldPath.documentId(), '>=', groupPrefix)
-                    .where(firebase.firestore.FieldPath.documentId(), '<', groupPrefix + '\uf8ff')
-                    .get()
-                    .then(snapshot => {
-                        snapshot.forEach(doc => {
-                            // Parse day index from document ID to check if it's an affected day
-                            const idParts = doc.id.substring(groupPrefix.length + 1).split('_');
-                            const docDayIdx = parseInt(idParts[0]);
-                            if (dayIndices.has(docDayIdx)) {
-                                totalConflicts++;
-                                const matchDate = dates.find(d => d.getDay() === docDayIdx);
-                                if (matchDate) {
-                                    const dateStr = matchDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                                    if (!conflictDates.includes(dateStr)) conflictDates.push(dateStr);
+
+        // Check for existing bookings on the affected dates (skip if dates unchanged during edit)
+        const isEditing = !!editingClosureKey;
+        const oldParts = isEditing ? editingClosureKey.split('|') : [];
+        const datesChanged = !isEditing || oldParts[0] !== startDate || (oldParts[1] || '') !== (endDate || '');
+
+        if (datesChanged) {
+            const affectedDates = [];
+            let scanDate = new Date(newStart + 'T00:00:00');
+            const scanEnd = new Date(newEnd + 'T00:00:00');
+            while (scanDate <= scanEnd) {
+                affectedDates.push(new Date(scanDate));
+                scanDate.setDate(scanDate.getDate() + 1);
+            }
+
+            let totalConflicts = 0;
+            const conflictDates = [];
+            try {
+                const weekGroups = {};
+                affectedDates.forEach(date => {
+                    const weekKey = getWeekKey(date);
+                    const groupKey = `${editId}_${weekKey}`;
+                    if (!weekGroups[groupKey]) weekGroups[groupKey] = [];
+                    weekGroups[groupKey].push(date);
+                });
+                const queries = Object.entries(weekGroups).map(([groupPrefix, dates]) => {
+                    const dayIndices = new Set(dates.map(d => d.getDay()));
+                    return db.collection('appointments')
+                        .where(firebase.firestore.FieldPath.documentId(), '>=', groupPrefix)
+                        .where(firebase.firestore.FieldPath.documentId(), '<', groupPrefix + '\uf8ff')
+                        .get()
+                        .then(snapshot => {
+                            snapshot.forEach(doc => {
+                                const idParts = doc.id.substring(groupPrefix.length + 1).split('_');
+                                const docDayIdx = parseInt(idParts[0]);
+                                if (dayIndices.has(docDayIdx)) {
+                                    totalConflicts++;
+                                    const matchDate = dates.find(d => d.getDay() === docDayIdx);
+                                    if (matchDate) {
+                                        const dateStr = matchDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                                        if (!conflictDates.includes(dateStr)) conflictDates.push(dateStr);
+                                    }
                                 }
-                            }
+                            });
                         });
-                    });
-            });
-            await Promise.all(queries);
-        } catch (e) {
-            // If query fails, proceed without warning
+                });
+                await Promise.all(queries);
+            } catch (e) {
+                // If query fails, proceed without warning
+            }
+
+            if (totalConflicts > 0) {
+                const dateList = conflictDates.length <= 5
+                    ? conflictDates.join(', ')
+                    : conflictDates.slice(0, 5).join(', ') + ` and ${conflictDates.length - 5} more`;
+                const msg = `${totalConflicts} existing booking(s) found on: ${dateList}.\n\nThey will be hidden but not deleted. Remove them manually if needed.\n\nContinue?`;
+                if (!confirm(msg)) return;
+            }
         }
-        
-        if (totalConflicts > 0) {
-            const dateList = conflictDates.length <= 5 
-                ? conflictDates.join(', ') 
-                : conflictDates.slice(0, 5).join(', ') + ` and ${conflictDates.length - 5} more`;
-            const msg = `${totalConflicts} existing booking(s) found on: ${dateList}.\n\nThey will be hidden but not deleted. Remove them manually if needed.\n\nContinue adding this closure?`;
-            if (!confirm(msg)) return;
-        }
-        
-        const closureEntry = { 
-            date: startDate, 
-            reason: reason || 'Closed' 
+
+        const closureEntry = {
+            date: startDate,
+            reason: reason || 'Closed'
         };
-        
+
         if (endDate && endDate !== startDate) {
             closureEntry.endDate = endDate;
         }
-        
+
         r.closuresByYear[year].push(closureEntry);
-        
+
+        // Reset form
         dateInput.value = '';
         endDateInput.value = '';
         reasonInput.value = '';
-        
+        toggleClosureEndDate(false);
+
+        const wasEditing = !!editingClosureKey;
+        editingClosureKey = null;
+        document.getElementById('closureAddBtn').textContent = 'Add';
+        document.getElementById('closureCancelEditLink').style.display = 'none';
+
         // Switch year selector to the year we just added to
         document.getElementById('closureYearSelect').value = year;
-        
+
         renderClosureList(r);
-        showToast("Closure date added. Remember to save changes.", "success");
+        showToast(wasEditing ? "Closure date updated. Remember to save changes." : "Closure date added. Remember to save changes.", "success");
     }
 
     function removeClosureDate(key) {
@@ -3573,33 +3662,55 @@ const firebaseConfig = {
         const editId = document.getElementById('settingResSelect').value;
         const sourceRes = resources.find(x => x.id === editId);
         if (!sourceRes) return;
-        
+
         const selectedYear = document.getElementById('closureYearSelect').value;
         const closures = getClosuresForYear(sourceRes, selectedYear);
         if (closures.length === 0) {
             showToast(`No closure dates for ${selectedYear} to apply.`, "error");
             return;
         }
-        
+
         const otherResources = resources.filter(r => r.id !== editId);
         if (otherResources.length === 0) {
             showToast("No other resources to apply to.", "error");
             return;
         }
-        
-        document.getElementById('applyClosuresDesc').textContent = 
-            `Apply ${closures.length} closure date(s) for ${selectedYear} from "${sourceRes.name}" to:`;
-        
+
+        document.getElementById('applyClosuresDesc').textContent =
+            `Apply closures for ${selectedYear} from "${sourceRes.name}":`;
+
+        // Closure selection checkboxes
+        const sorted = [...closures].sort((a, b) => a.date.localeCompare(b.date));
+        const dateContainer = document.getElementById('applyClosuresDateCheckboxes');
+        dateContainer.innerHTML = sorted.map((c, idx) => {
+            const startDate = new Date(c.date + 'T00:00');
+            const startFmt = startDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            let dateDisplay;
+            if (c.endDate && c.endDate !== c.date) {
+                const endDate = new Date(c.endDate + 'T00:00');
+                const endFmt = endDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                dateDisplay = startFmt + ' \u2192 ' + endFmt;
+            } else {
+                dateDisplay = startFmt;
+            }
+            const key = c.endDate ? c.date + '|' + c.endDate : c.date;
+            return `<label style="display:flex; align-items:center; gap:8px; padding:4px 8px; cursor:pointer; font-size:0.88em;">
+                <input type="checkbox" name="applyClosureDate" value="${key}" checked style="width:auto;">
+                <span><strong>${dateDisplay}</strong> <span style="color:#666;">${escapeHtml(c.reason || '')}</span></span>
+            </label>`;
+        }).join('');
+
+        // Target resource checkboxes
         const container = document.getElementById('applyClosuresCheckboxes');
         container.innerHTML = otherResources.map(r => {
             const existing = getClosuresForYear(r, selectedYear).length;
             const note = existing > 0 ? ` (${existing} existing)` : '';
-            return `<label style="display:flex; align-items:center; gap:8px; padding:6px 4px; cursor:pointer;">
-                <input type="checkbox" value="${r.id}" checked style="width:auto;">
+            return `<label style="display:flex; align-items:center; gap:8px; padding:4px 8px; cursor:pointer; font-size:0.88em;">
+                <input type="checkbox" name="applyClosureTarget" value="${r.id}" checked style="width:auto;">
                 <span>${escapeHtml(r.name)}${note}</span>
             </label>`;
         }).join('');
-        
+
         document.getElementById('applyClosuresModal').style.display = 'flex';
     }
     
@@ -3607,22 +3718,37 @@ const firebaseConfig = {
         const editId = document.getElementById('settingResSelect').value;
         const sourceRes = resources.find(x => x.id === editId);
         const selectedYear = document.getElementById('closureYearSelect').value;
-        const closures = getClosuresForYear(sourceRes, selectedYear);
-        
-        const checkboxes = document.querySelectorAll('#applyClosuresCheckboxes input[type="checkbox"]:checked');
-        const targetIds = [...checkboxes].map(cb => cb.value);
-        
+        const allClosures = getClosuresForYear(sourceRes, selectedYear);
+
+        // Get selected closure keys
+        const dateCheckboxes = document.querySelectorAll('input[name="applyClosureDate"]:checked');
+        const selectedKeys = new Set([...dateCheckboxes].map(cb => cb.value));
+
+        if (selectedKeys.size === 0) {
+            showToast("No closure dates selected.", "error");
+            return;
+        }
+
+        // Filter to only selected closures
+        const closures = allClosures.filter(c => {
+            const key = c.endDate ? c.date + '|' + c.endDate : c.date;
+            return selectedKeys.has(key);
+        });
+
+        const targetCheckboxes = document.querySelectorAll('input[name="applyClosureTarget"]:checked');
+        const targetIds = [...targetCheckboxes].map(cb => cb.value);
+
         if (targetIds.length === 0) {
             showToast("No resources selected.", "error");
             return;
         }
-        
+
         let applied = 0;
         resources.forEach(r => {
             if (!targetIds.includes(r.id)) return;
             if (!r.closuresByYear) r.closuresByYear = {};
             if (!r.closuresByYear[selectedYear]) r.closuresByYear[selectedYear] = [];
-            
+
             closures.forEach(c => {
                 if (!r.closuresByYear[selectedYear].some(existing => existing.date === c.date)) {
                     r.closuresByYear[selectedYear].push({ ...c });
@@ -3630,12 +3756,12 @@ const firebaseConfig = {
             });
             applied++;
         });
-        
+
         closeModal('applyClosuresModal');
         showLoading(true);
         try {
             await db.collection('system').doc('resources').set({ list: resources });
-            showToast(`${selectedYear} closures applied to ${applied} resource(s).`, "success");
+            showToast(`${closures.length} closure(s) applied to ${applied} resource(s).`, "success");
         } catch (e) {
             showToast("Error: " + e.message, "error");
         }

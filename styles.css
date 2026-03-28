@@ -734,6 +734,11 @@ textarea { resize: vertical; }
     font-size: 0.85em;
     color: #666;
 }
+.closure-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
 .closure-item button {
     padding: 4px 8px;
     font-size: 0.8em;
