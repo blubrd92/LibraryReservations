@@ -5028,7 +5028,7 @@ const firebaseConfig = {
             allHeatHours.forEach(h => {
                 const total = hourTotals[h];
                 const hl = total > 0 && total === maxHourTotal ? ' dash-highlight' : '';
-                html += '<div class="dash-hm-cell' + hl + '" style="background:transparent;border:none;" title="Total at ' + formatTime(h) + ': ' + total + '">' + (total > 0 ? total : '') + '</div>';
+                html += '<div class="dash-hm-cell' + hl + '" style="background:transparent;border:none;color:#666;" title="Total at ' + formatTime(h) + ': ' + total + '">' + (total > 0 ? total : '') + '</div>';
             });
             html += '</div>';
             // Heatmap scale legend
