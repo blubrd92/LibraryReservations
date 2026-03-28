@@ -519,7 +519,7 @@
                                 <input type="date" id="newClosureEndDate" title="End Date">
                                 <button type="button" onclick="toggleClosureEndDate(false)" style="background:none;border:none;color:#999;cursor:pointer;font-size:1.1em;padding:0 4px;" title="Remove end date">&times;</button>
                             </span>
-                            <a href="#" id="closureAddEndDateLink" onclick="toggleClosureEndDate(true);return false;" style="align-self:center;font-size:0.85em;white-space:nowrap;">+ End date</a>
+                            <button type="button" id="closureAddEndDateLink" onclick="toggleClosureEndDate(true)" style="align-self:center;font-size:0.8em;padding:4px 8px;white-space:nowrap;">+ End date</button>
                             <input type="text" id="newClosureReason" placeholder="Reason (e.g. Holiday)">
                             <button class="btn-success" id="closureAddBtn" onclick="addClosureDate()">Add</button>
                             <a href="#" id="closureCancelEditLink" onclick="cancelClosureEdit();return false;" style="display:none;align-self:center;font-size:0.85em;color:#c62828;">Cancel</a>
