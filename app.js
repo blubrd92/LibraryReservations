@@ -629,7 +629,10 @@ const firebaseConfig = {
                             };
                         }
 
-                        if (canEdit) {
+                        // Check if this slot is on a past day (locked for new bookings)
+                        const slotLocked = isBookingLocked(activeWeekKey, col.dayIndex, res);
+
+                        if (canEdit && !slotLocked) {
                             slot.onclick = (e) => {
                                 if (selectionState.active) return;
                                 if (resizeJustEnded) return;

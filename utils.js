@@ -325,14 +325,7 @@ function isBookingLocked(weekKey, dayIndex, res, today) {
     today = new Date(today);
     today.setHours(0, 0, 0, 0);
 
-    if (res.viewMode === 'day') {
-        return bookingDate < today;
-    } else {
-        const day = today.getDay();
-        const thisWeekStart = new Date(today);
-        thisWeekStart.setDate(today.getDate() - day);
-        return bookingDate < thisWeekStart;
-    }
+    return bookingDate < today;
 }
 
 /**

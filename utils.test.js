@@ -17,6 +17,7 @@ const {
     getSubRoomName,
     getNthWeekdayOfMonth,
     getLastWeekdayOfMonth,
+    isBookingLocked,
     isBookingAnonymized,
     checkTimeConflict,
     formatCosmeticTime,
@@ -487,6 +488,64 @@ describe('getLastWeekdayOfMonth', () => {
 });
 
 // ============================================================
+// isBookingLocked
+// ============================================================
+
+describe('isBookingLocked', () => {
+    // Fixed "today": Wednesday Jan 8, 2025
+    const today = new Date(2025, 0, 8);
+
+    test('yesterday is locked', () => {
+        const res = { viewMode: 'week' };
+        // Jan 7 (Tuesday) - dayIndex 2 in week starting Jan 5
+        expect(isBookingLocked('2025-01-05', 2, res, today)).toBe(true);
+    });
+
+    test('today is NOT locked', () => {
+        const res = { viewMode: 'week' };
+        // Jan 8 (Wednesday) - dayIndex 3 in week starting Jan 5
+        expect(isBookingLocked('2025-01-05', 3, res, today)).toBe(false);
+    });
+
+    test('future day is NOT locked', () => {
+        const res = { viewMode: 'week' };
+        // Jan 9 (Thursday) - dayIndex 4 in week starting Jan 5
+        expect(isBookingLocked('2025-01-05', 4, res, today)).toBe(false);
+    });
+
+    test('past day in same week is locked (week view)', () => {
+        const res = { viewMode: 'week' };
+        // Jan 5 (Sunday) is before Jan 8 (today), same week
+        expect(isBookingLocked('2025-01-05', 0, res, today)).toBe(true);
+    });
+
+    test('past day in same week is locked (day view)', () => {
+        const res = { viewMode: 'day' };
+        // Jan 5 (Sunday) is before Jan 8 (today)
+        expect(isBookingLocked('2025-01-05', 0, res, today)).toBe(true);
+    });
+
+    test('both view modes behave the same', () => {
+        const week = { viewMode: 'week' };
+        const day = { viewMode: 'day' };
+        // Past day
+        expect(isBookingLocked('2025-01-05', 1, week, today))
+            .toBe(isBookingLocked('2025-01-05', 1, day, today));
+        // Today
+        expect(isBookingLocked('2025-01-05', 3, week, today))
+            .toBe(isBookingLocked('2025-01-05', 3, day, today));
+        // Future day
+        expect(isBookingLocked('2025-01-05', 5, week, today))
+            .toBe(isBookingLocked('2025-01-05', 5, day, today));
+    });
+
+    test('prior week is locked', () => {
+        const res = { viewMode: 'week' };
+        expect(isBookingLocked('2024-12-29', 0, res, today)).toBe(true);
+    });
+});
+
+// ============================================================
 // isBookingAnonymized
 // ============================================================
 
@@ -511,10 +570,16 @@ describe('isBookingAnonymized', () => {
         expect(isBookingAnonymized('2025-01-05', 4, res, today)).toBe(false);
     });
 
-    test('week view: booking in current week is NOT anonymized', () => {
+    test('week view: past day in current week IS anonymized', () => {
         const res = { viewMode: 'week' };
-        // Week of Jan 5 is current week (today is Jan 8)
-        expect(isBookingAnonymized('2025-01-05', 0, res, today)).toBe(false);
+        // Jan 5 (Sunday) is before Jan 8 (today), even though same week
+        expect(isBookingAnonymized('2025-01-05', 0, res, today)).toBe(true);
+    });
+
+    test('week view: today in current week is NOT anonymized', () => {
+        const res = { viewMode: 'week' };
+        // Jan 8 (Wednesday, today) - dayIndex 3 in week starting Jan 5
+        expect(isBookingAnonymized('2025-01-05', 3, res, today)).toBe(false);
     });
 
     test('week view: booking in prior week IS anonymized', () => {
