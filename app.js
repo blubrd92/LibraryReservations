@@ -5023,7 +5023,7 @@ const firebaseConfig = {
         return slim;
     }
 
-    async function loadStatsData(forceRefresh) {
+    async function loadStatsData() {
         const resId = document.getElementById('statsResourceSelect').value;
         const year = parseInt(document.getElementById('statsYearSelect').value);
         const res = resources.find(r => r.id === resId);
@@ -5034,16 +5034,12 @@ const firebaseConfig = {
         const currentYear = new Date().getFullYear();
         const isPastYear = year < currentYear;
 
-        // Show recalculate button only for past years (cached data)
-        const recalcBtn = document.getElementById('statsRecalcBtn');
-        if (recalcBtn) recalcBtn.style.display = isPastYear ? '' : 'none';
-
         try {
             let bookings;
             const memoryCacheKey = `${resId}_${year}`;
 
             // Check in-memory session cache first (avoids all reads on repeated opens)
-            if (!forceRefresh && statsBookingsCache[memoryCacheKey]) {
+            if (statsBookingsCache[memoryCacheKey]) {
                 const cached = statsBookingsCache[memoryCacheKey];
                 if (Date.now() - cached.fetchedAt < STATS_CACHE_TTL) {
                     bookings = cached.bookings;
@@ -5051,7 +5047,7 @@ const firebaseConfig = {
             }
 
             // For past years, try loading from Firestore cache (1 read instead of ~53)
-            if (!bookings && isPastYear && !forceRefresh) {
+            if (!bookings && isPastYear) {
                 const cacheDocId = getStatsCacheDocId(resId, year);
                 const cacheDoc = await db.collection('system').doc(cacheDocId).get();
                 if (cacheDoc.exists) {
@@ -5159,11 +5155,6 @@ const firebaseConfig = {
 
         showLoading(false);
     }
-
-    function recalculateStats() {
-        loadStatsData(true);
-    }
-
 
     function toggleStatsView(view) {
         const chartBtn = document.getElementById('statsViewChart');
