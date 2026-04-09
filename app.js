@@ -5262,10 +5262,11 @@ const firebaseConfig = {
         html += '    </div>';
         html += '  </div>';
         html += '  <div class="dash-ring-legend">';
-        html += '    <div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:#2e7d32;"></span> 0-25% Light</div>';
-        html += '    <div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:#1976d2;"></span> 25-50% Moderate</div>';
-        html += '    <div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:#e65100;"></span> 50-75% Heavy</div>';
-        html += '    <div class="dash-ring-legend-item"><span class="dash-ring-dot" style="background:#c62828;"></span> 75%+ Near Capacity</div>';
+        const activeLevel = utilVal >= 75 ? 3 : utilVal >= 50 ? 2 : utilVal >= 25 ? 1 : 0;
+        html += '    <div class="dash-ring-legend-item' + (activeLevel === 0 ? ' dash-highlight' : '') + '"><span class="dash-ring-dot" style="background:#2e7d32;"></span> 0-25% Light</div>';
+        html += '    <div class="dash-ring-legend-item' + (activeLevel === 1 ? ' dash-highlight' : '') + '"><span class="dash-ring-dot" style="background:#1976d2;"></span> 25-50% Moderate</div>';
+        html += '    <div class="dash-ring-legend-item' + (activeLevel === 2 ? ' dash-highlight' : '') + '"><span class="dash-ring-dot" style="background:#e65100;"></span> 50-75% Heavy</div>';
+        html += '    <div class="dash-ring-legend-item' + (activeLevel === 3 ? ' dash-highlight' : '') + '"><span class="dash-ring-dot" style="background:#c62828;"></span> 75%+ Near Capacity</div>';
         html += '  </div>';
         html += '</div>';
         html += '</div>';
