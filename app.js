@@ -5469,7 +5469,7 @@ const firebaseConfig = {
                     html += '<div class="dash-ring-legend-item' + hl + '"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + n + ': ' + total + '</div>';
                 });
                 html += '</div>';
-                html += '<div class="dash-vbar-hint">Tip: Hover over the colored sections of each month\'s bar to see each person\'s assisted session count</div>';
+                html += '<div class="dash-vbar-hint">Hover over each month\'s colored sections for individual session counts</div>';
 
                 html += '</div>'; // end panel
                 html += '</div>'; // end row
