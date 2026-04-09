@@ -623,13 +623,12 @@ const firebaseConfig = {
                                             rescheduleMode.highlightElement = hl;
                                         }
                                         const slotRect = slot.getBoundingClientRect();
-                                        const pad = 2;
-                                        const halfH = (slotRect.height / 2) - pad - 1;
-                                        const hlTop = offset > 0 ? slotRect.top + slotRect.height / 2 + pad : slotRect.top + pad;
-                                        rescheduleMode.highlightElement.style.left = (slotRect.left + pad) + 'px';
+                                        const halfH = slotRect.height / 2;
+                                        const hlTop = offset > 0 ? slotRect.top + halfH : slotRect.top;
+                                        rescheduleMode.highlightElement.style.left = slotRect.left + 'px';
                                         rescheduleMode.highlightElement.style.top = hlTop + 'px';
-                                        rescheduleMode.highlightElement.style.width = (slotRect.width - pad * 2 - 1) + 'px';
-                                        rescheduleMode.highlightElement.style.height = Math.max(halfH, 10) + 'px';
+                                        rescheduleMode.highlightElement.style.width = slotRect.width + 'px';
+                                        rescheduleMode.highlightElement.style.height = halfH + 'px';
                                         rescheduleMode.highlightElement.classList.toggle('invalid', !rv.valid);
                                     }
                                 }
@@ -1067,16 +1066,15 @@ const firebaseConfig = {
 
             // Create highlight element with border over just the target quarter
             const rect = slot.getBoundingClientRect();
-            const padding = 2;
-            const halfHeight = (rect.height / 2) - padding - 1;
-            const quarterTop = quarterOffset > 0 ? rect.top + rect.height / 2 + padding : rect.top + padding;
+            const halfHeight = rect.height / 2;
+            const quarterTop = quarterOffset > 0 ? rect.top + halfHeight : rect.top;
 
             const highlight = document.createElement('div');
             highlight.className = 'drag-slot-highlight';
-            highlight.style.left = (rect.left + padding) + 'px';
+            highlight.style.left = rect.left + 'px';
             highlight.style.top = quarterTop + 'px';
-            highlight.style.width = (rect.width - padding * 2 - 1) + 'px';
-            highlight.style.height = Math.max(halfHeight, 10) + 'px';
+            highlight.style.width = rect.width + 'px';
+            highlight.style.height = halfHeight + 'px';
             document.body.appendChild(highlight);
             dragState.highlightElement = highlight;
 

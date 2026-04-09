@@ -559,7 +559,6 @@ textarea { resize: vertical; }
     position: fixed;
     background: rgba(39, 174, 96, 0.4);
     border: 2px solid var(--success);
-    border-radius: 3px;
     pointer-events: none;
     z-index: 1000;
     box-sizing: border-box;
