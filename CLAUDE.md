@@ -17,11 +17,11 @@ A web-based library resource reservation/scheduling system. Staff use it to mana
 ## File Structure
 
 ```
-app.js           (~4,900 lines)  - Application logic (DOM, Firebase, UI interactions)
-utils.js         (~310 lines)    - Pure utility functions (testable, no DOM/Firebase deps)
-utils.test.js    (~420 lines)    - Jest tests for utils.js
-index.html       (~640 lines)    - HTML markup, modals, UI structure
-styles.css       (~1,120 lines)  - All styling
+app.js           (~5,950 lines)  - Application logic (DOM, Firebase, UI interactions)
+utils.js         (~490 lines)    - Pure utility functions (testable, no DOM/Firebase deps)
+utils.test.js    (~800 lines)    - Jest tests for utils.js
+index.html       (~710 lines)    - HTML markup, 13 modals, UI structure
+styles.css       (~1,275 lines)  - All styling, 5 color palettes
 package.json                     - Dev dependencies (Jest only)
 ```
 
@@ -109,23 +109,28 @@ The file is organized into labeled sections. Use these markers to navigate:
 
 | Line | Section Marker | What It Contains |
 |------|---------------|-----------------|
-| 1 | `// --- FIREBASE CONFIG ---` | Firebase initialization, auth constants |
-| 44 | `// --- STATE ---` | All global state variables (resources, bookings, drag/selection/resize state objects) |
-| 120 | `function init()` | Bootstrap: sets current week, auth state listener, date picker setup |
-| 155 | `// --- AUTH ACTIONS ---` | `doLogin()`, `doLogout()`, `canEditResource()`, `setupRealtimeListeners()` |
-| 202 | `// --- CORE LOGIC ---` | `loadBookingsForCurrentView()`, `handleResourceUpdate()`, navigation, `renderGrid()` |
-| 380 | `function renderGrid()` | Main grid rendering (~390 lines). Builds time slots, positions booking overlays, attaches event listeners |
-| 768 | `// --- DRAG-AND-DROP HANDLERS ---` | Moving existing bookings via drag. Includes validation, conflict checking, drop confirmation |
-| 1394 | `// --- DRAG-TO-CREATE HANDLERS ---` | Creating new bookings by clicking and dragging on empty slots |
-| 1773 | `// --- RESIZE HANDLERS ---` | Changing booking duration by dragging the bottom edge |
-| 2077 | `// --- RESCHEDULE MODE ---` | Multi-step rescheduling: enter mode, navigate to target day/week, click to place |
-| 2316 | `// --- MODAL & SAVE ---` | Booking modal form population, `saveBooking()`, `saveRecurringBooking()`, recurring pattern logic |
-| 2796 | `// --- ADMIN PANEL ---` | Admin settings UI, resource management, `saveAllSettings()` |
-| 3175 | `// --- CLOSURE DATE MANAGEMENT ---` | Add/remove closure dates, year-based storage, apply closures across resources |
-| 3509 | `// --- NEW RESOURCE WITH IMPORT OPTION ---` | Creating resources with option to clone settings from existing ones |
-| 3800 | `// --- BOOKING POPOVER & HIGHLIGHTS ---` | Hover popover, highlighting, `deleteBooking()` with series-aware logic |
-| 3935 | `// --- UTILITY FUNCTIONS ---` | `closeModal()`, `createDiv()`, `showLoading()`, modal toggles, advance limit checking |
-| 4066 | `// --- STATS FUNCTIONS ---` | Statistics modal, heatmap, dashboard charts, CSV export (~960 lines to end of file) |
+| ~1 | `// --- FIREBASE CONFIG ---` | Firebase initialization, auth constants |
+| ~43 | `// --- STATE ---` | All global state variables (resources, bookings, drag/selection/resize state objects) |
+| ~123 | `function init()` | Bootstrap: sets current week, auth state listener, date picker setup |
+| ~163 | `// --- AUTH ACTIONS ---` | `doLogin()`, `doLogout()`, `canEditResource()`, `setupRealtimeListeners()` |
+| ~217 | `// --- CORE LOGIC ---` | `loadBookingsForCurrentView()`, `handleResourceUpdate()`, navigation, `renderGrid()` |
+| ~423 | `function renderGrid()` | Main grid rendering (~414 lines). Builds time slots, positions booking overlays, attaches event listeners |
+| ~839 | `// --- CURRENT TIME INDICATOR ---` | Time indicator line for day view (`setupTimeIndicator`, `placeTimeIndicator`) |
+| ~905 | `// --- DRAG-AND-DROP HANDLERS ---` | Moving existing bookings via drag. Includes validation, conflict checking, drop confirmation |
+| ~1555 | `// --- DRAG-TO-CREATE HANDLERS ---` | Creating new bookings by clicking and dragging on empty slots |
+| ~1946 | `// --- RESIZE HANDLERS ---` | Changing booking duration by dragging the bottom edge |
+| ~2262 | `// --- RESCHEDULE MODE ---` | Multi-step rescheduling: enter mode, navigate to target day/week, click to place |
+| ~2512 | `// --- MODAL & SAVE ---` | Booking modal form population, `saveBooking()`, `saveRecurringBooking()`, recurring pattern logic |
+| ~3031 | `// --- ADMIN PANEL ---` | Admin settings UI, resource management, sub-room editing, staffing config |
+| ~3420 | `// --- CLOSURE DATE MANAGEMENT ---` | Add/remove closure dates, year-based storage, apply closures across resources |
+| ~3837 | `// --- STAFF NAME LIST MANAGEMENT ---` | Configure staff names per resource, apply across resources |
+| ~4071 | `// --- NEW RESOURCE WITH IMPORT OPTION ---` | Creating resources with option to clone settings from existing ones |
+| ~4261 | `async function deleteResource()` | Delete resource with password protection |
+| ~4299 | `async function saveAllSettings()` | Main settings save, also triggers lazy janitor |
+| ~4356 | `async function checkAndRunJanitor()` | Monthly check for old booking scrubbing (anonymization) |
+| ~4501 | `// --- BOOKING POPOVER & HIGHLIGHTS ---` | Hover popover, highlighting, `deleteBooking()` with series-aware logic |
+| ~4657 | `// --- UTILITY FUNCTIONS ---` | `closeModal()`, `createDiv()`, `showLoading()`, modal toggles, advance limit checking |
+| ~4788 | `// --- STATS FUNCTIONS ---` | Statistics modal, heatmap, dashboard charts, CSV export (~1,160 lines to end of file) |
 
 ## Key Patterns & Conventions
 
@@ -150,9 +155,22 @@ Three state objects track interactive operations:
 
 Each follows the pattern: start handler sets state, move handler updates visuals, end handler shows confirmation or saves.
 
+### Reschedule Mode
+Distinct from drag-to-move. Allows navigating to a different week before placing a booking. Flow: enter reschedule mode → navigate to target date → click target slot → confirm. Managed by the `rescheduleMode` state object.
+
+### Lazy Janitor (Anonymization)
+`checkAndRunJanitor()` runs once per session when settings are saved. It scrubs old booking patron names based on `anonymityBufferMonths` (0–3 months). Processes in 500-document batches with cursor-based pagination and checkpoint tracking.
+
+### Stats Caching
+Multi-layer caching for statistics performance:
+- **Session cache:** In-memory `statsBookingsCache` map with 5-minute TTL
+- **Firestore cache:** Year and monthly cache documents created on-demand
+- YTD calculations only include bookings up to today
+
 ### Error Handling
 - Firestore operations are wrapped in try/catch with `showToast()` for error display.
 - A loading overlay (`showLoading(true/false)`) is shown during saves.
+- Navigation is debounced (150ms) to batch quick successive clicks.
 
 ### Time Representation
 - Times are floats: 10.0 = 10:00 AM, 10.5 = 10:30 AM, 10.25 = 10:15 AM.
@@ -162,17 +180,17 @@ Each follows the pattern: start handler sets state, move handler updates visuals
 ## Common Tasks
 
 ### Adding a new field to bookings
-1. Add the field to the save logic in `saveBooking()` (around line 2574)
+1. Add the field to the save logic in `saveBooking()` (around line ~2770)
 2. Add it to the modal form in `index.html` inside `#bookingModal`
-3. Populate it in `openBookingModal()` (around line 2420)
-4. If it should display on the grid, update the booking overlay rendering in `renderGrid()` (around line 700+)
-5. If it should appear in the popover, update `showBookingPopover()` (around line 3918)
+3. Populate it in `openBookingModal()` (around line ~2610)
+4. If it should display on the grid, update the booking overlay rendering in `renderGrid()` (around line ~700+)
+5. If it should appear in the popover, update `showBookingPopover()` (around line ~4520)
 6. If it should appear in stats/CSV export, update `renderStatsChart()` and `exportStatsCSV()`
 
 ### Adding a new resource setting
 1. Add the form control to the admin panel in `index.html` inside `#settingsOverlay`
-2. Load the value in `loadSettingsForEditor()` (around line 2941)
-3. Save the value in `saveAllSettings()` (around line 3846)
+2. Load the value in `loadSettingsForEditor()` (around line ~3140)
+3. Save the value in `saveAllSettings()` (around line ~4299)
 4. Use the setting where needed (typically in `renderGrid()` or `openBookingModal()`)
 
 ### Adding a new pure utility function
@@ -196,17 +214,19 @@ npm run test:watch   # re-run on file changes
 npm run test:verbose # show individual test names
 ```
 
-Tests cover the pure utility functions in `utils.js` (64 tests across 16 test groups). After making changes to any utility function, run `npm test` to verify nothing is broken.
+Tests cover the 24 pure utility functions in `utils.js` (99 tests across 24 test groups). After making changes to any utility function, run `npm test` to verify nothing is broken.
 
 ### What's tested
 
-- Time/date formatting (`formatTime`, `formatDateISO`, `getWeekKey`, etc.)
+- Time/date formatting (`formatTime`, `formatDateISO`, `formatDateShort`, `getWeekKey`, `getWeekStart`, `getCurrentTimeFloat`, `formatCosmeticTime`)
+- HTML escaping (`escapeHtml`)
 - Slot ID parsing and construction (`parseSlotId`, `buildSlotId`, `normalizeSubIndex`)
-- Closure date logic (`getClosureReason`, `migrateClosureDates`, `getClosuresForYear`)
+- Closure date logic (`getClosureReason`, `migrateClosureDates`, `getClosuresForYear`, `getAllClosures`)
 - Sub-room helpers (`getActiveSubRooms`, `migrateSubRooms`, `getSubRoomName`)
 - Recurring date math (`getNthWeekdayOfMonth`, `getLastWeekdayOfMonth`)
-- Booking anonymization (`isBookingAnonymized`)
+- Booking anonymization (`isBookingAnonymized`, `isBookingLocked`)
 - Conflict detection (`checkTimeConflict`)
+- Staff name normalization (`normalizeStaffName`)
 
 ### Adding new tests
 
