@@ -5728,8 +5728,9 @@ const firebaseConfig = {
                         }
                         
                         // Calculate heat map level (0-8)
-                        const heatLevel = hours === 0 ? 0 : Math.min(8, Math.ceil((hours / maxHours) * 8));
-                        const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : '';
+                        const isPast = date <= today;
+                        const heatLevel = hours === 0 ? (isPast ? 1 : 0) : Math.min(8, Math.ceil((hours / maxHours) * 8));
+                        const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : (isPast ? '0' : '');
                         const dayUtil = dayAvailable > 0 ? ((hours / dayAvailable) * 100).toFixed(1) : '0.0';
                         const bc = stat.bookingCount;
                         const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'}, ${bc} booking${bc === 1 ? '' : 's'} (${dayUtil}% utilization)` : 'No bookings';
