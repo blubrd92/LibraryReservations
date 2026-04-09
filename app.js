@@ -5432,7 +5432,6 @@ const firebaseConfig = {
                 html += '<div class="dash-row" style="grid-template-columns: 1fr;">';
                 html += '<div class="dash-panel">';
                 html += '<div class="dash-panel-title">Staff/Volunteer Assisted Sessions</div>';
-                html += '<div style="font-size: 0.8em; color: #555; margin-bottom: 4px;">Hover over the different colors to see individual assisted sessions for that month.</div>';
                 html += '<div class="dash-stacked-chart">';
                 for (let i = 0; i < 12; i++) {
                     let monthTotal = 0;
@@ -5459,6 +5458,7 @@ const firebaseConfig = {
                     html += '</div>';
                 }
                 html += '</div>';
+                html += '<div class="dash-vbar-hint">Hover over colors to see individual assisted sessions</div>';
 
                 // Legend
                 const maxStaffTotal = Math.max(...staffNames.map(n => msc[n].reduce((s, c) => s + c, 0)));
