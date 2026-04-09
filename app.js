@@ -5458,7 +5458,6 @@ const firebaseConfig = {
                     html += '</div>';
                 }
                 html += '</div>';
-                html += '<div class="dash-vbar-hint">Hover over colors to see individual assisted sessions</div>';
 
                 // Legend
                 const maxStaffTotal = Math.max(...staffNames.map(n => msc[n].reduce((s, c) => s + c, 0)));
@@ -5470,6 +5469,7 @@ const firebaseConfig = {
                     html += '<div class="dash-ring-legend-item' + hl + '"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + n + ': ' + total + '</div>';
                 });
                 html += '</div>';
+                html += '<div class="dash-vbar-hint">Tip: Hover over the colored sections of each month\'s bar to see each person\'s assisted session count</div>';
 
                 html += '</div>'; // end panel
                 html += '</div>'; // end row
