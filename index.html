@@ -405,7 +405,7 @@
                                 <button class="btn-success" id="staffNameAddBtn" onclick="addStaffName()">Add</button>
                                 <a href="#" id="staffNameCancelEditLink" onclick="cancelStaffNameEdit();return false;" style="display:none;align-self:center;font-size:0.85em;color:#c62828;">Cancel</a>
                             </div>
-                            <div id="staffNameList" class="closure-list" style="max-height:150px;"></div>
+                            <div id="staffNameList" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto; margin-bottom:10px;"></div>
                             <div class="closure-actions">
                                 <button onclick="openApplyStaffNamesModal()" style="font-size:0.85em;">Apply Names to Other Resources...</button>
                             </div>

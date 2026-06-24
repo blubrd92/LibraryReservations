@@ -4047,16 +4047,15 @@ const firebaseConfig = {
             return;
         }
         // Render in stored array order (not alphabetical) so the custom order is
-        // visible and can be rearranged by dragging.
+        // visible and can be rearranged by dragging. Uses the same card markup as
+        // the sub-room reorder so the two look and behave identically.
         container.innerHTML = names.map((name, i) => {
-            return `<div class="closure-item staff-name-row" data-idx="${i}" draggable="true">
-                <div class="closure-item-info" style="display:flex; align-items:center; gap:8px;">
-                    <span class="subroom-drag-handle" title="Drag to reorder">☰</span>
-                    <span class="closure-item-date">${escapeHtml(name)}</span>
-                </div>
-                <div class="closure-item-actions">
-                    <button onclick="editStaffName(${i})">Edit</button>
-                    <button class="btn-danger" onclick="removeStaffName(${i})">Remove</button>
+            return `<div class="subroom-card staff-name-row" data-idx="${i}" draggable="true">
+                <span class="subroom-drag-handle" title="Drag to reorder">☰</span>
+                <span style="flex:1; font-size:0.9em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(name)}</span>
+                <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+                    <button type="button" onclick="editStaffName(${i})" style="padding:4px 8px; font-size:0.8em;">Edit</button>
+                    <button type="button" onclick="removeStaffName(${i})" class="btn-danger" style="padding:4px 8px; font-size:0.8em;">Remove</button>
                 </div>
             </div>`;
         }).join('');
