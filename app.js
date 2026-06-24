@@ -210,11 +210,106 @@ const firebaseConfig = {
      * for an intentional reset. Returns the Firestore promise, or a rejected promise
      * when the safety guard blocks the write.
      */
+    const RESOURCE_BACKUP_LIMIT = 20; // how many resource-config snapshots to keep
+
     function saveResourceList(list, options = {}) {
         if (!shouldPersistResourceList(list, resourcesEverLoaded, options.allowEmpty === true)) {
             return Promise.reject(new Error("Refused to save an empty resource list (safety check)."));
         }
-        return db.collection('system').doc('resources').set({ list });
+        return db.collection('system').doc('resources').set({ list }).then((result) => {
+            // Best-effort version-history snapshot. A backup failure must NEVER turn
+            // a successful save into a failure, so its errors are swallowed.
+            if (!options.skipBackup && Array.isArray(list) && list.length > 0) {
+                backupResourceList(list).catch((err) => console.warn("Resource backup skipped:", err && err.message));
+            }
+            return result;
+        });
+    }
+
+    // --- RESOURCE VERSION HISTORY (free-tier backup) ---
+    // Each successful resource-config save also appends a snapshot to the single
+    // system/resourceBackups document (newest first, capped at RESOURCE_BACKUP_LIMIT).
+    // This is a lightweight, free-tier stand-in for point-in-time recovery: the
+    // resource config is tiny and changes rarely, and bookings live elsewhere and
+    // are untouched. The admin "Version History" panel restores from these.
+    let loadedResourceBackups = [];
+
+    async function backupResourceList(list) {
+        const ref = db.collection('system').doc('resourceBackups');
+        const snap = await ref.get();
+        const prev = (snap.exists && Array.isArray(snap.data().versions)) ? snap.data().versions : [];
+        const versions = [
+            {
+                savedAt: new Date().toISOString(),
+                count: list.length,
+                names: list.map((r) => (r && r.name ? String(r.name) : '(unnamed)')),
+                list: JSON.parse(JSON.stringify(list))
+            },
+            ...prev
+        ].slice(0, RESOURCE_BACKUP_LIMIT);
+        await ref.set({ versions });
+    }
+
+    async function openResourceBackupModal() {
+        const listEl = document.getElementById('resourceBackupList');
+        listEl.innerHTML = '<p style="color:#777;">Loading…</p>';
+        document.getElementById('resourceBackupModal').style.display = 'flex';
+        try {
+            const snap = await db.collection('system').doc('resourceBackups').get();
+            loadedResourceBackups = (snap.exists && Array.isArray(snap.data().versions)) ? snap.data().versions : [];
+            renderResourceBackupList();
+        } catch (e) {
+            listEl.innerHTML = `<p style="color:var(--danger);">Couldn't load version history: ${escapeHtml(e.message)}</p>`;
+        }
+    }
+
+    function renderResourceBackupList() {
+        const listEl = document.getElementById('resourceBackupList');
+        if (!loadedResourceBackups.length) {
+            listEl.innerHTML = '<p style="color:#777;">No snapshots yet. One is saved automatically each time resource settings are saved.</p>';
+            return;
+        }
+        const rowStyle = "border:1px solid #e0e0e0; border-radius:6px; padding:10px 12px; margin-bottom:8px; display:flex; justify-content:space-between; gap:12px; align-items:center;";
+        listEl.innerHTML = loadedResourceBackups.map((v, i) => {
+            const when = v.savedAt ? new Date(v.savedAt).toLocaleString() : 'Unknown time';
+            const names = Array.isArray(v.names)
+                ? v.names
+                : (Array.isArray(v.list) ? v.list.map((r) => r && r.name).filter(Boolean) : []);
+            const count = typeof v.count === 'number' ? v.count : names.length;
+            const preview = names.length ? escapeHtml(names.join(', ')) : '(no resources)';
+            return `<div style="${rowStyle}">
+                <div style="min-width:0;">
+                    <div style="font-weight:600;">${escapeHtml(when)}</div>
+                    <div style="font-size:0.85em; color:#666; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${preview}">${count} resource(s): ${preview}</div>
+                </div>
+                <button class="btn-success" onclick="restoreResourceBackup(${i})" style="white-space:nowrap;">Restore</button>
+            </div>`;
+        }).join('');
+    }
+
+    async function restoreResourceBackup(index) {
+        const version = loadedResourceBackups[index];
+        if (!version || !Array.isArray(version.list) || version.list.length === 0) {
+            return showToast("That snapshot is empty or unreadable.", "error");
+        }
+        const when = version.savedAt ? new Date(version.savedAt).toLocaleString() : 'this snapshot';
+        const currentCount = Array.isArray(resources) ? resources.length : 0;
+        if (!confirm(`Restore the resource configuration from ${when}?\n\nThis replaces the current configuration (${currentCount} resource(s)) with the snapshot's ${version.list.length} resource(s). Bookings are not affected. The current configuration is snapshotted first, so you can undo this.`)) {
+            return;
+        }
+        closeModal('resourceBackupModal');
+        showLoading(true);
+        try {
+            // Snapshot the current config first so the restore itself is reversible.
+            if (Array.isArray(resources) && resources.length > 0) {
+                await backupResourceList(resources).catch(() => {});
+            }
+            await saveResourceList(JSON.parse(JSON.stringify(version.list)), { skipBackup: true });
+            showToast("Resource configuration restored.", "success");
+        } catch (e) {
+            showToast("Restore failed: " + e.message, "error");
+        }
+        showLoading(false);
     }
 
     function setupRealtimeListeners() {

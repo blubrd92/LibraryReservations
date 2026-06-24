@@ -32,9 +32,11 @@ service cloud.firestore {
              && request.resource.data.list.size() > 0;
     }
 
-    // The `system` collection holds the resource catalog (`resources`) plus the
-    // janitor checkpoint, stats metadata, and stats cache documents. All require
-    // auth; `resources` additionally requires the non-empty-list guard.
+    // The `system` collection holds the resource catalog (`resources`), the
+    // resource-config version history (`resourceBackups`), the janitor checkpoint,
+    // stats metadata, and stats cache documents. All require auth; `resources`
+    // additionally requires the non-empty-list guard. `resourceBackups` is a normal
+    // signed-in read/write document (the snapshot append + prune happens client-side).
     match /system/{docId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn()

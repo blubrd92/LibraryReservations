@@ -541,6 +541,7 @@
         </div>
         <div class="settings-footer">
             <button class="btn-success" onclick="saveAllSettings()">Save Changes</button>
+            <button onclick="openResourceBackupModal()">⟲ Version History</button>
             <button onclick="closeModal('settingsOverlay')">Cancel</button>
         </div>
     </div>
@@ -639,6 +640,19 @@
         <div class="flex gap">
             <button class="btn-danger" onclick="confirmDeleteResource()" style="background: var(--danger); color: white;">Delete Permanently</button>
             <button onclick="closeModal('deleteResourceModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="resourceBackupModal" class="modal">
+    <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-header">⟲ Resource Version History</div>
+        <div style="padding: 12px 0;">
+            <p style="margin:0 0 12px 0; color:#555;">Automatic snapshots of your resource configuration, newest first. Restoring replaces the current configuration with the selected snapshot — your bookings are never affected.</p>
+            <div id="resourceBackupList" style="max-height: 50vh; overflow-y: auto;"></div>
+        </div>
+        <div class="flex gap">
+            <button onclick="closeModal('resourceBackupModal')">Close</button>
         </div>
     </div>
 </div>
