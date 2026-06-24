@@ -4046,16 +4046,31 @@ const firebaseConfig = {
             container.innerHTML = '<div class="closure-empty">No staff names configured</div>';
             return;
         }
-        const sorted = [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-        container.innerHTML = sorted.map(name => {
-            return `<div class="closure-item">
-                <div class="closure-item-info"><span class="closure-item-date">${escapeHtml(name)}</span></div>
+        // Render in stored array order (not alphabetical) so the custom order is
+        // visible and can be rearranged by dragging.
+        container.innerHTML = names.map((name, i) => {
+            return `<div class="closure-item staff-name-row" data-idx="${i}" draggable="true">
+                <div class="closure-item-info" style="display:flex; align-items:center; gap:8px;">
+                    <span class="subroom-drag-handle" title="Drag to reorder">☰</span>
+                    <span class="closure-item-date">${escapeHtml(name)}</span>
+                </div>
                 <div class="closure-item-actions">
-                    <button onclick="editStaffName('${escapeHtml(name).replace(/'/g, "\\'")}')">Edit</button>
-                    <button class="btn-danger" onclick="removeStaffName('${escapeHtml(name).replace(/'/g, "\\'")}')">Remove</button>
+                    <button onclick="editStaffName(${i})">Edit</button>
+                    <button class="btn-danger" onclick="removeStaffName(${i})">Remove</button>
                 </div>
             </div>`;
         }).join('');
+
+        // Drag-to-reorder wiring (mirrors the sub-room cards). Row listeners attach
+        // to the freshly rendered rows; the container listeners use stable function
+        // references, so re-adding them on each render is a harmless no-op.
+        container.querySelectorAll('.staff-name-row').forEach(row => {
+            row.addEventListener('dragstart', onStaffNameDragStart);
+            row.addEventListener('dragend', onStaffNameDragEnd);
+        });
+        container.addEventListener('dragover', onStaffNameDragOver);
+        container.addEventListener('drop', onStaffNameDrop);
+        container.addEventListener('dragleave', onStaffNameDragLeave);
     }
 
     function addStaffName() {
@@ -4094,15 +4109,13 @@ const firebaseConfig = {
         renderStaffNameList();
     }
 
-    function editStaffName(name) {
+    function editStaffName(idx) {
         const editId = document.getElementById('settingResSelect').value;
         const r = resources.find(x => x.id === editId);
-        if (!r || !r.staffNames) return;
-        const idx = r.staffNames.indexOf(name);
-        if (idx < 0) return;
+        if (!r || !Array.isArray(r.staffNames) || !r.staffNames[idx]) return;
 
         editingStaffNameIdx = idx;
-        document.getElementById('newStaffName').value = name;
+        document.getElementById('newStaffName').value = r.staffNames[idx];
         document.getElementById('staffNameAddBtn').textContent = 'Update';
         document.getElementById('staffNameCancelEditLink').style.display = '';
     }
@@ -4114,14 +4127,91 @@ const firebaseConfig = {
         document.getElementById('staffNameCancelEditLink').style.display = 'none';
     }
 
-    function removeStaffName(name) {
+    function removeStaffName(idx) {
         const editId = document.getElementById('settingResSelect').value;
         const r = resources.find(x => x.id === editId);
-        if (!r || !r.staffNames) return;
-        r.staffNames = r.staffNames.filter(n => n !== name);
+        if (!r || !Array.isArray(r.staffNames) || idx < 0 || idx >= r.staffNames.length) return;
+        r.staffNames.splice(idx, 1);
         cancelStaffNameEdit();
         renderStaffNameList();
         showToast("Staff name removed. Remember to save changes.", "success");
+    }
+
+    // --- STAFF NAME DRAG-TO-REORDER (mirrors the sub-room cards) ---
+    let staffNameDragIdx = null;
+
+    function onStaffNameDragStart(e) {
+        staffNameDragIdx = this.dataset.idx;
+        this.classList.add('subroom-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', this.dataset.idx); // needed for Firefox
+    }
+
+    function onStaffNameDragEnd() {
+        staffNameDragIdx = null;
+        const container = document.getElementById('staffNameList');
+        if (container) {
+            const ind = container.querySelector('.subroom-drop-indicator');
+            if (ind) ind.remove();
+        }
+        document.querySelectorAll('.staff-name-row.subroom-dragging').forEach(el => el.classList.remove('subroom-dragging'));
+    }
+
+    function onStaffNameDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (staffNameDragIdx === null) return;
+        const container = document.getElementById('staffNameList');
+        const existing = container.querySelector('.subroom-drop-indicator');
+        if (existing) existing.remove();
+        const rows = [...container.querySelectorAll('.staff-name-row:not(.subroom-dragging)')];
+        let insertBefore = null;
+        for (const row of rows) {
+            const rect = row.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) { insertBefore = row; break; }
+        }
+        const indicator = document.createElement('div');
+        indicator.className = 'subroom-drop-indicator';
+        if (insertBefore) container.insertBefore(indicator, insertBefore);
+        else container.appendChild(indicator);
+    }
+
+    function onStaffNameDragLeave(e) {
+        const container = document.getElementById('staffNameList');
+        if (!container.contains(e.relatedTarget)) {
+            const ind = container.querySelector('.subroom-drop-indicator');
+            if (ind) ind.remove();
+        }
+    }
+
+    function onStaffNameDrop(e) {
+        e.preventDefault();
+        const container = document.getElementById('staffNameList');
+        const indicator = container.querySelector('.subroom-drop-indicator');
+        if (indicator) indicator.remove();
+        if (staffNameDragIdx === null) return;
+
+        const editId = document.getElementById('settingResSelect').value;
+        const r = resources.find(x => x.id === editId);
+        if (!r || !Array.isArray(r.staffNames)) { staffNameDragIdx = null; return; }
+
+        // Visual order of the rows NOT being dragged, then splice the dragged item
+        // in at the drop position — same approach as the sub-room reorder.
+        const rows = [...container.querySelectorAll('.staff-name-row:not(.subroom-dragging)')];
+        let dropVisualPos = rows.length;
+        for (let i = 0; i < rows.length; i++) {
+            const rect = rows[i].getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) { dropVisualPos = i; break; }
+        }
+
+        const dragArrIdx = parseInt(staffNameDragIdx, 10);
+        const order = rows.map(row => parseInt(row.dataset.idx, 10));
+        order.splice(dropVisualPos, 0, dragArrIdx);
+
+        r.staffNames = order.map(idx => r.staffNames[idx]);
+        staffNameDragIdx = null;
+        renderStaffNameList();
+        showToast("Order updated. Remember to save changes.", "success");
     }
 
     function openApplyStaffNamesModal() {
