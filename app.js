@@ -331,7 +331,7 @@ const firebaseConfig = {
                     // We had real resources and the document just came back
                     // empty / missing / malformed. Do NOT overwrite, and do NOT
                     // clobber the in-memory list — keep showing the last good copy.
-                    showToast("Resource list came back empty — keeping the last loaded copy and not overwriting. Check Firestore or restore from a backup.", "error");
+                    showToast("Resource list came back empty. Keeping the last loaded copy and not overwriting. Check Firestore or restore from a backup.", "error");
                     return;
                 case 'first-run':
                     // Genuinely empty database (nothing has ever loaded). Show a
