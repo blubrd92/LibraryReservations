@@ -232,6 +232,16 @@ body.is-dragging .slot::after {
     opacity: 0.9;
 }
 
+/* Very tight blocks (e.g. 15-minute): a single line, vertically centered so it
+   stays legible in the thin block; clips at the right edge rather than wrapping. */
+.booking-float.is-compact { justify-content: center; }
+.booking-float .slot-compact {
+    display: block;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
 /* Overflow indicator */
 .booking-float .overflow-indicator {
     position: absolute;

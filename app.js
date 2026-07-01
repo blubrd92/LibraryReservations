@@ -917,23 +917,35 @@ const firebaseConfig = {
                 booking.locked = locked;
                 const displayName = anon ? 'Past Booking' : escapeHtml(booking.data.name);
                 const seriesIcon = booking.data.seriesId ? '<span class="series-indicator" title="Recurring series">🔁</span> ' : '';
-                bookingEl.innerHTML = `<span class="slot-name">${seriesIcon}${displayName}</span>`;
                 const bookingDayEnd = res.hours[(booking.dayIndex * 2) + 1];
                 const cosmeticMin = res.cosmeticCloseMinutes || 0;
-                bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin)} (${booking.data.duration}h)</span>`;
-                
-                if (booking.data.hasStaff) {
-                    bookingEl.innerHTML += `<span class="slot-staff">w/ ${escapeHtml(booking.data.staffName)}</span>`;
-                }
-                
-                if (anon) {
-                    if (booking.data.notes) {
-                        bookingEl.innerHTML += `<span class="slot-notes" style="font-size:0.8em; margin-top:4px; opacity:0.75; font-style:italic;">Past notes anonymized for patron privacy</span>`;
+
+                if (Math.max(bookingHeight, 10) < 40) {
+                    // Very tight block (e.g. a 15-minute booking): the stacked layout
+                    // can't fit, so show a single centered line, pipe-separated, that
+                    // stays partly readable even when it clips. The name is kept first
+                    // (left) so it's the part that survives when the line is cut off.
+                    bookingEl.classList.add('is-compact');
+                    const compactParts = [`${seriesIcon}${displayName}`, `${formatTime(booking.start)}–${formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin)}`];
+                    if (booking.data.hasStaff) compactParts.push(`w/ ${escapeHtml(booking.data.staffName)}`);
+                    bookingEl.innerHTML = `<span class="slot-compact">${compactParts.join(' | ')}</span>`;
+                } else {
+                    bookingEl.innerHTML = `<span class="slot-name">${seriesIcon}${displayName}</span>`;
+                    bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin)} (${booking.data.duration}h)</span>`;
+
+                    if (booking.data.hasStaff) {
+                        bookingEl.innerHTML += `<span class="slot-staff">w/ ${escapeHtml(booking.data.staffName)}</span>`;
                     }
-                } else if (booking.data.showNotes && booking.data.notes) {
-                    bookingEl.innerHTML += `<span class="slot-notes" style="font-size:0.85em; margin-top:4px; opacity:0.9; border-top:1px solid rgba(255,255,255,0.2); padding-top:2px;">${escapeHtml(booking.data.notes)}</span>`;
-                } else if (!booking.data.showNotes && booking.data.notes) {
-                    bookingEl.innerHTML += `<span class="slot-notes" style="font-size:0.8em; margin-top:4px; opacity:0.75; font-style:italic;">📝 Click to view note</span>`;
+
+                    if (anon) {
+                        if (booking.data.notes) {
+                            bookingEl.innerHTML += `<span class="slot-notes" style="font-size:0.8em; margin-top:4px; opacity:0.75; font-style:italic;">Past notes anonymized for patron privacy</span>`;
+                        }
+                    } else if (booking.data.showNotes && booking.data.notes) {
+                        bookingEl.innerHTML += `<span class="slot-notes" style="font-size:0.85em; margin-top:4px; opacity:0.9; border-top:1px solid rgba(255,255,255,0.2); padding-top:2px;">${escapeHtml(booking.data.notes)}</span>`;
+                    } else if (!booking.data.showNotes && booking.data.notes) {
+                        bookingEl.innerHTML += `<span class="slot-notes" style="font-size:0.8em; margin-top:4px; opacity:0.75; font-style:italic;">📝 Click to view note</span>`;
+                    }
                 }
                 
                 const canEdit = canEditResource(res);
