@@ -185,6 +185,16 @@ The file is organized into labeled sections. **Search for the marker text to nav
 ### Slot ID Convention
 Slot IDs encode position: `{resId}_{weekKey}_{dayIndex}_{time}[_{subRoomIndex}]`. This is used both as Firestore document IDs and as HTML `data-slot-id` attributes. Many functions parse these IDs (`parseSlotId`) to extract day index, time, etc.
 
+### Booking Overlay Positioning
+Bookings are not grid cells — they are absolutely-positioned `.booking-float` overlays placed on top of the 30-minute DOM slots. The DOM only ever renders 30-minute slots; 15-minute (quarter-hour) bookings are positioned *within* a slot, not given their own rows. The time→pixel mapping lives in `renderGrid()`:
+
+- `slotHeight` is the **measured** start-slot rect height. Rows use `grid-auto-rows: 1fr`, so heights are fractional and collapse to the 30px `min-height` on a full schedule.
+- **Top** = measured slot top + a half-slot offset for `:15`/`:45` starts + a small symmetric `gap`.
+- **Height** = `duration * 2 * slotHeight - gap * 2`, with a small floor so a 15-minute block never exceeds its half-slot on compact rows.
+- The half-slot offset is aligned to the dashed midline drawn by `.quarter-hour-slot::before` (`50% - 0.5px` of the padding box, ≈ `slotHeight/2 - 1`), and `container.clientTop`/`clientLeft` are subtracted because absolute `top`/`left` resolve against the padding box while the measured rects are border-box.
+
+**Known duplication / candidate refactor:** this same math is copied — with small variations — into the drag-move highlight (DRAG-AND-DROP HANDLERS section), the drag-to-create overlay (DRAG-TO-CREATE HANDLERS), and the resize overlay (RESIZE HANDLERS). Only the `renderGrid()` copy currently carries the alignment corrections above, so the interactive previews can sit ~1px off from where the block finally lands. If you touch this geometry again, strongly consider extracting a single `computeBlockRect(...)`-style helper (ideally pure, in `utils.js`, so it can be unit-tested) and pointing all four call sites at it — the scattered copies are what made a past 15-minute-block alignment bug hard to find. The sites differ in inputs (a measured `positions[]` array vs. a `gridRowRect` vs. a raw `slotRect`) and coordinate space (the render is container-relative; the previews are body-appended / viewport-relative), so unifying them is a real refactor, not a copy-paste.
+
 ### State Objects
 Three state objects track interactive operations:
 - `dragState` - dragging an existing booking to a new slot
