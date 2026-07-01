@@ -249,6 +249,11 @@ body.is-dragging .slot::after {
     white-space: nowrap;
     overflow: hidden;
 }
+/* When a compact line is clipped, fade its right edge as a "more on hover" cue. */
+.booking-float.is-clipped .slot-compact {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+}
 
 /* Overflow indicator */
 .booking-float .overflow-indicator {

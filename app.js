@@ -1009,10 +1009,18 @@ const firebaseConfig = {
                 
                 container.appendChild(bookingEl);
                 
-                // Check overflow after layout is fully complete (double rAF ensures paint)
+                // Check overflow after layout is fully complete (double rAF ensures paint).
+                // Compact single-line blocks clip horizontally, so fade their right edge
+                // as the "there's more, hover" cue. Taller stacked blocks that overflow
+                // vertically keep the "Hover for details" hint.
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
-                        if (bookingEl.scrollHeight > bookingEl.clientHeight) {
+                        const compactEl = bookingEl.querySelector('.slot-compact');
+                        if (compactEl) {
+                            if (compactEl.scrollWidth > compactEl.clientWidth) {
+                                bookingEl.classList.add('is-clipped');
+                            }
+                        } else if (bookingEl.scrollHeight > bookingEl.clientHeight) {
                             const indicator = document.createElement('span');
                             indicator.className = 'overflow-indicator';
                             indicator.innerText = 'Hover for details';
