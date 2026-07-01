@@ -193,8 +193,6 @@ Bookings are not grid cells — they are absolutely-positioned `.booking-float` 
 - **Height** = `duration * 2 * slotHeight - gap * 2`, with a small floor so a 15-minute block never exceeds its half-slot on compact rows.
 - The half-slot offset is aligned to the dashed midline drawn by `.quarter-hour-slot::before` (`50% - 0.5px` of the padding box, ≈ `slotHeight/2 - 1`), and `container.clientTop`/`clientLeft` are subtracted because absolute `top`/`left` resolve against the padding box while the measured rects are border-box.
 
-Block **content is tiered by height** (`usableLines` in `renderGrid()`): the name shows always, then a compact time (`start · duration`, via `formatDuration`), then staff, then notes — each added only if it fits. A block too short for even the name renders as a bare colored bar and relies on the hover popover instead of clipping text. The time is intentionally compact because the row axis already encodes it for on-the-hour/half-hour bookings (the block shows the start, which is unlabeled for `:15`/`:45`, plus the duration). Past-day bookings (`isBookingLocked`) get the `.is-past` class and are dimmed so today/upcoming stand out.
-
 **Known duplication / candidate refactor:** this same math is copied — with small variations — into the drag-move highlight (DRAG-AND-DROP HANDLERS section), the drag-to-create overlay (DRAG-TO-CREATE HANDLERS), and the resize overlay (RESIZE HANDLERS). Only the `renderGrid()` copy currently carries the alignment corrections above, so the interactive previews can sit ~1px off from where the block finally lands. If you touch this geometry again, strongly consider extracting a single `computeBlockRect(...)`-style helper (ideally pure, in `utils.js`, so it can be unit-tested) and pointing all four call sites at it — the scattered copies are what made a past 15-minute-block alignment bug hard to find. The sites differ in inputs (a measured `positions[]` array vs. a `gridRowRect` vs. a raw `slotRect`) and coordinate space (the render is container-relative; the previews are body-appended / viewport-relative), so unifying them is a real refactor, not a copy-paste.
 
 ### State Objects
@@ -273,7 +271,7 @@ Tests cover the pure utility functions in `utils.js` (one `describe` group per e
 
 ### What's tested
 
-- Time/date formatting (`formatTime`, `formatDuration`, `formatDateISO`, `formatDateShort`, `getWeekKey`, `getWeekStart`, `getCurrentTimeFloat`, `formatCosmeticTime`)
+- Time/date formatting (`formatTime`, `formatDateISO`, `formatDateShort`, `getWeekKey`, `getWeekStart`, `getCurrentTimeFloat`, `formatCosmeticTime`)
 - HTML escaping (`escapeHtml`)
 - Slot ID parsing and construction (`parseSlotId`, `buildSlotId`, `normalizeSubIndex`)
 - Closure date logic (`getClosureReason`, `migrateClosureDates`, `getClosuresForYear`, `getAllClosures`)
