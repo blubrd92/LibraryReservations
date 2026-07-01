@@ -907,9 +907,12 @@ const firebaseConfig = {
                 // gap top and bottom so the block sits symmetrically between its grid lines
                 // and stacked bookings never overlap. The small floor keeps very short
                 // (15-min) blocks visible without exceeding their half-slot on compact rows.
+                const MIN_BLOCK_HEIGHT = 10;   // floor keeps 15-min blocks visible on compact rows
+                const COMPACT_HEIGHT_PX = 40;  // below this the stacked layout can't fit (pairs with .is-compact CSS)
                 const bookingHeight = (booking.data.duration * 2 * slotHeight) - gap * 2;
-                bookingEl.style.height = Math.max(bookingHeight, 10) + 'px';
-                
+                const finalHeight = Math.max(bookingHeight, MIN_BLOCK_HEIGHT);
+                bookingEl.style.height = finalHeight + 'px';
+
                 // Content
                 const anon = isBookingAnonymized(activeWeekKey, booking.dayIndex, res);
                 const locked = isBookingLocked(activeWeekKey, booking.dayIndex, res);
@@ -920,15 +923,22 @@ const firebaseConfig = {
                 const bookingDayEnd = res.hours[(booking.dayIndex * 2) + 1];
                 const cosmeticMin = res.cosmeticCloseMinutes || 0;
 
-                if (Math.max(bookingHeight, 10) < 40) {
+                if (finalHeight < COMPACT_HEIGHT_PX) {
                     // Very tight block (e.g. a 15-minute booking): the stacked layout
                     // can't fit, so show a single centered line, pipe-separated, that
                     // stays partly readable even when it clips. The name is kept first
                     // (left) so it's the part that survives when the line is cut off.
                     bookingEl.classList.add('is-compact');
-                    const compactParts = [`${seriesIcon}${displayName}`, `${formatTime(booking.start)}–${formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin)}`];
-                    if (booking.data.hasStaff) compactParts.push(`w/ ${escapeHtml(booking.data.staffName)}`);
+                    const compactTime = `${formatTime(booking.start)}–${formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin)}`;
+                    const compactParts = [`<span class="compact-name">${seriesIcon}${displayName}</span>`, `<span class="compact-detail">${compactTime}</span>`];
+                    if (booking.data.hasStaff) compactParts.push(`<span class="compact-detail">w/ ${escapeHtml(booking.data.staffName)}</span>`);
+                    if (!anon && booking.data.notes) compactParts.push('📝');
                     bookingEl.innerHTML = `<span class="slot-compact">${compactParts.join(' | ')}</span>`;
+                    // The hover popover carries the full detail, but touch devices can't
+                    // hover — a native title gives them (and any clipped line) a fallback.
+                    let titleText = `${anon ? 'Past Booking' : booking.data.name} | ${compactTime}`;
+                    if (booking.data.hasStaff) titleText += ` | w/ ${booking.data.staffName}`;
+                    bookingEl.title = titleText;
                 } else {
                     bookingEl.innerHTML = `<span class="slot-name">${seriesIcon}${displayName}</span>`;
                     bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin)} (${booking.data.duration}h)</span>`;
@@ -2299,7 +2309,9 @@ const firebaseConfig = {
         if (resizeState.overlayElement) {
             const padding = 2;
             const newHeight = (resizeState.slotHeight * newDuration * 2) - padding * 2 - 1;
-            resizeState.overlayElement.style.height = Math.max(newHeight, 20) + 'px';
+            // Floor matches the rendered block's MIN_BLOCK_HEIGHT so the preview
+            // doesn't snap shorter on release when resizing down to 15 minutes.
+            resizeState.overlayElement.style.height = Math.max(newHeight, 10) + 'px';
         }
 
         // Update tooltip

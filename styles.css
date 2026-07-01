@@ -249,10 +249,18 @@ body.is-dragging .slot::after {
     white-space: nowrap;
     overflow: hidden;
 }
-/* When a compact line is clipped, fade its right edge as a "more on hover" cue. */
+/* Mirror the stacked layout's hierarchy on the one-liner: the name keeps the
+   block's 600 weight, the time/staff details are lighter (like .slot-time). */
+.booking-float .slot-compact .compact-detail {
+    font-weight: normal;
+    opacity: 0.9;
+}
+/* When a compact line is clipped, fade its right edge as a "more on hover" cue.
+   Capped at a quarter of the line so narrow day-view columns don't fade half
+   their text away. */
 .booking-float.is-clipped .slot-compact {
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
-    mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - min(18px, 25%)), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - min(18px, 25%)), transparent 100%);
 }
 
 /* Overflow indicator */
