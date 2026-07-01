@@ -206,6 +206,9 @@ Each follows the pattern: start handler sets state, move handler updates visuals
 ### Reschedule Mode
 Distinct from drag-to-move. Allows navigating to a different week before placing a booking. Flow: enter reschedule mode → navigate to target date → click target slot → confirm. Managed by the `rescheduleMode` state object.
 
+### Settings Editor Working Copies
+The admin settings editor never mutates the live `resources` objects while editing. Sub-rooms (`editingSubRooms`), closure dates (`editingClosures`), and staff names (`editingStaffNames`) are per-resource working copies initialized by `loadSettingsForEditor()` and folded into the list only by `saveAllSettings()`. A snapshot taken at load time (`captureSettingsSnapshot`) backs the unsaved-changes guard: Cancel, Escape, and switching resources confirm before discarding, and the resources realtime listener skips refreshing a dirty editor. The "apply to other resources" flows are the deliberate exception — they write the *target* resources to Firestore immediately (sourced from the working copy), while the edited resource itself still waits for Save. If you add a new list-like setting to the editor, follow this pattern rather than mutating the live resource.
+
 ### Lazy Janitor (Anonymization)
 Two functions work together to scrub old patron names based on each resource's `anonymityBufferMonths` (0–3):
 - `checkAndRunJanitor()` runs on app load. It uses a Firestore transaction on `system/janitor` (`lastRunMonth`) so the sweep runs at most once per month, then calls `runLazyJanitor()` for every resource.
