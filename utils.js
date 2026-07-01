@@ -26,6 +26,18 @@ function formatTime(val) {
 }
 
 /**
+ * Format a duration in float hours as a compact label for booking blocks.
+ * Examples: 0.25 → "15m", 0.5 → "30m", 1 → "1h", 1.5 → "1h30", 2.25 → "2h15"
+ */
+function formatDuration(hours) {
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h${m}`;
+}
+
+/**
  * Format a Date as "YYYY-MM-DD" for ISO string comparisons.
  */
 function formatDateISO(d) {
@@ -509,6 +521,7 @@ function shouldPersistResourceList(list, everLoaded, allowEmpty = false) {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         formatTime,
+        formatDuration,
         formatDateISO,
         formatDateShort,
         getWeekKey,

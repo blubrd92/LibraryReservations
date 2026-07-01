@@ -1,5 +1,6 @@
 const {
     formatTime,
+    formatDuration,
     formatDateISO,
     formatDateShort,
     getWeekKey,
@@ -58,6 +59,29 @@ describe('formatTime', () => {
     test('handles noon and midnight', () => {
         expect(formatTime(0)).toBe('12:00am');
         expect(formatTime(12)).toBe('12:00pm');
+    });
+});
+
+// ============================================================
+// formatDuration
+// ============================================================
+
+describe('formatDuration', () => {
+    test('formats sub-hour durations as minutes', () => {
+        expect(formatDuration(0.25)).toBe('15m');
+        expect(formatDuration(0.5)).toBe('30m');
+        expect(formatDuration(0.75)).toBe('45m');
+    });
+
+    test('formats whole hours', () => {
+        expect(formatDuration(1)).toBe('1h');
+        expect(formatDuration(2)).toBe('2h');
+    });
+
+    test('formats hours with a minute remainder', () => {
+        expect(formatDuration(1.5)).toBe('1h30');
+        expect(formatDuration(1.25)).toBe('1h15');
+        expect(formatDuration(2.75)).toBe('2h45');
     });
 });
 

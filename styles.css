@@ -198,11 +198,13 @@ body.is-dragging .slot::after {
 /* Floating booking elements (absolutely positioned) */
 .booking-float {
     position: absolute;
-    color: white; 
-    border-radius: 4px; 
-    padding: 6px 8px; 
-    font-weight: 600; 
-    z-index: 10; 
+    color: white;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 1.2;
+    z-index: 10;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     display: flex;
     flex-direction: column; 
@@ -215,22 +217,41 @@ body.is-dragging .slot::after {
 
 .booking-float.with-staff { border-left: 5px solid var(--app-color-3); }
 
-.booking-float .slot-name,
+/* Name is the primary element: one line, ellipsis when it doesn't fit. */
+.booking-float .slot-name {
+    display: block;
+    width: 100%;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Secondary info is smaller and lighter than the name. */
 .booking-float .slot-staff,
 .booking-float .slot-notes {
     display: block;
     width: 100%;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    font-weight: normal;
+    font-size: 0.85em;
+    opacity: 0.9;
 }
+
+.booking-float .slot-notes { margin-top: 2px; }
 
 .booking-float .slot-time {
     display: block;
     width: 100%;
     font-weight: normal;
     font-size: 0.85em;
-    opacity: 0.9;
+    opacity: 0.85;
 }
+
+/* Past-day bookings recede so today/upcoming stand out; hover restores them for reading. */
+.booking-float.is-past { opacity: 0.55; box-shadow: none; }
+.booking-float.is-past:hover { opacity: 1; }
 
 /* Overflow indicator */
 .booking-float .overflow-indicator {

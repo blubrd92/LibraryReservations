@@ -910,31 +910,38 @@ const firebaseConfig = {
                 const bookingHeight = (booking.data.duration * 2 * slotHeight) - gap * 2;
                 bookingEl.style.height = Math.max(bookingHeight, 10) + 'px';
                 
-                // Content
+                // Content, sized to the block. The name is always the priority; add
+                // secondary fields (compact time, then staff, then notes) only when
+                // there's vertical room. If not even the name fits, leave a bare
+                // colored bar and let the hover popover carry the detail — better than
+                // clipping text mid-line on a 15-minute block.
                 const anon = isBookingAnonymized(activeWeekKey, booking.dayIndex, res);
                 const locked = isBookingLocked(activeWeekKey, booking.dayIndex, res);
                 booking.anonymized = anon;
                 booking.locked = locked;
+                if (locked) bookingEl.classList.add('is-past'); // past days recede visually
                 const displayName = anon ? 'Past Booking' : escapeHtml(booking.data.name);
                 const seriesIcon = booking.data.seriesId ? '<span class="series-indicator" title="Recurring series">🔁</span> ' : '';
-                bookingEl.innerHTML = `<span class="slot-name">${seriesIcon}${displayName}</span>`;
-                const bookingDayEnd = res.hours[(booking.dayIndex * 2) + 1];
-                const cosmeticMin = res.cosmeticCloseMinutes || 0;
-                bookingEl.innerHTML += `<span class="slot-time">${formatTime(booking.start)} - ${formatCosmeticTime(booking.end, bookingDayEnd, cosmeticMin)} (${booking.data.duration}h)</span>`;
-                
-                if (booking.data.hasStaff) {
-                    bookingEl.innerHTML += `<span class="slot-staff">w/ ${escapeHtml(booking.data.staffName)}</span>`;
-                }
-                
-                if (anon) {
-                    if (booking.data.notes) {
-                        bookingEl.innerHTML += `<span class="slot-notes" style="font-size:0.8em; margin-top:4px; opacity:0.75; font-style:italic;">Past notes anonymized for patron privacy</span>`;
+
+                // ~14px per line of booking text; 4px is the block's vertical padding.
+                const usableLines = Math.floor((Math.max(bookingHeight, 10) - 4) / 14);
+                let bookingHtml = '';
+                if (usableLines >= 1) bookingHtml += `<span class="slot-name">${seriesIcon}${displayName}</span>`;
+                // Time is demoted to "start · duration": the start (which the 30-min
+                // axis can't show for :15/:45 bookings) plus the duration (hard to judge
+                // from height on packed rows). The full start–end range stays in the popover.
+                if (usableLines >= 2) bookingHtml += `<span class="slot-time">${formatTime(booking.start)} · ${formatDuration(booking.data.duration)}</span>`;
+                if (booking.data.hasStaff && usableLines >= 3) bookingHtml += `<span class="slot-staff">w/ ${escapeHtml(booking.data.staffName)}</span>`;
+                if (usableLines >= 4) {
+                    if (anon && booking.data.notes) {
+                        bookingHtml += `<span class="slot-notes" style="opacity:0.75; font-style:italic;">Past notes anonymized for patron privacy</span>`;
+                    } else if (booking.data.showNotes && booking.data.notes) {
+                        bookingHtml += `<span class="slot-notes" style="border-top:1px solid rgba(255,255,255,0.2); padding-top:2px;">${escapeHtml(booking.data.notes)}</span>`;
+                    } else if (!booking.data.showNotes && booking.data.notes) {
+                        bookingHtml += `<span class="slot-notes" style="opacity:0.75; font-style:italic;">📝 Click to view note</span>`;
                     }
-                } else if (booking.data.showNotes && booking.data.notes) {
-                    bookingEl.innerHTML += `<span class="slot-notes" style="font-size:0.85em; margin-top:4px; opacity:0.9; border-top:1px solid rgba(255,255,255,0.2); padding-top:2px;">${escapeHtml(booking.data.notes)}</span>`;
-                } else if (!booking.data.showNotes && booking.data.notes) {
-                    bookingEl.innerHTML += `<span class="slot-notes" style="font-size:0.8em; margin-top:4px; opacity:0.75; font-style:italic;">📝 Click to view note</span>`;
                 }
+                bookingEl.innerHTML = bookingHtml;
                 
                 const canEdit = canEditResource(res);
                 
