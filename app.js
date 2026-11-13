@@ -5934,9 +5934,6 @@ const firebaseConfig = {
         { label: 'Heavy', range: '50 to 75%' },
         { label: 'Near capacity', range: '75% and up' }
     ];
-    // Fixed-order categorical colors for the staff chart (never cycled: past eight
-    // names, the smallest fold into "Other").
-    const STATS_SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
     function setStatsTile(id, value, sub) {
         document.getElementById(id).innerText = value;
         const subEl = document.getElementById(id + 'Sub');
@@ -5955,7 +5952,7 @@ const firebaseConfig = {
             if (valueLabel !== '') {
                 html += '<div class="dash-vbar-pct' + (opts.highlight ? ' dash-highlight' : '') + '" style="bottom:calc(' + hPct + '% + 4px);">' + valueLabel + '</div>';
             }
-            html += '<div class="dash-vbar-bar' + (opts.segments ? ' stacked' : '') + '" style="height:' + hPct + '%;' + (hPct > 0 ? 'min-height:2px;' : '') + '">' + (opts.segments || '') + '</div>';
+            html += '<div class="dash-vbar-bar" style="height:' + hPct + '%;' + (hPct > 0 ? 'min-height:2px;' : '') + '"></div>';
         }
         html += '</div>';
         html += '<div class="dash-vbar-label' + (opts.highlight ? ' dash-highlight' : '') + '">' + label + '</div>';
@@ -5989,25 +5986,49 @@ const firebaseConfig = {
         // the build order below does not matter.
         html += '<div class="dash-grid' + (hasSubRooms ? ' has-rooms' : '') + (hasStaffChart ? ' has-staff' : '') + '">';
 
-        // Booking length
+        // Booking length: a histogram on an even time axis, so a long list of
+        // lengths (15-minute steps up to several hours) stays one compact shape
+        // and unused lengths show as gaps instead of disappearing.
         html += '<div class="dash-panel dash-p-length">';
         html += '<div class="dash-panel-title">Booking Length</div>';
-        html += '<div class="dash-panel-sub">How long bookings run</div>';
         const durBuckets = statsData.durationBuckets || {};
-        const durKeys = Object.keys(durBuckets).map(Number).sort((a, b) => a - b);
+        const durKeys = Object.keys(durBuckets).map(Number).filter(d => d > 0).sort((a, b) => a - b);
         if (durKeys.length > 0) {
-            const maxDurCount = Math.max(...durKeys.map(d => durBuckets[d.toString()]));
-            html += '<div class="dash-hbar-chart">';
+            const durLong = d => {
+                const h = Math.floor(d), m = Math.round((d - h) * 60);
+                return h === 0 ? m + ' min' : (m === 0 ? h + (h === 1 ? ' hour' : ' hours') : h + 'h ' + m + 'm');
+            };
+            const durShort = d => d < 1 ? Math.round(d * 60) + 'm' : d + 'h';
+            const durTotal = durKeys.reduce((sum, d) => sum + durBuckets[d.toString()], 0);
+            let modeDur = durKeys[0], medianDur = null, cumulative = 0;
             durKeys.forEach(d => {
-                const count = durBuckets[d.toString()];
-                const label = d < 1 ? (d * 60) + 'm' : d + 'h';
-                const bookPct = s.totalBookings > 0 ? Math.round((count / s.totalBookings) * 100) : 0;
-                const hl = count === maxDurCount ? ' dash-highlight' : '';
-                html += '<div class="dash-hbar-row"' + statsTipAttrs(label + ' bookings', plural(count, 'booking') + ' · ' + bookPct + '% of all bookings') + '>';
-                html += '  <div class="dash-hbar-label' + hl + '">' + label + '</div>';
-                html += '  <div class="dash-hbar-track"><div class="dash-hbar-fill" style="width:' + (count / maxDurCount) * 100 + '%;"></div></div>';
-                html += '  <div class="dash-hbar-value' + hl + '">' + count + ' · ' + bookPct + '%</div>';
-                html += '</div>';
+                const c = durBuckets[d.toString()];
+                if (c > durBuckets[modeDur.toString()]) modeDur = d;
+                cumulative += c;
+                if (medianDur === null && cumulative >= durTotal / 2) medianDur = d;
+            });
+            html += '<div class="dash-panel-sub">Most common <strong>' + durLong(modeDur) + '</strong> · half are ' + durLong(medianDur) + ' or shorter</div>';
+
+            // Even steps when every length sits on the 15/30-minute grid (the normal
+            // case); otherwise fall back to one column per length actually used.
+            let steps = durKeys;
+            if (durKeys.every(d => Number.isInteger(d * 4))) {
+                const step = durKeys.every(d => Number.isInteger(d * 2)) ? 0.5 : 0.25;
+                let maxDur = Math.max(durKeys[durKeys.length - 1], res.maxDuration || 0);
+                if (maxDur / step > 32) maxDur = durKeys[durKeys.length - 1];
+                steps = [];
+                for (let i = 1; i * step <= maxDur + 1e-9; i++) steps.push(i * step);
+            }
+            const labelAll = steps.length <= 8;
+            const maxDurCount = durBuckets[modeDur.toString()];
+            html += '<div class="dash-vbar-chart dash-hist">';
+            steps.forEach((d, i) => {
+                const count = durBuckets[d.toString()] || 0;
+                const pct = Math.round((count / durTotal) * 100);
+                const isPeak = d === modeDur;
+                const axisLabel = (labelAll || i === 0 || Number.isInteger(d)) ? durShort(d) : '&nbsp;';
+                html += statsVbarCol(axisLabel, count / maxDurCount, isPeak ? pct + '%' : '', durLong(d) + ' bookings',
+                    plural(count, 'booking') + ' · ' + pct + '% of all bookings', { highlight: isPeak });
             });
             html += '</div>';
         } else {
@@ -6101,56 +6122,43 @@ const firebaseConfig = {
         html += '</div>';
         html += '</div>';
 
-        // === STAFF ASSISTANCE (full width, conditional) ===
-        if (res.hasStaffField) {
-            const msc = statsData.monthlyStaffCounts || {};
-            const totalOf = (n) => msc[n].reduce((sum, c) => sum + c, 0);
-            let staffNames = Object.keys(msc).filter(n => totalOf(n) > 0).sort();
-            if (staffNames.length > 0) {
-                // Past eight names, keep the seven busiest and fold the rest into "Other".
-                let series = staffNames.map(n => ({ name: n, counts: msc[n] }));
-                if (series.length > STATS_SERIES_COLORS.length) {
-                    const keep = staffNames.slice().sort((a, b) => totalOf(b) - totalOf(a)).slice(0, STATS_SERIES_COLORS.length - 1);
-                    const other = new Array(12).fill(0);
-                    staffNames.filter(n => !keep.includes(n)).forEach(n => msc[n].forEach((c, i) => { other[i] += c; }));
-                    series = staffNames.filter(n => keep.includes(n)).map(n => ({ name: n, counts: msc[n] }));
-                    series.push({ name: 'Other', counts: other });
-                }
-                const monthTotals = [];
-                for (let i = 0; i < 12; i++) monthTotals.push(series.reduce((sum, sr) => sum + sr.counts[i], 0));
-                const maxMonthTotal = Math.max(...monthTotals);
+        // === STAFF ASSISTANCE (conditional) ===
+        // A table of exact counts (person by month) with heat shading: staff copy
+        // monthly numbers from this, so every figure is readable without hovering.
+        if (hasStaffChart) {
+            const msc = staffCounts;
+            const names = Object.keys(msc).filter(n => msc[n].some(c => c > 0))
+                .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+            const thisYear = new Date().getFullYear();
+            // Months after this one have no year-to-date data yet; leave them blank, not zero.
+            const lastMonthWithData = statsData.year < thisYear ? 11 : (statsData.year === thisYear ? new Date().getMonth() : -1);
+            const monthTotals = MONTHS.map((m, i) => names.reduce((sum, n) => sum + msc[n][i], 0));
+            const cellMax = Math.max(1, ...names.map(n => Math.max(...msc[n])));
+            const rowTotals = names.map(n => msc[n].reduce((sum, c) => sum + c, 0));
+            const topTotal = Math.max(...rowTotals);
 
-                html += '<div class="dash-panel dash-p-staff">';
-                html += '<div class="dash-panel-title">Staff/Volunteer Assisted Sessions</div>';
-                html += '<div class="dash-panel-sub">Assisted bookings per month, by person</div>';
-                html += '<div class="dash-vbar-chart">';
-                for (let i = 0; i < 12; i++) {
-                    const monthTotal = monthTotals[i];
-                    let segments = '';
-                    const lines = [];
-                    series.forEach((sr, si) => {
-                        const count = sr.counts[i];
-                        if (count === 0) return;
-                        segments += '<div class="dash-stacked-segment" style="height:' + (count / monthTotal) * 100 + '%;background:' + STATS_SERIES_COLORS[si] + ';"></div>';
-                        lines.push(sr.name + ': ' + count);
-                    });
-                    html += statsVbarCol(MONTHS[i], maxMonthTotal > 0 ? monthTotal / maxMonthTotal : 0, monthTotal > 0 ? monthTotal : '',
-                        MONTHS_FULL[i] + ' · ' + plural(monthTotal, 'session'), lines.join('\n'),
-                        { highlight: monthTotal > 0 && monthTotal === maxMonthTotal, segments: segments });
-                }
-                html += '</div>';
-
-                const seriesTotals = series.map(sr => sr.counts.reduce((sum, c) => sum + c, 0));
-                const maxStaffTotal = Math.max(...seriesTotals);
-                html += '<div class="dash-legend">';
-                series.forEach((sr, si) => {
-                    const hl = seriesTotals[si] === maxStaffTotal ? ' dash-highlight' : '';
-                    html += '<div class="dash-legend-item' + hl + '"><span class="dash-dot" style="background:' + STATS_SERIES_COLORS[si] + ';"></span>' + escapeHtml(sr.name) + ': ' + seriesTotals[si] + '</div>';
+            html += '<div class="dash-panel dash-p-staff">';
+            html += '<div class="dash-panel-title">Staff/Volunteer Assisted Sessions</div>';
+            html += '<div class="dash-panel-sub">Assisted bookings per person, per month. Darker means more.</div>';
+            html += '<table class="dash-staff-table"><thead><tr><th class="st-name">Name</th>';
+            MONTHS.forEach((m, i) => { html += '<th' + (i === lastMonthWithData && statsData.year === thisYear ? ' class="st-current"' : '') + '>' + m + '</th>'; });
+            html += '<th class="st-total">Total</th></tr></thead><tbody>';
+            names.forEach((n, ni) => {
+                html += '<tr><td class="st-name' + (rowTotals[ni] === topTotal ? ' dash-highlight' : '') + '"' + statsTipAttrs(n, plural(rowTotals[ni], 'assisted booking') + ' this year') + '>' + escapeHtml(n) + '</td>';
+                msc[n].forEach((count, i) => {
+                    if (i > lastMonthWithData) { html += '<td class="st-future"></td>'; return; }
+                    const lvl = count > 0 ? Math.min(8, Math.ceil((count / cellMax) * 8)) : 0;
+                    html += '<td class="' + (count > 0 ? 'dash-hm-lvl-' + lvl : 'st-zero') + '"' +
+                        statsTipAttrs(n + ' · ' + MONTHS_FULL[i] + ' ' + statsData.year, plural(count, 'assisted booking')) + '>' + count + '</td>';
                 });
-                html += '</div>';
-
-                html += '</div>'; // end panel
-            }
+                html += '<td class="st-total">' + rowTotals[ni] + '</td></tr>';
+            });
+            html += '</tbody><tfoot><tr><td class="st-name">All</td>';
+            monthTotals.forEach((t, i) => {
+                html += '<td' + (i <= lastMonthWithData ? statsTipAttrs(MONTHS_FULL[i] + ' ' + statsData.year, plural(t, 'assisted booking') + ' in total') : '') + '>' + (i <= lastMonthWithData ? t : '') + '</td>';
+            });
+            html += '<td class="st-total">' + rowTotals.reduce((sum, t) => sum + t, 0) + '</td></tr></tfoot></table>';
+            html += '</div>';
         }
 
         // === Weekly Rhythm (full width) ===
@@ -6185,7 +6193,7 @@ const firebaseConfig = {
             html += '<div class="dash-hm-corner"></div>';
             allHeatHours.forEach(h => {
                 const hl = hourTotals[h] > 0 && hourTotals[h] === maxHourTotal ? ' dash-highlight' : '';
-                html += '<div class="dash-hm-hdr' + hl + '">' + formatTime(h) + '</div>';
+                html += '<div class="dash-hm-hdr' + hl + '">' + formatTime(h).replace(':00', '') + '</div>';
             });
             for (let d = 0; d < 7; d++) {
                 const dayData = heatmap[d] || {};
