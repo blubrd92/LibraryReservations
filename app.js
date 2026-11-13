@@ -5853,6 +5853,7 @@ const firebaseConfig = {
             gridBtn.classList.remove('active');
             chartContainer.style.display = '';
             gridContainer.style.display = 'none';
+            labelStaffSegments();
         } else {
             gridBtn.classList.add('active');
             chartBtn.classList.remove('active');
@@ -5934,6 +5935,22 @@ const firebaseConfig = {
         { label: 'Heavy', range: '50 to 75%' },
         { label: 'Near capacity', range: '75% and up' }
     ];
+    // Fixed-order colors for the staff chart, each with a text color that stays
+    // readable on it (for the count printed inside a segment).
+    const STATS_SERIES_COLORS = [
+        { fill: '#2a78d6', text: '#fff' }, { fill: '#eb6834', text: '#1f2a37' }, { fill: '#1baf7a', text: '#1f2a37' },
+        { fill: '#eda100', text: '#1f2a37' }, { fill: '#e87ba4', text: '#1f2a37' }, { fill: '#008300', text: '#fff' },
+        { fill: '#6250d6', text: '#fff' }, { fill: '#e34948', text: '#fff' }
+    ];
+    // Print each staff segment's count inside it when the segment is tall enough
+    // to hold a number. Needs real pixel heights, so it runs after the dashboard
+    // is visible (render, view toggle, window resize).
+    function labelStaffSegments() {
+        document.querySelectorAll('#statsChart .dash-stacked-segment').forEach(seg => {
+            seg.textContent = seg.offsetHeight >= 13 ? seg.dataset.count : '';
+        });
+    }
+
     function setStatsTile(id, value, sub) {
         document.getElementById(id).innerText = value;
         const subEl = document.getElementById(id + 'Sub');
@@ -5952,7 +5969,7 @@ const firebaseConfig = {
             if (valueLabel !== '') {
                 html += '<div class="dash-vbar-pct' + (opts.highlight ? ' dash-highlight' : '') + '" style="bottom:calc(' + hPct + '% + 4px);">' + valueLabel + '</div>';
             }
-            html += '<div class="dash-vbar-bar" style="height:' + hPct + '%;' + (hPct > 0 ? 'min-height:2px;' : '') + '"></div>';
+            html += '<div class="dash-vbar-bar' + (opts.segments ? ' stacked' : '') + '" style="height:' + hPct + '%;' + (hPct > 0 ? 'min-height:2px;' : '') + '">' + (opts.segments || '') + '</div>';
         }
         html += '</div>';
         html += '<div class="dash-vbar-label' + (opts.highlight ? ' dash-highlight' : '') + '">' + label + '</div>';
@@ -6123,41 +6140,50 @@ const firebaseConfig = {
         html += '</div>';
 
         // === STAFF ASSISTANCE (conditional) ===
-        // A table of exact counts (person by month) with heat shading: staff copy
-        // monthly numbers from this, so every figure is readable without hovering.
+        // Stacked bars, one per month, one colored segment per person. Staff copy
+        // monthly numbers from this, so each segment prints its own count when it
+        // is tall enough (labelStaffSegments), the bar total sits on top, and the
+        // hover lists every person for that month.
         if (hasStaffChart) {
             const msc = staffCounts;
             const names = Object.keys(msc).filter(n => msc[n].some(c => c > 0))
                 .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-            const thisYear = new Date().getFullYear();
-            // Months after this one have no year-to-date data yet; leave them blank, not zero.
-            const lastMonthWithData = statsData.year < thisYear ? 11 : (statsData.year === thisYear ? new Date().getMonth() : -1);
             const monthTotals = MONTHS.map((m, i) => names.reduce((sum, n) => sum + msc[n][i], 0));
-            const cellMax = Math.max(1, ...names.map(n => Math.max(...msc[n])));
-            const rowTotals = names.map(n => msc[n].reduce((sum, c) => sum + c, 0));
-            const topTotal = Math.max(...rowTotals);
+            const maxMonthTotal = Math.max(...monthTotals);
+            // Eight colors in fixed order; a ninth person onward reuses them with stripes.
+            const swatch = (si) => {
+                const c = STATS_SERIES_COLORS[si % STATS_SERIES_COLORS.length];
+                return 'background-color:' + c.fill + ';color:' + c.text + ';' +
+                    (si >= STATS_SERIES_COLORS.length ? 'background-image:repeating-linear-gradient(45deg, rgba(255,255,255,0.45) 0 3px, transparent 3px 7px);' : '');
+            };
 
             html += '<div class="dash-panel dash-p-staff">';
             html += '<div class="dash-panel-title">Staff/Volunteer Assisted Sessions</div>';
-            html += '<div class="dash-panel-sub">Assisted bookings per person, per month. Darker means more.</div>';
-            html += '<table class="dash-staff-table"><thead><tr><th class="st-name">Name</th>';
-            MONTHS.forEach((m, i) => { html += '<th' + (i === lastMonthWithData && statsData.year === thisYear ? ' class="st-current"' : '') + '>' + m + '</th>'; });
-            html += '<th class="st-total">Total</th></tr></thead><tbody>';
-            names.forEach((n, ni) => {
-                html += '<tr><td class="st-name' + (rowTotals[ni] === topTotal ? ' dash-highlight' : '') + '"' + statsTipAttrs(n, plural(rowTotals[ni], 'assisted booking') + ' this year') + '>' + escapeHtml(n) + '</td>';
-                msc[n].forEach((count, i) => {
-                    if (i > lastMonthWithData) { html += '<td class="st-future"></td>'; return; }
-                    const lvl = count > 0 ? Math.min(8, Math.ceil((count / cellMax) * 8)) : 0;
-                    html += '<td class="' + (count > 0 ? 'dash-hm-lvl-' + lvl : 'st-zero') + '"' +
-                        statsTipAttrs(n + ' · ' + MONTHS_FULL[i] + ' ' + statsData.year, plural(count, 'assisted booking')) + '>' + count + '</td>';
+            html += '<div class="dash-panel-sub">Assisted bookings per month, by person</div>';
+            html += '<div class="dash-vbar-chart dash-staff-chart">';
+            for (let i = 0; i < 12; i++) {
+                const monthTotal = monthTotals[i];
+                let segments = '';
+                const lines = [];
+                names.forEach((n, si) => {
+                    const count = msc[n][i];
+                    if (count === 0) return;
+                    segments += '<div class="dash-stacked-segment" data-count="' + count + '" style="height:' + (count / monthTotal) * 100 + '%;' + swatch(si) + '"></div>';
+                    lines.push(n + ': ' + count);
                 });
-                html += '<td class="st-total">' + rowTotals[ni] + '</td></tr>';
+                html += statsVbarCol(MONTHS[i], maxMonthTotal > 0 ? monthTotal / maxMonthTotal : 0, monthTotal > 0 ? monthTotal : '',
+                    MONTHS_FULL[i] + ' · ' + plural(monthTotal, 'session'), lines.join('\n'),
+                    { highlight: monthTotal > 0 && monthTotal === maxMonthTotal, segments: segments });
+            }
+            html += '</div>';
+
+            const rowTotals = names.map(n => msc[n].reduce((sum, c) => sum + c, 0));
+            const topTotal = Math.max(...rowTotals);
+            html += '<div class="dash-legend">';
+            names.forEach((n, si) => {
+                html += '<div class="dash-legend-item' + (rowTotals[si] === topTotal ? ' dash-highlight' : '') + '"><span class="dash-dot" style="' + swatch(si) + '"></span>' + escapeHtml(n) + ': ' + rowTotals[si] + '</div>';
             });
-            html += '</tbody><tfoot><tr><td class="st-name">All</td>';
-            monthTotals.forEach((t, i) => {
-                html += '<td' + (i <= lastMonthWithData ? statsTipAttrs(MONTHS_FULL[i] + ' ' + statsData.year, plural(t, 'assisted booking') + ' in total') : '') + '>' + (i <= lastMonthWithData ? t : '') + '</td>';
-            });
-            html += '<td class="st-total">' + rowTotals.reduce((sum, t) => sum + t, 0) + '</td></tr></tfoot></table>';
+            html += '</div>';
             html += '</div>';
         }
 
@@ -6229,6 +6255,7 @@ const firebaseConfig = {
         html += '</div>'; // end dash-grid
 
         container.innerHTML = html;
+        labelStaffSegments();
     }
 
     function renderStatsGrid(dailyStats, year, res, bookings) {
@@ -6671,7 +6698,7 @@ const firebaseConfig = {
             if (currentResId) {
                 renderGrid();
             }
-            if (document.getElementById('statsModal').style.display === 'flex') fitStatsGrid();
+            if (document.getElementById('statsModal').style.display === 'flex') { fitStatsGrid(); labelStaffSegments(); }
             // Force sidebar scrollbar recalculation
             const sidebar = document.getElementById('infoSidebar');
             if (sidebar && !sidebar.classList.contains('hidden')) {
