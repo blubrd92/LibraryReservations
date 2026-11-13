@@ -5947,7 +5947,7 @@ const firebaseConfig = {
         html += '<div class="dash-panel-title">Utilization</div>';
         html += '<div class="dash-panel-sub">Share of open hours that were booked</div>';
         html += '<div class="dash-ring-container">';
-        html += '  <div class="dash-ring" style="background: conic-gradient(#2a78d6 0% ' + utilVal + '%, #e6eaef ' + utilVal + '% 100%);"' +
+        html += '  <div class="dash-ring" style="background: conic-gradient(#1976d2 0% ' + utilVal + '%, #e3f2fd ' + utilVal + '% 100%);"' +
             statsTipAttrs('Utilization', statsFmtHours(statsData.ytdTotal) + 'h booked of ' + statsFmtHours(statsData.ytdAvailable) + 'h open') + '>';
         html += '    <div class="dash-ring-inner">';
         html += '      <span class="dash-ring-pct">' + (s.utilization !== null ? s.utilization + '%' : 'N/A') + '</span>';
@@ -6511,7 +6511,7 @@ const firebaseConfig = {
         statsData = {
             dailyStats, year, res, monthlyTotals, monthlyAvailable, monthlyTotalsYtd, monthlyAvailableYtd, grandTotal, totalAvailable, ytdAvailable, ytdTotal,
             summary: {
-                totalHours: parseFloat(grandTotal.toFixed(2)),
+                totalHours: parseFloat(ytdTotal.toFixed(2)), // YTD, to match the on-screen tile and the CSV's "OVERVIEW (YTD)" heading
                 totalBookings: totalBookingCount,
                 utilization: ytdAvailable > 0 ? parseFloat(((ytdTotal / ytdAvailable) * 100).toFixed(1)) : null,
                 avgHoursPerDay: ytdDaysBookable > 0 ? parseFloat((ytdTotal / ytdDaysBookable).toFixed(1)) : 0,

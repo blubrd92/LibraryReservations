@@ -863,7 +863,7 @@ textarea { resize: vertical; }
     --st-muted: #6b7480;
     --st-line: #e3e7ec;
     --st-soft: #f6f8fa;
-    --st-accent: #2a78d6;
+    --st-accent: #1976d2;
     background: white; padding: 0; width: 1280px; max-width: 97%; height: 94vh; max-height: 94vh;
     overflow: hidden; border-radius: 10px; display: flex; flex-direction: column; color: var(--st-ink);
 }
@@ -931,14 +931,14 @@ textarea { resize: vertical; }
 
 /* One-hue sequential scale, shared by the year grid and the day-by-hour heatmap */
 .stats-heat-0, .dash-hm-lvl-0 { background: #f6f8fa; }
-.stats-heat-1, .dash-hm-lvl-1 { background: #e6f0fc; }
-.stats-heat-2, .dash-hm-lvl-2 { background: #cde2fb; }
-.stats-heat-3, .dash-hm-lvl-3 { background: #b7d3f6; }
-.stats-heat-4, .dash-hm-lvl-4 { background: #9ec5f4; }
-.stats-heat-5, .dash-hm-lvl-5 { background: #6da7ec; }
-.stats-heat-6, .dash-hm-lvl-6 { background: #3987e5; }
-.stats-heat-7, .dash-hm-lvl-7 { background: #256abf; }
-.stats-heat-8, .dash-hm-lvl-8 { background: #104281; }
+.stats-heat-1, .dash-hm-lvl-1 { background: #e3f2fd; }
+.stats-heat-2, .dash-hm-lvl-2 { background: #bbdefb; }
+.stats-heat-3, .dash-hm-lvl-3 { background: #90caf9; }
+.stats-heat-4, .dash-hm-lvl-4 { background: #64b5f6; }
+.stats-heat-5, .dash-hm-lvl-5 { background: #42a5f5; }
+.stats-heat-6, .dash-hm-lvl-6 { background: #2196f3; }
+.stats-heat-7, .dash-hm-lvl-7 { background: #1e88e5; }
+.stats-heat-8, .dash-hm-lvl-8 { background: #1565c0; }
 .stats-table .stats-heat-7, .stats-table .stats-heat-8, .dash-hm-cell.dash-hm-lvl-7, .dash-hm-cell.dash-hm-lvl-8 { color: #fff; }
 .stats-table .stats-heat-0 { color: var(--st-muted); }
 
@@ -970,7 +970,7 @@ textarea { resize: vertical; }
 .dash-ring-sub { font-size: 0.7em; color: var(--st-muted); margin-top: 2px; }
 .dash-bands { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--st-muted); }
 .dash-band { display: flex; justify-content: space-between; gap: 18px; padding: 3px 10px; border-radius: 6px; }
-.dash-band.dash-band-on { background: #e6f0fc; color: var(--st-ink); font-weight: 700; }
+.dash-band.dash-band-on { background: #e3f2fd; color: var(--st-ink); font-weight: 700; }
 
 /* Horizontal bars (booking length, rooms) */
 .dash-hbar-chart { display: flex; flex-direction: column; gap: 8px; }
@@ -978,7 +978,7 @@ textarea { resize: vertical; }
 .dash-hbar-label { width: 44px; font-size: 0.8rem; font-weight: 600; color: var(--st-ink-2); text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dash-hbar-chart.wide-labels .dash-hbar-label { width: 110px; }
 .dash-hbar-track { flex: 1; height: 16px; position: relative; }
-.dash-hbar-fill { height: 100%; min-width: 2px; background: var(--st-accent); border-radius: 0 4px 4px 0; }
+.dash-hbar-fill { height: 100%; min-width: 2px; background: linear-gradient(90deg, #1976d2, #42a5f5); border-radius: 0 4px 4px 0; }
 .dash-hbar-value { font-size: 0.78rem; color: var(--st-muted); width: 84px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
 /* Vertical bars (weekly, monthly, staff) */
@@ -986,7 +986,7 @@ textarea { resize: vertical; }
 .dash-vbar-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; border-radius: 6px; }
 .dash-vbar-col:hover { background: var(--st-soft); }
 .dash-vbar-plot { position: relative; height: 160px; border-bottom: 1px solid #cfd5dc; }
-.dash-vbar-bar { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 62%; max-width: 40px; background: var(--st-accent); border-radius: 4px 4px 0 0; display: flex; flex-direction: column-reverse; overflow: hidden; }
+.dash-vbar-bar { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 62%; max-width: 40px; background: linear-gradient(180deg, #1976d2, #42a5f5); border-radius: 4px 4px 0 0; display: flex; flex-direction: column-reverse; overflow: hidden; }
 .dash-vbar-pct { position: absolute; left: 0; right: 0; text-align: center; font-size: 0.72rem; color: var(--st-muted); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dash-vbar-label { text-align: center; font-size: 0.75rem; color: var(--st-muted); font-weight: 600; padding: 5px 0 3px; }
 .dash-vbar-col.is-closed .dash-vbar-label { opacity: 0.6; }
