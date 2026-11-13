@@ -568,62 +568,107 @@
 <div id="statsModal" class="modal">
     <div class="stats-box">
         <div class="settings-header">
-            <span>📊 Usage Statistics</span>
+            <span>Usage Statistics</span>
+            <button class="stats-close" onclick="closeModal('statsModal')">Close</button>
         </div>
         <div class="stats-toolbar">
-            <div style="display: flex; gap: 15px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;">
-                <div>
-                    <label style="font-weight: bold;">Resource:</label>
-                    <select id="statsResourceSelect" onchange="handleStatsResourceChange()"></select>
-                </div>
-                <div>
-                    <label style="font-weight: bold;">Year:</label>
-                    <select id="statsYearSelect" onchange="loadStatsData()"></select>
-                </div>
-                <button class="btn-success" onclick="exportStatsCSV()">📥 Export CSV</button>
+            <label class="stats-field">
+                <span>Resource</span>
+                <select id="statsResourceSelect" onchange="handleStatsResourceChange()"></select>
+            </label>
+            <label class="stats-field">
+                <span>Year</span>
+                <select id="statsYearSelect" onchange="loadStatsData()"></select>
+            </label>
+            <span class="stats-toolbar-spacer"></span>
+            <div class="stats-view-toggle" role="group" aria-label="Statistics view">
+                <button id="statsViewGrid" class="active" onclick="toggleStatsView('grid')">Grid</button>
+                <button id="statsViewChart" onclick="toggleStatsView('chart')">Dashboard</button>
             </div>
-            
-            <div id="statsSummary" style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid #e0e0e0;">
-                <div style="display: flex; flex-wrap: wrap; background: #f5f7fa; padding: 8px 15px; gap: 6px 16px; border-bottom: 1px solid #e0e0e0;">
-                    <div><strong>Total Hours:</strong> <span id="statsTotalHours">0</span></div>
-                    <div><strong>Bookings:</strong> <span id="statsBookingCount">0</span></div>
-                    <div><strong>Utilization:</strong> <span id="statsUtilization">0%</span></div>
-                    <div><strong>Avg Hours/Day:</strong> <span id="statsAvgHours">0</span></div>
-                    <div><strong>Avg Duration:</strong> <span id="statsAvgDuration">0</span></div>
-                    <div id="statsStaffSection" style="display:none;"><strong>Staff/Volunteer Assisted:</strong> <span id="statsStaffAssisted">-</span></div>
-                </div>
-                <div style="display: flex; flex-wrap: wrap; background: #fafafa; padding: 8px 15px; gap: 6px 16px;">
-                    <div><strong>Busiest Month:</strong> <span id="statsBusiestMonth">-</span></div>
-                    <div><strong>Busiest Day:</strong> <span id="statsBusiestDay">-</span></div>
-                    <div><strong>Quietest Day:</strong> <span id="statsQuietestDay">-</span></div>
-                    <div><strong>Peak Hour:</strong> <span id="statsPeakHour">-</span></div>
-                </div>
-                <div style="padding: 4px 15px 6px; font-size: 0.8em; color: #555; background: #fafafa;">All metrics above reflect year-to-date. Future bookings are excluded as they may still change.</div>
-            </div>
-
-            <div>
-                <div class="stats-view-toggle">
-                    <button id="statsViewChart" onclick="toggleStatsView('chart')">📊 Dashboard</button>
-                    <button id="statsViewGrid" class="active" onclick="toggleStatsView('grid')">📋 Grid</button>
-                </div>
-            </div>
+            <button class="btn-success" onclick="exportStatsCSV()">Export CSV</button>
         </div>
         <div class="stats-body">
-            <div id="statsChartContainer" class="stats-chart-container" style="display: none;">
-                <div id="statsChart"></div>
+            <div id="statsSummary" class="stats-summary">
+                <div class="stats-tiles">
+                    <div class="stats-tile">
+                        <div class="stats-tile-label">Hours Booked</div>
+                        <div class="stats-tile-value" id="statsTotalHours">0</div>
+                        <div class="stats-tile-sub" id="statsTotalHoursSub"></div>
+                    </div>
+                    <div class="stats-tile">
+                        <div class="stats-tile-label">Bookings</div>
+                        <div class="stats-tile-value" id="statsBookingCount">0</div>
+                        <div class="stats-tile-sub" id="statsBookingCountSub"></div>
+                    </div>
+                    <div class="stats-tile">
+                        <div class="stats-tile-label">Utilization</div>
+                        <div class="stats-tile-value" id="statsUtilization">0%</div>
+                        <div class="stats-tile-sub" id="statsUtilizationSub"></div>
+                    </div>
+                    <div class="stats-tile">
+                        <div class="stats-tile-label">Avg Hours / Open Day</div>
+                        <div class="stats-tile-value" id="statsAvgHours">0</div>
+                        <div class="stats-tile-sub" id="statsAvgHoursSub"></div>
+                    </div>
+                    <div class="stats-tile">
+                        <div class="stats-tile-label">Avg Booking Length</div>
+                        <div class="stats-tile-value" id="statsAvgDuration">-</div>
+                        <div class="stats-tile-sub" id="statsAvgDurationSub"></div>
+                    </div>
+                    <div class="stats-tile" id="statsStaffSection" style="display:none;">
+                        <div class="stats-tile-label">Staff/Volunteer Assisted</div>
+                        <div class="stats-tile-value" id="statsStaffAssisted">-</div>
+                        <div class="stats-tile-sub" id="statsStaffAssistedSub"></div>
+                    </div>
+                </div>
+                <div class="stats-tiles stats-tiles-compact">
+                    <div class="stats-tile">
+                        <div class="stats-tile-label">Busiest Month</div>
+                        <div class="stats-tile-value" id="statsBusiestMonth">-</div>
+                        <div class="stats-tile-sub" id="statsBusiestMonthSub"></div>
+                    </div>
+                    <div class="stats-tile">
+                        <div class="stats-tile-label">Busiest Day</div>
+                        <div class="stats-tile-value" id="statsBusiestDay">-</div>
+                        <div class="stats-tile-sub" id="statsBusiestDaySub"></div>
+                    </div>
+                    <div class="stats-tile">
+                        <div class="stats-tile-label">Quietest Day</div>
+                        <div class="stats-tile-value" id="statsQuietestDay">-</div>
+                        <div class="stats-tile-sub" id="statsQuietestDaySub"></div>
+                    </div>
+                    <div class="stats-tile">
+                        <div class="stats-tile-label">Peak Start Hour</div>
+                        <div class="stats-tile-value" id="statsPeakHour">-</div>
+                        <div class="stats-tile-sub" id="statsPeakHourSub"></div>
+                    </div>
+                </div>
+                <div class="stats-note">Figures above and on the Dashboard are year to date. Future bookings are left out because they may still change. The Grid shows every booked day, including upcoming ones.</div>
             </div>
-            
-            <div id="statsGridContainer" style="overflow-x: auto; overflow-y: auto; flex: 1; min-height: 0;">
+
+            <div id="statsGridContainer">
+                <div class="stats-grid-head">
+                    <div class="stats-grid-title">Hours booked per day</div>
+                    <div class="stats-grid-legend">
+                        <span>Fewer</span>
+                        <span class="sg-swatch stats-heat-1"></span><span class="sg-swatch stats-heat-2"></span><span class="sg-swatch stats-heat-3"></span><span class="sg-swatch stats-heat-4"></span><span class="sg-swatch stats-heat-5"></span><span class="sg-swatch stats-heat-6"></span><span class="sg-swatch stats-heat-7"></span><span class="sg-swatch stats-heat-8"></span>
+                        <span>More</span>
+                        <span class="sg-legend-gap"></span>
+                        <span class="sg-swatch sg-closed"></span><span>Closed</span>
+                        <span class="sg-legend-gap"></span>
+                        <span class="sg-swatch sg-today"></span><span>Today</span>
+                    </div>
+                </div>
                 <table id="statsGrid" class="stats-table">
                     <thead id="statsGridHead"></thead>
                     <tbody id="statsGridBody"></tbody>
                     <tfoot id="statsGridFoot"></tfoot>
                 </table>
             </div>
-        </div>
-        <div class="settings-footer">
-            <span></span>
-            <button onclick="closeModal('statsModal')">Close</button>
+
+            <div id="statsChartContainer" class="stats-chart-container" style="display: none;">
+                <div id="statsChart"></div>
+            </div>
         </div>
     </div>
 </div>

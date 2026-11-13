@@ -5314,6 +5314,7 @@ const firebaseConfig = {
         document.getElementById(id).style.display = 'none';
         if (id === 'bookingModal') clearPresenceHold();
         if (id === 'futureBookingModal') pendingFutureBookingAction = null;
+        if (id === 'statsModal') hideStatsTip();
     }
 
     // Global Escape key handler: closes the topmost visible modal
@@ -5821,6 +5822,7 @@ const firebaseConfig = {
         const gridBtn = document.getElementById('statsViewGrid');
         const chartContainer = document.getElementById('statsChartContainer');
         const gridContainer = document.getElementById('statsGridContainer');
+        hideStatsTip();
         
         if (view === 'chart') {
             chartBtn.classList.add('active');
@@ -5835,12 +5837,94 @@ const firebaseConfig = {
         }
     }
 
+    // --- Stats presentation helpers ---
+    // Every mark in the stats modal carries data-tip-h (heading) / data-tip (detail)
+    // attributes; one delegated listener turns them into a tooltip that follows the cursor.
+    function statsTipAttrs(heading, detail) {
+        return ' data-tip-h="' + escapeHtml(String(heading)) + '" data-tip="' + escapeHtml(String(detail || '')) + '"';
+    }
+    let statsTipEl = null;
+    let statsTipTarget = null;
+    function hideStatsTip() {
+        if (statsTipEl) statsTipEl.style.display = 'none';
+        statsTipTarget = null;
+    }
+    (function setupStatsTip() {
+        const modal = document.getElementById('statsModal');
+        if (!modal) return;
+        modal.addEventListener('mousemove', (e) => {
+            const target = e.target.closest ? e.target.closest('[data-tip-h]') : null;
+            if (!target) { hideStatsTip(); return; }
+            if (!statsTipEl) {
+                statsTipEl = document.createElement('div');
+                statsTipEl.className = 'stats-tip';
+                statsTipEl.innerHTML = '<div class="stats-tip-h"></div><div class="stats-tip-b"></div>';
+                document.body.appendChild(statsTipEl);
+            }
+            if (statsTipTarget !== target) {
+                statsTipTarget = target;
+                statsTipEl.children[0].textContent = target.getAttribute('data-tip-h');
+                statsTipEl.children[1].textContent = target.getAttribute('data-tip') || '';
+            }
+            statsTipEl.style.display = 'block';
+            const w = statsTipEl.offsetWidth, h = statsTipEl.offsetHeight;
+            let x = e.clientX + 14, y = e.clientY + 16;
+            if (x + w > window.innerWidth - 8) x = e.clientX - w - 14;
+            if (y + h > window.innerHeight - 8) y = e.clientY - h - 12;
+            statsTipEl.style.left = Math.max(8, x) + 'px';
+            statsTipEl.style.top = Math.max(8, y) + 'px';
+        });
+        modal.addEventListener('mouseleave', hideStatsTip);
+    })();
+
+    function statsFmtHours(v) {
+        return parseFloat((v || 0).toFixed(1)).toLocaleString('en-US');
+    }
+    function statsUtilBand(pct) {
+        return pct >= 75 ? 3 : pct >= 50 ? 2 : pct >= 25 ? 1 : 0;
+    }
+    const STATS_UTIL_BANDS = [
+        { label: 'Light', range: 'under 25%' },
+        { label: 'Moderate', range: '25 to 50%' },
+        { label: 'Heavy', range: '50 to 75%' },
+        { label: 'Near capacity', range: '75% and up' }
+    ];
+    // Fixed-order categorical colors for the staff chart (never cycled: past eight
+    // names, the smallest fold into "Other").
+    const STATS_SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
+    function setStatsTile(id, value, sub) {
+        document.getElementById(id).innerText = value;
+        const subEl = document.getElementById(id + 'Sub');
+        if (subEl) subEl.innerText = sub || '';
+    }
+
+    // One column of a vertical bar chart. `frac` is 0..1 of the plot height.
+    function statsVbarCol(label, frac, valueLabel, tipH, tipB, opts) {
+        opts = opts || {};
+        const hPct = Math.max(0, Math.min(1, frac)) * 86; // leave headroom for the value label
+        let html = '<div class="dash-vbar-col' + (opts.closed ? ' is-closed' : '') + '"' + statsTipAttrs(tipH, tipB) + '>';
+        html += '<div class="dash-vbar-plot">';
+        if (opts.closed) {
+            html += '<div class="dash-vbar-closed">Closed</div>';
+        } else {
+            if (valueLabel !== '') {
+                html += '<div class="dash-vbar-pct' + (opts.highlight ? ' dash-highlight' : '') + '" style="bottom:calc(' + hPct + '% + 4px);">' + valueLabel + '</div>';
+            }
+            html += '<div class="dash-vbar-bar' + (opts.segments ? ' stacked' : '') + '" style="height:' + hPct + '%;' + (hPct > 0 ? 'min-height:2px;' : '') + '">' + (opts.segments || '') + '</div>';
+        }
+        html += '</div>';
+        html += '<div class="dash-vbar-label' + (opts.highlight ? ' dash-highlight' : '') + '">' + label + '</div>';
+        html += '</div>';
+        return html;
+    }
+
     function renderStatsChart() {
         const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const container = document.getElementById('statsChart');
         
         if (!statsData || !statsData.summary) {
-            container.innerHTML = '<p style="text-align:center;color:#999;">No data available.</p>';
+            container.innerHTML = '<div class="dash-empty">No data available.</div>';
             return;
         }
 
@@ -5848,39 +5932,41 @@ const firebaseConfig = {
         const mTotals = statsData.monthlyTotalsYtd || [];
         const mAvail = statsData.monthlyAvailableYtd || [];
         const res = statsData.res;
+        const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
 
         let html = '';
-        html += '<div style="font-size: 0.8em; color: #555; margin-bottom: 8px;">All charts reflect year-to-date. Future bookings are excluded as they may still change.</div>';
 
-        // === ROW 1: Utilization Ring + Duration Distribution + Sub-Room Pie (conditional) ===
+        // === ROW 1: Utilization + Booking Length + Rooms (conditional) ===
         const hasSubRooms = res.viewMode === 'day' && Array.isArray(res.subRooms) && getActiveSubRooms(res).length > 1;
         html += '<div class="dash-row' + (hasSubRooms ? ' dash-row-thirds' : '') + '">';
 
-        // Utilization Ring
+        // Utilization ring
+        const utilVal = s.utilization !== null ? s.utilization : 0;
+        const activeLevel = statsUtilBand(utilVal);
         html += '<div class="dash-panel">';
         html += '<div class="dash-panel-title">Utilization</div>';
-        const utilVal = s.utilization !== null ? s.utilization : 0;
-        const ringColor = utilVal >= 75 ? '#c62828' : utilVal >= 50 ? '#e65100' : utilVal >= 25 ? '#1976d2' : '#2e7d32';
+        html += '<div class="dash-panel-sub">Share of open hours that were booked</div>';
         html += '<div class="dash-ring-container">';
-        html += '  <div class="dash-ring" style="background: conic-gradient(' + ringColor + ' 0% ' + utilVal + '%, #e0e0e0 ' + utilVal + '% 100%);">';
+        html += '  <div class="dash-ring" style="background: conic-gradient(#2a78d6 0% ' + utilVal + '%, #e6eaef ' + utilVal + '% 100%);"' +
+            statsTipAttrs('Utilization', statsFmtHours(statsData.ytdTotal) + 'h booked of ' + statsFmtHours(statsData.ytdAvailable) + 'h open') + '>';
         html += '    <div class="dash-ring-inner">';
         html += '      <span class="dash-ring-pct">' + (s.utilization !== null ? s.utilization + '%' : 'N/A') + '</span>';
-        html += '      <span class="dash-ring-sub">' + (statsData.ytdTotal ? parseFloat(statsData.ytdTotal.toFixed(1)) : 0) + 'h of ' + (statsData.ytdAvailable ? parseFloat(statsData.ytdAvailable.toFixed(0)) : '?') + 'h</span>';
+        html += '      <span class="dash-ring-sub">' + statsFmtHours(statsData.ytdTotal) + 'h of ' + (statsData.ytdAvailable ? statsFmtHours(statsData.ytdAvailable) : '?') + 'h</span>';
         html += '    </div>';
         html += '  </div>';
-        html += '  <div class="dash-ring-legend">';
-        const activeLevel = utilVal >= 75 ? 3 : utilVal >= 50 ? 2 : utilVal >= 25 ? 1 : 0;
-        html += '    <div class="dash-ring-legend-item' + (activeLevel === 0 ? ' dash-highlight' : '') + '"><span class="dash-ring-dot" style="background:#2e7d32;"></span> 0-25% Light</div>';
-        html += '    <div class="dash-ring-legend-item' + (activeLevel === 1 ? ' dash-highlight' : '') + '"><span class="dash-ring-dot" style="background:#1976d2;"></span> 25-50% Moderate</div>';
-        html += '    <div class="dash-ring-legend-item' + (activeLevel === 2 ? ' dash-highlight' : '') + '"><span class="dash-ring-dot" style="background:#e65100;"></span> 50-75% Heavy</div>';
-        html += '    <div class="dash-ring-legend-item' + (activeLevel === 3 ? ' dash-highlight' : '') + '"><span class="dash-ring-dot" style="background:#c62828;"></span> 75%+ Near Capacity</div>';
+        html += '  <div class="dash-bands">';
+        STATS_UTIL_BANDS.forEach((b, i) => {
+            const on = s.utilization !== null && i === activeLevel;
+            html += '<div class="dash-band' + (on ? ' dash-band-on' : '') + '"><span>' + b.label + '</span><span>' + b.range + '</span></div>';
+        });
         html += '  </div>';
         html += '</div>';
         html += '</div>';
 
-        // Duration Distribution
+        // Booking length
         html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Booking Duration Breakdown</div>';
+        html += '<div class="dash-panel-title">Booking Length</div>';
+        html += '<div class="dash-panel-sub">How long bookings run</div>';
         const durBuckets = statsData.durationBuckets || {};
         const durKeys = Object.keys(durBuckets).map(Number).sort((a, b) => a - b);
         if (durKeys.length > 0) {
@@ -5888,110 +5974,89 @@ const firebaseConfig = {
             html += '<div class="dash-hbar-chart">';
             durKeys.forEach(d => {
                 const count = durBuckets[d.toString()];
-                const pct = s.totalBookings > 0 ? (count / s.totalBookings) * 100 : 0;
                 const label = d < 1 ? (d * 60) + 'm' : d + 'h';
                 const bookPct = s.totalBookings > 0 ? Math.round((count / s.totalBookings) * 100) : 0;
                 const hl = count === maxDurCount ? ' dash-highlight' : '';
-                html += '<div class="dash-hbar-row">';
+                html += '<div class="dash-hbar-row"' + statsTipAttrs(label + ' bookings', plural(count, 'booking') + ' · ' + bookPct + '% of all bookings') + '>';
                 html += '  <div class="dash-hbar-label' + hl + '">' + label + '</div>';
-                html += '  <div class="dash-hbar-track" title="' + count + ' bookings (' + bookPct + '%)"><div class="dash-hbar-fill duration" style="width:' + pct + '%;"></div></div>';
-                html += '  <div class="dash-hbar-value' + hl + '">' + count + ' (' + bookPct + '%)</div>';
+                html += '  <div class="dash-hbar-track"><div class="dash-hbar-fill" style="width:' + (count / maxDurCount) * 100 + '%;"></div></div>';
+                html += '  <div class="dash-hbar-value' + hl + '">' + count + ' · ' + bookPct + '%</div>';
                 html += '</div>';
             });
             html += '</div>';
         } else {
-            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
+            html += '<div class="dash-empty">No data yet</div>';
         }
         html += '</div>';
 
-        // Sub-Room Pie (conditional)
+        // Rooms (conditional)
         if (hasSubRooms) {
             html += '<div class="dash-panel">';
             html += '<div class="dash-panel-title">Room Distribution</div>';
+            html += '<div class="dash-panel-sub">Bookings by room</div>';
             const srCounts = statsData.subRoomCounts || {};
-            const srKeys = Object.keys(srCounts);
+            const srKeys = Object.keys(srCounts).sort((a, b) => srCounts[b] - srCounts[a]);
             const srTotal = srKeys.reduce((sum, k) => sum + srCounts[k], 0);
             if (srTotal > 0) {
-                // Build conic-gradient slices
-                const PIE_COLORS = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#edc948', '#76b7b2', '#9c755f'];
-                let cumPct = 0;
-                let gradientParts = [];
-                let legendItems = [];
-                srKeys.sort((a, b) => srCounts[b] - srCounts[a]).forEach((k, i) => {
+                const srMax = srCounts[srKeys[0]];
+                html += '<div class="dash-hbar-chart wide-labels">';
+                srKeys.forEach((k, i) => {
                     const count = srCounts[k];
-                    const pct = (count / srTotal) * 100;
-                    const color = PIE_COLORS[i % PIE_COLORS.length];
+                    const pct = Math.round((count / srTotal) * 100);
                     const roomName = getSubRoomName(res, parseInt(k));
                     const hl = i === 0 ? ' dash-highlight' : '';
-                    gradientParts.push(color + ' ' + cumPct + '% ' + (cumPct + pct) + '%');
-                    cumPct += pct;
-                    legendItems.push('<div class="dash-pie-legend-item' + hl + '"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + roomName + ': ' + count + ' (' + Math.round(pct) + '%)</div>');
+                    html += '<div class="dash-hbar-row"' + statsTipAttrs(roomName, plural(count, 'booking') + ' · ' + pct + '% of all bookings') + '>';
+                    html += '  <div class="dash-hbar-label' + hl + '">' + escapeHtml(roomName) + '</div>';
+                    html += '  <div class="dash-hbar-track"><div class="dash-hbar-fill" style="width:' + (count / srMax) * 100 + '%;"></div></div>';
+                    html += '  <div class="dash-hbar-value' + hl + '">' + count + ' · ' + pct + '%</div>';
+                    html += '</div>';
                 });
-                html += '<div class="dash-pie-container">';
-                html += '  <div class="dash-pie" style="background: conic-gradient(' + gradientParts.join(', ') + ');"></div>';
-                html += '  <div class="dash-pie-legend">' + legendItems.join('') + '</div>';
                 html += '</div>';
             } else {
-                html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
+                html += '<div class="dash-empty">No data yet</div>';
             }
             html += '</div>';
         }
 
         html += '</div>'; // end row 1
 
-        // === ROW 2: Weekly Usage + Monthly Bars ===
+        // === ROW 2: By weekday + By month ===
         html += '<div class="dash-row">';
 
-        // Weekly Usage bar chart (avg hours per day of week, YTD)
+        // Weekly usage (utilization per day of week, YTD)
         html += '<div class="dash-panel">';
         html += '<div class="dash-panel-title">Weekly Usage</div>';
+        html += '<div class="dash-panel-sub">Utilization by day of the week</div>';
         const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const dowData = statsData.dowSummary || [];
-        const dowMap = {};
-        dowData.forEach(d => { dowMap[d.day] = d; });
         const DOW_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-        // Find peak day utilization for highlighting
+        const dowMap = {};
+        (statsData.dowSummary || []).forEach(d => { dowMap[d.day] = d; });
         let peakDowUtil = 0;
         for (let i = 0; i < 7; i++) {
-            const dayStart = res.hours[i * 2];
-            const dayEnd = res.hours[i * 2 + 1];
-            if (dayStart !== dayEnd) {
-                const entry = dowMap[DOW_FULL[i]];
-                if (entry && entry.utilization > peakDowUtil) peakDowUtil = entry.utilization;
-            }
+            const entry = dowMap[DOW_FULL[i]];
+            if (res.hours[i * 2] !== res.hours[i * 2 + 1] && entry && entry.utilization > peakDowUtil) peakDowUtil = entry.utilization;
         }
         html += '<div class="dash-vbar-chart">';
         for (let i = 0; i < 7; i++) {
             const entry = dowMap[DOW_FULL[i]];
-            const avgHrs = entry ? entry.avgHours : 0;
-            const totalHrs = entry ? entry.totalHours : 0;
-            const availHrs = entry ? entry.availableHours : 0;
+            const isClosed = res.hours[i * 2] === res.hours[i * 2 + 1];
             const util = entry ? entry.utilization : 0;
-            const openDays = entry ? entry.openDayCount : 0;
-            const dayStart = res.hours[i * 2];
-            const dayEnd = res.hours[i * 2 + 1];
-            const isClosed = dayStart === dayEnd;
-            const pct = isClosed ? 0 : util;
-            const fillPct = isClosed ? 0 : Math.min(100, pct);
-            const hl = !isClosed && util > 0 && util === peakDowUtil ? ' dash-highlight' : '';
-            const title = isClosed ? DOW_LABELS[i] + ': Closed'
-                : DOW_LABELS[i] + ': avg ' + avgHrs + 'h/day, ' + parseFloat(totalHrs.toFixed(1)) + 'h total / ' + parseFloat(availHrs.toFixed(1)) + 'h avail (' + util + '%) over ' + openDays + ' days';
-            html += '<div class="dash-vbar-col">';
-            html += '  <div class="dash-vbar-pct' + hl + '">' + (!isClosed && availHrs > 0 ? Math.round(pct) + '%' : '') + '</div>';
-            html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
-            html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
-            html += '  </div>';
-            html += '  <div class="dash-vbar-label' + hl + '">' + DOW_LABELS[i] + '</div>';
-            html += '</div>';
+            if (isClosed || !entry) {
+                html += statsVbarCol(DOW_LABELS[i], 0, '', DOW_FULL[i] + 's', isClosed ? 'Closed' : 'No open days yet', { closed: isClosed });
+                continue;
+            }
+            const detail = Math.round(util) + '% utilization\n' + statsFmtHours(entry.totalHours) + 'h booked of ' + statsFmtHours(entry.availableHours) + 'h open\n' +
+                'avg ' + entry.avgHours + 'h a day over ' + plural(entry.openDayCount, 'open day');
+            html += statsVbarCol(DOW_LABELS[i], peakDowUtil > 0 ? util / peakDowUtil : 0, Math.round(util) + '%', DOW_FULL[i] + 's', detail,
+                { highlight: util > 0 && util === peakDowUtil });
         }
         html += '</div>';
-        html += '<div class="dash-vbar-hint">Hover over bars for details</div>';
         html += '</div>';
 
-        // Monthly utilization bar chart
+        // Monthly usage
         html += '<div class="dash-panel">';
         html += '<div class="dash-panel-title">Monthly Usage</div>';
-        // Find peak month utilization for highlighting
+        html += '<div class="dash-panel-sub">Utilization by month</div>';
         let peakMonthPct = 0;
         for (let i = 0; i < 12; i++) {
             const avail = mAvail[i] || 0;
@@ -6002,21 +6067,16 @@ const firebaseConfig = {
         for (let i = 0; i < 12; i++) {
             const booked = mTotals[i] || 0;
             const avail = mAvail[i] || 0;
-            const pct = avail > 0 ? Math.round((booked / avail) * 100) : 0;
-            const fillPct = avail > 0 ? Math.min(100, (booked / avail) * 100) : 0;
-            const hl = pct > 0 && pct === peakMonthPct ? ' dash-highlight' : '';
-            const title = MONTHS[i] + ': ' + parseFloat(booked.toFixed(1)) + 'h / ' + parseFloat(avail.toFixed(1)) + 'h (' + pct + '%)';
-
-            html += '<div class="dash-vbar-col">';
-            html += '  <div class="dash-vbar-pct' + hl + '">' + (avail > 0 ? pct + '%' : '') + '</div>';
-            html += '  <div class="dash-vbar-wrap" style="height:' + Math.max(fillPct, 2) + '%;" title="' + title + '">';
-            html += '    <div class="dash-vbar-fill" style="height:100%;"></div>';
-            html += '  </div>';
-            html += '  <div class="dash-vbar-label' + hl + '">' + MONTHS[i] + '</div>';
-            html += '</div>';
+            if (avail <= 0) {
+                html += statsVbarCol(MONTHS[i], 0, '', MONTHS_FULL[i], 'No open days yet');
+                continue;
+            }
+            const pct = Math.round((booked / avail) * 100);
+            html += statsVbarCol(MONTHS[i], peakMonthPct > 0 ? pct / peakMonthPct : 0, pct + '%', MONTHS_FULL[i],
+                pct + '% utilization\n' + statsFmtHours(booked) + 'h booked of ' + statsFmtHours(avail) + 'h open',
+                { highlight: pct > 0 && pct === peakMonthPct });
         }
         html += '</div>';
-        html += '<div class="dash-vbar-hint">Hover over bars for details</div>';
         html += '</div>';
 
         html += '</div>'; // end row 2
@@ -6024,73 +6084,63 @@ const firebaseConfig = {
         // === STAFF ASSISTANCE (full width, conditional) ===
         if (res.hasStaffField) {
             const msc = statsData.monthlyStaffCounts || {};
-            const staffNames = Object.keys(msc).sort();
-            const hasStaffData = staffNames.some(n => msc[n].some(c => c > 0));
-            if (hasStaffData) {
-                const STAFF_COLORS = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#edc948', '#76b7b2', '#9c755f'];
-                // Find max monthly total for scaling
-                let maxMonthTotal = 0;
-                for (let i = 0; i < 12; i++) {
-                    let monthTotal = 0;
-                    staffNames.forEach(n => { monthTotal += msc[n][i]; });
-                    if (monthTotal > maxMonthTotal) maxMonthTotal = monthTotal;
+            const totalOf = (n) => msc[n].reduce((sum, c) => sum + c, 0);
+            let staffNames = Object.keys(msc).filter(n => totalOf(n) > 0).sort();
+            if (staffNames.length > 0) {
+                // Past eight names, keep the seven busiest and fold the rest into "Other".
+                let series = staffNames.map(n => ({ name: n, counts: msc[n] }));
+                if (series.length > STATS_SERIES_COLORS.length) {
+                    const keep = staffNames.slice().sort((a, b) => totalOf(b) - totalOf(a)).slice(0, STATS_SERIES_COLORS.length - 1);
+                    const other = new Array(12).fill(0);
+                    staffNames.filter(n => !keep.includes(n)).forEach(n => msc[n].forEach((c, i) => { other[i] += c; }));
+                    series = staffNames.filter(n => keep.includes(n)).map(n => ({ name: n, counts: msc[n] }));
+                    series.push({ name: 'Other', counts: other });
                 }
+                const monthTotals = [];
+                for (let i = 0; i < 12; i++) monthTotals.push(series.reduce((sum, sr) => sum + sr.counts[i], 0));
+                const maxMonthTotal = Math.max(...monthTotals);
 
-                html += '<div class="dash-row" style="grid-template-columns: 1fr;">';
+                html += '<div class="dash-row dash-row-full">';
                 html += '<div class="dash-panel">';
                 html += '<div class="dash-panel-title">Staff/Volunteer Assisted Sessions</div>';
-                html += '<div class="dash-stacked-chart">';
+                html += '<div class="dash-panel-sub">Assisted bookings per month, by person</div>';
+                html += '<div class="dash-vbar-chart">';
                 for (let i = 0; i < 12; i++) {
-                    let monthTotal = 0;
-                    staffNames.forEach(n => { monthTotal += msc[n][i]; });
-                    const barPct = maxMonthTotal > 0 ? (monthTotal / maxMonthTotal) * 100 : 0;
-
-                    html += '<div class="dash-stacked-col">';
-                    const hlMonth = monthTotal > 0 && monthTotal === maxMonthTotal ? ' dash-highlight' : '';
-                    html += '  <div class="dash-stacked-count' + hlMonth + '">' + (monthTotal > 0 ? monthTotal : '') + '</div>';
-                    html += '  <div class="dash-stacked-bar" style="height:' + Math.max(barPct, monthTotal > 0 ? 2 : 0) + '%;">';
-                    if (monthTotal > 0) {
-                        // Build segments bottom-up
-                        staffNames.forEach((n, si) => {
-                            const count = msc[n][i];
-                            if (count === 0) return;
-                            const segPct = (count / monthTotal) * 100;
-                            const color = STAFF_COLORS[si % STAFF_COLORS.length];
-                            const isTop = si === staffNames.reduce((last, name, idx) => msc[name][i] > 0 ? idx : last, 0);
-                            html += '<div class="dash-stacked-segment' + (isTop ? ' dash-stacked-segment-top' : '') + '" style="height:' + segPct + '%;background:' + color + ';" title="' + n + ': ' + count + '"></div>';
-                        });
-                    }
-                    html += '  </div>';
-                    html += '  <div class="dash-stacked-label' + hlMonth + '">' + MONTHS[i] + '</div>';
-                    html += '</div>';
+                    const monthTotal = monthTotals[i];
+                    let segments = '';
+                    const lines = [];
+                    series.forEach((sr, si) => {
+                        const count = sr.counts[i];
+                        if (count === 0) return;
+                        segments += '<div class="dash-stacked-segment" style="height:' + (count / monthTotal) * 100 + '%;background:' + STATS_SERIES_COLORS[si] + ';"></div>';
+                        lines.push(sr.name + ': ' + count);
+                    });
+                    html += statsVbarCol(MONTHS[i], maxMonthTotal > 0 ? monthTotal / maxMonthTotal : 0, monthTotal > 0 ? monthTotal : '',
+                        MONTHS_FULL[i] + ' · ' + plural(monthTotal, 'session'), lines.join('\n'),
+                        { highlight: monthTotal > 0 && monthTotal === maxMonthTotal, segments: segments });
                 }
                 html += '</div>';
 
-                // Legend
-                const maxStaffTotal = Math.max(...staffNames.map(n => msc[n].reduce((s, c) => s + c, 0)));
-                html += '<div class="dash-stacked-legend">';
-                staffNames.forEach((n, si) => {
-                    const total = msc[n].reduce((s, c) => s + c, 0);
-                    const color = STAFF_COLORS[si % STAFF_COLORS.length];
-                    const hl = total === maxStaffTotal ? ' dash-highlight' : '';
-                    html += '<div class="dash-ring-legend-item' + hl + '"><span class="dash-ring-dot" style="background:' + color + ';"></span> ' + n + ': ' + total + '</div>';
+                const seriesTotals = series.map(sr => sr.counts.reduce((sum, c) => sum + c, 0));
+                const maxStaffTotal = Math.max(...seriesTotals);
+                html += '<div class="dash-legend">';
+                series.forEach((sr, si) => {
+                    const hl = seriesTotals[si] === maxStaffTotal ? ' dash-highlight' : '';
+                    html += '<div class="dash-legend-item' + hl + '"><span class="dash-dot" style="background:' + STATS_SERIES_COLORS[si] + ';"></span>' + escapeHtml(sr.name) + ': ' + seriesTotals[si] + '</div>';
                 });
                 html += '</div>';
-                html += '<div class="dash-vbar-hint">Hover over each month\'s colored sections for individual session counts</div>';
 
                 html += '</div>'; // end panel
                 html += '</div>'; // end row
             }
         }
 
-        // === ROW 3: Weekly Rhythm (full width) ===
-        html += '<div class="dash-row" style="grid-template-columns: 1fr;">';
-
-        // Weekly Rhythm Heatmap
+        // === Weekly Rhythm (full width) ===
+        html += '<div class="dash-row dash-row-full">';
         html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Weekly Rhythm (Day &times; Hour)</div>';
+        html += '<div class="dash-panel-title">Weekly Rhythm</div>';
+        html += '<div class="dash-panel-sub">Number of bookings that start in each hour, by day of the week</div>';
         const heatmap = statsData.dayHourHeatmap || [];
-        // Find all active hours across all days and the max count
         const activeHours = new Set();
         let heatMax = 0;
         for (let d = 0; d < 7; d++) {
@@ -6101,14 +6151,11 @@ const firebaseConfig = {
         }
         const sortedHours = Array.from(activeHours).sort((a, b) => a - b);
         if (sortedHours.length > 0 && heatMax > 0) {
-            // Fill in any gaps between min and max hour
             const minH = sortedHours[0];
             const maxH = sortedHours[sortedHours.length - 1];
             const allHeatHours = [];
             for (let h = minH; h <= maxH; h++) allHeatHours.push(h);
 
-            const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            // Pre-compute hour totals for highlighting
             const hourTotals = {};
             let maxHourTotal = 0;
             allHeatHours.forEach(h => {
@@ -6117,57 +6164,44 @@ const firebaseConfig = {
                 hourTotals[h] = total;
                 if (total > maxHourTotal) maxHourTotal = total;
             });
-            html += '<div class="dash-heatmap" style="grid-template-columns: 36px repeat(' + allHeatHours.length + ', 1fr);">';
-            // Header row
+            html += '<div class="dash-heatmap" style="grid-template-columns: 44px repeat(' + allHeatHours.length + ', minmax(0, 1fr));">';
             html += '<div class="dash-hm-corner"></div>';
             allHeatHours.forEach(h => {
                 const hl = hourTotals[h] > 0 && hourTotals[h] === maxHourTotal ? ' dash-highlight' : '';
                 html += '<div class="dash-hm-hdr' + hl + '">' + formatTime(h) + '</div>';
             });
-            // Data rows
             for (let d = 0; d < 7; d++) {
                 const dayData = heatmap[d] || {};
-                // Skip days with no operating hours
-                const dayStart = res.hours[d * 2];
-                const dayEnd = res.hours[d * 2 + 1];
-                if (dayStart === dayEnd) {
-                    html += '<div class="dash-hm-day">' + DAY_ABBR[d] + '</div>';
-                    allHeatHours.forEach(() => {
-                        html += '<div class="dash-hm-cell dash-hm-closed" title="Closed"></div>';
+                html += '<div class="dash-hm-day">' + DOW_LABELS[d] + '</div>';
+                if (res.hours[d * 2] === res.hours[d * 2 + 1]) {
+                    allHeatHours.forEach(h => {
+                        html += '<div class="dash-hm-cell dash-hm-closed"' + statsTipAttrs(DOW_FULL[d] + 's, ' + formatTime(h), 'Closed') + '></div>';
                     });
                     continue;
                 }
-                html += '<div class="dash-hm-day">' + DAY_ABBR[d] + '</div>';
                 allHeatHours.forEach(h => {
                     const count = dayData[h] || 0;
                     const intensity = count > 0 ? Math.min(8, Math.ceil((count / heatMax) * 8)) : 0;
-                    const title = DAY_ABBR[d] + ' ' + formatTime(h) + ': ' + count + ' booking' + (count !== 1 ? 's' : '');
-                    html += '<div class="dash-hm-cell dash-hm-lvl-' + intensity + '" title="' + title + '">' + (count > 0 ? count : '') + '</div>';
+                    html += '<div class="dash-hm-cell dash-hm-lvl-' + intensity + '"' + statsTipAttrs(DOW_FULL[d] + 's, ' + formatTime(h), plural(count, 'booking') + ' started this hour') + '>' + (count > 0 ? count : '') + '</div>';
                 });
             }
-            // Totals row
-            html += '<div class="dash-hm-day" style="font-weight:600;">Total</div>';
+            html += '<div class="dash-hm-day">Total</div>';
             allHeatHours.forEach(h => {
                 const total = hourTotals[h];
                 const hl = total > 0 && total === maxHourTotal ? ' dash-highlight' : '';
-                html += '<div class="dash-hm-cell' + hl + '" style="background:transparent;border:none;color:#666;" title="Total at ' + formatTime(h) + ': ' + total + '">' + (total > 0 ? total : '') + '</div>';
+                html += '<div class="dash-hm-cell dash-hm-total' + hl + '"' + statsTipAttrs('All days, ' + formatTime(h), plural(total, 'booking') + ' started this hour') + '>' + (total > 0 ? total : '') + '</div>';
             });
             html += '</div>';
-            // Heatmap scale legend
             html += '<div class="dash-hm-scale">';
-            html += '<span>Less</span>';
-            for (let i = 0; i <= 8; i++) {
-                html += '<span class="dash-hm-cell dash-hm-lvl-' + i + '" style="width:14px;height:14px;display:inline-block;border-radius:2px;"></span>';
-            }
+            html += '<span>Fewer</span>';
+            for (let i = 1; i <= 8; i++) html += '<span class="sg-swatch dash-hm-lvl-' + i + '"></span>';
             html += '<span>More</span>';
             html += '</div>';
-            html += '<div class="dash-vbar-hint">Bookings starting in the same hour are grouped together</div>';
         } else {
-            html += '<div style="text-align:center;color:#999;padding:20px;">No data yet</div>';
+            html += '<div class="dash-empty">No data yet</div>';
         }
         html += '</div>';
-
-        html += '</div>'; // end row 3
+        html += '</div>';
 
         container.innerHTML = html;
     }
@@ -6190,7 +6224,10 @@ const firebaseConfig = {
         if (maxHours === 0) maxHours = 1;
         
         // Build header
-        thead.innerHTML = '<tr><th>Day</th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr>';
+        const nowForGrid = new Date();
+        const currentMonthIdx = year === nowForGrid.getFullYear() ? nowForGrid.getMonth() : -1;
+        thead.innerHTML = '<tr><th>Day</th>' + MONTHS.map((m, i) => `<th${i === currentMonthIdx ? ' class="sg-current"' : ''}>${m}</th>`).join('') + '</tr>';
+        const DOW_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
         
         // Helper to format date with ordinal suffix
         function formatDateWithOrdinal(month, day, year) {
@@ -6291,11 +6328,13 @@ const firebaseConfig = {
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 
                 if (day > daysInMonth) {
-                    rowHtml += `<td class="stats-closed"></td>`;
+                    rowHtml += `<td class="sg-void"></td>`;
                 } else {
                     const date = new Date(year, month, day);
                     const dateStr = formatDateISO(date);
                     const stat = dailyStats[dateStr];
+                    const todayClass = date.getTime() === today.getTime() ? ' sg-today' : '';
+                    const dowTag = `<span class="sg-dow">${DOW_SHORT[date.getDay()]}</span>`;
                     const dayOfWeekNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                     const dateTooltip = dayOfWeekNames[date.getDay()] + ', ' + formatDateWithOrdinal(month, day, year);
                     const hours = stat.hours;
@@ -6307,11 +6346,11 @@ const firebaseConfig = {
                     grandBookingCount += stat.bookingCount;
                     
                     if (stat.closed) {
-                        const shortReason = stat.reason.length > 8 ? stat.reason.substring(0, 7) + '\u2026' : stat.reason;
-                        const closedTooltip = hours > 0 
-                            ? `${dateTooltip} - ${stat.reason} (${parseFloat(hours.toFixed(2))}h booked)`
-                            : `${dateTooltip} - ${stat.reason}`;
-                        rowHtml += `<td class="stats-closed" title="${closedTooltip}">${shortReason || 'C'}</td>`;
+                        // Regular weekly closed days stay quiet (hatch only); named closures show their reason.
+                        const namedReason = stat.reason && stat.reason !== 'Closed' ? stat.reason : '';
+                        const shortReason = namedReason.length > 9 ? namedReason.substring(0, 8) + '\u2026' : namedReason;
+                        const closedDetail = (stat.reason || 'Closed') + (hours > 0 ? ` · ${parseFloat(hours.toFixed(2))}h booked` : '');
+                        rowHtml += `<td class="sg-cell sg-closed${todayClass}"${statsTipAttrs(dateTooltip, closedDetail)}>${dowTag}<span class="sg-val">${escapeHtml(shortReason)}</span></td>`;
                     } else {
                         // Calculate available hours for this open day
                         totalDaysBookable++;
@@ -6340,8 +6379,8 @@ const firebaseConfig = {
                         const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : (isPast ? '0' : '');
                         const dayUtil = dayAvailable > 0 ? ((hours / dayAvailable) * 100).toFixed(1) : '0.0';
                         const bc = stat.bookingCount;
-                        const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'}, ${bc} booking${bc === 1 ? '' : 's'} (${dayUtil}% utilization)` : 'No bookings';
-                        rowHtml += `<td class="stats-heat-${heatLevel}" title="${dateTooltip} - ${hoursText}">${displayHours}</td>`;
+                        const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'} · ${bc} booking${bc === 1 ? '' : 's'}\n${dayUtil}% of ${parseFloat(dayAvailable.toFixed(2))} open hours` : (isPast ? 'No bookings' : 'Nothing booked yet');
+                        rowHtml += `<td class="sg-cell stats-heat-${heatLevel}${todayClass}"${statsTipAttrs(dateTooltip, hoursText)}>${dowTag}<span class="sg-val">${displayHours}</span></td>`;
                     }
                 }
             }
@@ -6357,22 +6396,23 @@ const firebaseConfig = {
         monthlyTotals.forEach((t, i) => {
             const displayTotal = t > 0 ? parseFloat(t.toFixed(2)) + 'h' : '-';
             const bc = monthlyBookingCounts[i];
-            const countLabel = bc > 0 ? `<div style="font-size:0.85em;color:#555;font-weight:normal;">${bc} booking${bc === 1 ? '' : 's'}</div>` : '';
-            footHtml += `<td><div style="color:#1565c0;font-weight:bold;">${MONTHS[i]}</div>${displayTotal}${countLabel}</td>`;
+            const countLabel = bc > 0 ? `<span class="sg-total-b">${bc} booking${bc === 1 ? '' : 's'}</span>` : '';
+            footHtml += `<td${statsTipAttrs(MONTHS[i] + ' ' + year + ' total', (t > 0 ? parseFloat(t.toFixed(2)) + ' hours' : 'No hours') + ' · ' + bc + ' booking' + (bc === 1 ? '' : 's'))}><span class="sg-total-h">${displayTotal}</span>${countLabel}</td>`;
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
 
         // Update summary
-        document.getElementById('statsTotalHours').innerText = parseFloat(ytdTotal.toFixed(2)) + ' hours';
-        
+        setStatsTile('statsTotalHours', statsFmtHours(ytdTotal), ytdAvailable > 0 ? `of ${statsFmtHours(ytdAvailable)} open hours` : 'hours');
+
         // Booking count
-        document.getElementById('statsBookingCount').innerText = totalBookingCount;
-        
+        setStatsTile('statsBookingCount', totalBookingCount.toLocaleString('en-US'), 'year to date');
+
         // Utilization (YTD)
         const utilPct = ytdAvailable > 0 ? ((ytdTotal / ytdAvailable) * 100).toFixed(1) : 0;
-        document.getElementById('statsUtilization').innerText = ytdAvailable > 0 ? utilPct + '%' : 'N/A';
-        
+        setStatsTile('statsUtilization', ytdAvailable > 0 ? utilPct + '%' : 'N/A',
+            ytdAvailable > 0 ? STATS_UTIL_BANDS[statsUtilBand(parseFloat(utilPct))].label + ' use' : '');
+
         // Find busiest month (by utilization YTD)
         let busiestMonthIdx = -1, busiestMonthUtil = -1;
         for (let i = 0; i < 12; i++) {
@@ -6380,17 +6420,20 @@ const firebaseConfig = {
             const util = (monthlyTotalsYtd[i] / monthlyAvailableYtd[i]) * 100;
             if (util > busiestMonthUtil) { busiestMonthUtil = util; busiestMonthIdx = i; }
         }
-        document.getElementById('statsBusiestMonth').innerText = busiestMonthIdx >= 0
-            ? `${MONTHS[busiestMonthIdx]} (${parseFloat(monthlyTotalsYtd[busiestMonthIdx].toFixed(2))}h, ${busiestMonthUtil.toFixed(1)}%)` : '-';
-        
+        if (busiestMonthIdx >= 0) {
+            setStatsTile('statsBusiestMonth', MONTHS[busiestMonthIdx], `${parseFloat(monthlyTotalsYtd[busiestMonthIdx].toFixed(2))}h · ${busiestMonthUtil.toFixed(1)}% utilization`);
+        } else {
+            setStatsTile('statsBusiestMonth', '-', '');
+        }
+
         // Average hours per open day (YTD)
         const avgHours = ytdDaysBookable > 0 ? (ytdTotal / ytdDaysBookable).toFixed(1) : 0;
-        document.getElementById('statsAvgHours').innerText = avgHours;
-        
+        setStatsTile('statsAvgHours', avgHours, `over ${ytdDaysBookable} open day${ytdDaysBookable === 1 ? '' : 's'}`);
+
         // Average duration per booking
         const avgDuration = totalBookingCount > 0 ? (totalDurationSum / totalBookingCount).toFixed(1) + 'h' : '-';
-        document.getElementById('statsAvgDuration').innerText = avgDuration;
-        
+        setStatsTile('statsAvgDuration', avgDuration, 'per booking');
+
         // Busiest and quietest day of week (normalized avg hours per occurrence)
         const DAY_NAMES = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
         let busiestDayIdx = -1, busiestDayUtil = -1;
@@ -6404,25 +6447,27 @@ const firebaseConfig = {
             if (util > busiestDayUtil) { busiestDayUtil = util; busiestDayIdx = i; }
             if (util < quietestDayUtil) { quietestDayUtil = util; quietestDayIdx = i; }
         }
-        document.getElementById('statsBusiestDay').innerText = busiestDayIdx >= 0
-            ? `${DAY_NAMES[busiestDayIdx]} (avg ${dayAvgs[busiestDayIdx].avgHrs.toFixed(1)}h, ${dayAvgs[busiestDayIdx].util.toFixed(1)}%)` : '-';
-        document.getElementById('statsQuietestDay').innerText = quietestDayIdx >= 0
-            ? `${DAY_NAMES[quietestDayIdx]} (avg ${dayAvgs[quietestDayIdx].avgHrs.toFixed(1)}h, ${dayAvgs[quietestDayIdx].util.toFixed(1)}%)` : '-';
-        
+        const dayTile = (id, idx) => {
+            if (idx >= 0) setStatsTile(id, DAY_NAMES[idx], `avg ${dayAvgs[idx].avgHrs.toFixed(1)}h · ${dayAvgs[idx].util.toFixed(1)}% utilization`);
+            else setStatsTile(id, '-', '');
+        };
+        dayTile('statsBusiestDay', busiestDayIdx);
+        dayTile('statsQuietestDay', quietestDayIdx);
+
         // Peak hour
         let peakHour = -1, peakCount = 0;
         Object.keys(hourSlotCounts).forEach(h => {
             if (hourSlotCounts[h] > peakCount) { peakCount = hourSlotCounts[h]; peakHour = parseInt(h); }
         });
-        document.getElementById('statsPeakHour').innerText = peakHour >= 0
-            ? `${formatTime(peakHour)} (${peakCount} bookings)` : '-';
-        
+        if (peakHour >= 0) setStatsTile('statsPeakHour', formatTime(peakHour), `${peakCount} booking${peakCount === 1 ? '' : 's'} started`);
+        else setStatsTile('statsPeakHour', '-', '');
+
         // Staff assisted (conditional)
         if (res.hasStaffField) {
             document.getElementById('statsStaffSection').style.display = '';
             const staffPct = totalBookingCount > 0 ? ((staffAssistedCount / totalBookingCount) * 100).toFixed(0) : 0;
-            document.getElementById('statsStaffAssisted').innerText = totalBookingCount > 0
-                ? `${staffAssistedCount} (${staffPct}%)` : '-';
+            if (totalBookingCount > 0) setStatsTile('statsStaffAssisted', staffAssistedCount, `${staffPct}% of bookings`);
+            else setStatsTile('statsStaffAssisted', '-', '');
         } else {
             document.getElementById('statsStaffSection').style.display = 'none';
         }

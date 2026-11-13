@@ -31,11 +31,11 @@ This document drifts as the code moves. To keep it trustworthy, it deliberately 
 Approximate sizes (run `wc -l` for current values — see "Keeping this file accurate"):
 
 ```
-app.js         (largest, ~6,300 lines) - Application logic (DOM, Firebase, UI interactions)
-utils.js       (~540 lines)            - Pure utility functions (testable, no DOM/Firebase deps)
-utils.test.js  (~870 lines)            - Jest tests for utils.js
-index.html     (~720 lines)            - HTML markup, ~15 modal/overlay dialogs, UI structure
-styles.css     (~1,270 lines)          - All styling (layout, grid, modals, components)
+app.js         (largest, ~6,700 lines) - Application logic (DOM, Firebase, UI interactions)
+utils.js       (~580 lines)            - Pure utility functions (testable, no DOM/Firebase deps)
+utils.test.js  (~950 lines)            - Jest tests for utils.js
+index.html     (~780 lines)            - HTML markup, ~15 modal/overlay dialogs, UI structure
+styles.css     (~1,060 lines)          - All styling (layout, grid, modals, components)
 firestore.rules                        - Server-side access control (the real security boundary)
 package.json                           - Dev dependencies (Jest only)
 README.md                              - User-facing project summary
@@ -162,26 +162,26 @@ The file is organized into labeled sections. **Search for the marker text to nav
 | ~170 | `// --- AUTH ACTIONS ---` | `doLogin()`, `doLogout()`, `canEditResource()`, `setupRealtimeListeners()` |
 | ~229 | `// --- RESOURCE VERSION HISTORY ---` | `backupResourceList()`, backup modal, in-app restore from `system/resourceBackups` |
 | ~354 | `// --- CORE LOGIC ---` | `loadBookingsForCurrentView()`, `handleResourceUpdate()`, navigation, `loadVersion` stale-callback guard |
-| ~560 | `function renderGrid()` | Main grid rendering. Builds time slots, positions booking overlays, attaches event listeners |
-| ~1006 | `// --- CURRENT TIME INDICATOR ---` | Red time-indicator line for day view (`setupTimeIndicator`, `placeTimeIndicator`) |
-| ~1072 | `// --- DRAG-AND-DROP HANDLERS ---` | Moving existing bookings via drag. Validation, conflict checking, drop confirmation |
-| ~1737 | `// --- DRAG-TO-CREATE HANDLERS ---` | Creating new bookings by clicking and dragging on empty slots |
-| ~2129 | `// --- RESIZE HANDLERS ---` | Changing booking duration by dragging the bottom edge |
-| ~2445 | `// --- RESCHEDULE MODE ---` | Multi-step rescheduling: enter mode, navigate to target day/week, click to place |
+| ~566 | `function renderGrid()` | Main grid rendering. Builds time slots, positions booking overlays, attaches event listeners |
+| ~1059 | `// --- CURRENT TIME INDICATOR ---` | Red time-indicator line for day view (`setupTimeIndicator`, `placeTimeIndicator`) |
+| ~1125 | `// --- DRAG-AND-DROP HANDLERS ---` | Moving existing bookings via drag. Validation, conflict checking, drop confirmation |
+| ~1790 | `// --- DRAG-TO-CREATE HANDLERS ---` | Creating new bookings by clicking and dragging on empty slots |
+| ~2188 | `// --- RESIZE HANDLERS ---` | Changing booking duration by dragging the bottom edge |
+| ~2506 | `// --- RESCHEDULE MODE ---` | Multi-step rescheduling: enter mode, navigate to target day/week, click to place |
 | ~2766 | `// --- FUTURE-DATE CONFIRM ---` | `confirmFutureBooking()` gate (per-resource setting) shown before the booking modal opens for a future day |
 | ~2793 | `// --- BOOKING PRESENCE ---` | "Being booked…" overlays for other users: `presence` listener, hold write/heartbeat/clear, `computeGridBlockRect()`, `renderPresenceHolds()` |
-| ~2705 | `// --- MODAL & SAVE ---` | Booking modal (`openBookingModal`), `saveBooking()`, `saveRecurringBooking()`, recurring pattern logic |
-| ~3227 | `// --- ADMIN PANEL ---` | Admin settings UI (`loadSettingsForEditor`), resource management, sub-room editing, staffing config |
-| ~3642 | `// --- CLOSURE DATE MANAGEMENT ---` | Add/remove closure dates, year-based storage, apply closures across resources |
-| ~4059 | `// --- STAFF NAME LIST MANAGEMENT ---` | Configure staff/volunteer names per resource, apply across resources |
-| ~4169 | `// --- STAFF NAME DRAG-TO-REORDER ---` | Drag-to-reorder for the staff/volunteer name cards (mirrors sub-room cards) |
-| ~4383 | `// --- NEW RESOURCE WITH IMPORT OPTION ---` | Creating resources with option to clone settings from existing ones |
-| ~4573 | `async function deleteResource()` | Delete resource with password protection |
-| ~4620 | `async function saveAllSettings()` | Main settings save; also calls `runLazyJanitor()` on the saved resource |
-| ~4677 | `checkAndRunJanitor()` / `runLazyJanitor()` | Monthly janitor gate + the batched anonymization worker |
-| ~4822 | `// --- BOOKING POPOVER & HIGHLIGHTS ---` | Hover popover (`showBookingPopover`), highlighting, `deleteBooking()` with series-aware logic |
-| ~4978 | `// --- UTILITY FUNCTIONS ---` | `closeModal()`, `createDiv()`, `showLoading()`, modal toggles, advance-limit checking |
-| ~5109 | `// --- STATS FUNCTIONS ---` | Statistics modal, heatmap, dashboard charts, CSV export (to end of file) |
+| ~2944 | `// --- MODAL & SAVE ---` | Booking modal (`openBookingModal`), `saveBooking()`, `saveRecurringBooking()`, recurring pattern logic |
+| ~3468 | `// --- ADMIN PANEL ---` | Admin settings UI (`loadSettingsForEditor`), resource management, sub-room editing, staffing config |
+| ~3954 | `// --- CLOSURE DATE MANAGEMENT ---` | Add/remove closure dates, year-based storage, apply closures across resources |
+| ~4358 | `// --- STAFF NAME LIST MANAGEMENT ---` | Configure staff/volunteer names per resource, apply across resources |
+| ~4458 | `// --- STAFF NAME DRAG-TO-REORDER ---` | Drag-to-reorder for the staff/volunteer name cards (mirrors sub-room cards) |
+| ~4669 | `// --- NEW RESOURCE WITH IMPORT OPTION ---` | Creating resources with option to clone settings from existing ones |
+| ~4862 | `async function deleteResource()` | Delete resource with password protection |
+| ~4916 | `async function saveAllSettings()` | Main settings save; also calls `runLazyJanitor()` on the saved resource |
+| ~4995 | `checkAndRunJanitor()` / `runLazyJanitor()` | Monthly janitor gate + the batched anonymization worker |
+| ~5153 | `// --- BOOKING POPOVER & HIGHLIGHTS ---` | Hover popover (`showBookingPopover`), highlighting, `deleteBooking()` with series-aware logic |
+| ~5309 | `// --- UTILITY FUNCTIONS ---` | `closeModal()`, `createDiv()`, `showLoading()`, modal toggles, advance-limit checking |
+| ~5449 | `// --- STATS FUNCTIONS ---` | Statistics modal: summary tiles, year grid (days × months), dashboard charts, shared hover tooltip (`statsTipAttrs`), CSV export (to end of file) |
 
 ## Key Patterns & Conventions
 
@@ -241,6 +241,9 @@ Multi-layer caching for statistics performance:
 - **Session cache:** In-memory `statsBookingsCache` map with a 5-minute TTL (`STATS_CACHE_TTL`). Invalidated on booking writes.
 - **Firestore cache:** Year and monthly cache documents created on demand under `system/`.
 - YTD calculations only include bookings up to today.
+
+### Stats Modal Presentation
+`renderStatsGrid()` does all the aggregation, fills the summary tiles (`setStatsTile(id, value, sub)` writes `#id` and `#idSub`), builds the year grid, stores everything in `statsData`, then calls `renderStatsChart()` for the dashboard. Both views sit in one scroll container (`.stats-body`), so the grid's sticky header/footer depend on no ancestor in between setting `overflow`. Hover details come from one delegated tooltip: any element with `data-tip-h` / `data-tip` attributes (build them with `statsTipAttrs(heading, detail)`, which escapes) gets it for free, so new marks should use that rather than `title`. Color: the grid and the day-by-hour heatmap share one single-hue scale (`.stats-heat-N` / `.dash-hm-lvl-N`, 0-8); the staff chart is the only categorical chart and uses `STATS_SERIES_COLORS` in fixed order, folding names past eight into "Other".
 
 ### Error Handling
 - Firestore operations are wrapped in try/catch with `showToast()` for error display.
