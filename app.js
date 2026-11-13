@@ -5150,8 +5150,8 @@ const firebaseConfig = {
 
         loadBookingsForCurrentView();
     }
-    // Keyboard shortcut: Alt+R switches to the next resource, Alt+Shift+R to the
-    // previous one (wrapping around). Matches on e.code because Option+R types a
+    // Keyboard shortcut: Alt+S switches to the next resource, Alt+Shift+S to the
+    // previous one (wrapping around). Matches on e.code because Option+S types a
     // symbol on a Mac. Ignored while any dialog is open, mid-drag, during a
     // reschedule (switching would cancel it), or while typing in a field.
     function cycleResource(step) {
@@ -5162,7 +5162,7 @@ const firebaseConfig = {
         handleResourceChange();
     }
     document.addEventListener('keydown', function(e) {
-        if (!e.altKey || e.ctrlKey || e.metaKey || e.code !== 'KeyR') return;
+        if (!e.altKey || e.ctrlKey || e.metaKey || e.code !== 'KeyS') return;
         if (!currentUserRole) return; // not logged in
         const dialogOpen = Array.from(document.querySelectorAll('.modal, #settingsOverlay'))
             .some(el => el.style.display === 'flex');

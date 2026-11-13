@@ -247,7 +247,7 @@ Multi-layer caching for statistics performance:
 
 ### Keyboard Shortcuts
 - **Escape** closes the topmost open modal (priority list in the UTILITY FUNCTIONS section).
-- **Alt+R / Alt+Shift+R** switch to the next / previous resource (`cycleResource()`, defined just before the BOOKING POPOVER section). It goes through `handleResourceChange()`, so it behaves exactly like picking from the dropdown, and is ignored while a dialog is open, during a drag or reschedule, or while a text field has focus.
+- **Alt+S / Alt+Shift+S** switch to the next / previous resource (`cycleResource()`, defined just before the BOOKING POPOVER section). It goes through `handleResourceChange()`, so it behaves exactly like picking from the dropdown, and is ignored while a dialog is open, during a drag or reschedule, or while a text field has focus.
 
 ### Error Handling
 - Firestore operations are wrapped in try/catch with `showToast()` for error display.
