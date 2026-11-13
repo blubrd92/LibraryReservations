@@ -178,6 +178,19 @@
     </div>
 </div>
 
+<!-- Future-Date Confirmation Modal -->
+<div id="futureBookingModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">Booking for a Future Day</div>
+        <p style="margin: 0 0 8px;">This booking is for <strong id="futureBookingDate"></strong>, which is <strong id="futureBookingAhead"></strong>.</p>
+        <p style="margin: 0;">Is that the day you meant?</p>
+        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+            <button id="btnConfirmFutureBooking" class="btn-success" onclick="proceedFutureBooking()">Yes, Book This Day</button>
+            <button onclick="closeModal('futureBookingModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <!-- Move Confirmation Modal -->
 <div id="moveModal" class="modal">
     <div class="modal-content">
@@ -435,6 +448,10 @@
                             <input type="checkbox" id="editAllowRecurring" style="width:auto;">
                             <label for="editAllowRecurring">🔁 Allow Recurring Bookings (staff can create repeating series)</label>
                         </div>
+                    </div>
+                    <div class="settings-option">
+                        <input type="checkbox" id="editConfirmFutureBooking" style="width:auto;">
+                        <label for="editConfirmFutureBooking">Ask for Confirmation Before Booking a Future Day (tomorrow or later)</label>
                     </div>
                 </div>
             </div>

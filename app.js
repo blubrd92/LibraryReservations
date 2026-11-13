@@ -361,6 +361,8 @@ const firebaseConfig = {
         const res = resources.find(r => r.id === currentResId);
         if (!res) return;
 
+        ensurePresenceListener(res.id);
+
         const isDayView = res.viewMode === 'day';
         const activeWeekKey = getWeekKey(isDayView ? currentDayDate : currentWeekStart);
         // For day-view resources, narrow query to just the displayed day
@@ -565,6 +567,7 @@ const firebaseConfig = {
         hideBookingPopover();
         const container = document.getElementById('gridContainer');
         container.innerHTML = '';
+        lastGridLayout = null; // presence overlays are redrawn once the new grid is laid out
         const res = resources.find(r => r.id === currentResId);
         if(!res) return;
         
@@ -831,7 +834,7 @@ const firebaseConfig = {
 
                                 const advCheck = checkAdvanceLimit(res, activeWeekKey, col.dayIndex);
                                 if (!advCheck.allowed) { showToast(advCheck.message, "error"); return; }
-                                openBookingModal(adjustedSlotId, null, col.subIndex);
+                                confirmFutureBooking(res, activeWeekKey, col.dayIndex, () => openBookingModal(adjustedSlotId, null, col.subIndex));
                             };
 
                             // DRAG-AND-DROP: Set up empty slots as drop targets
@@ -1046,6 +1049,10 @@ const firebaseConfig = {
 
             // Position current time indicator (day view, today only)
             setupTimeIndicator(container, isDayView, minH, maxH, slotElements);
+
+            // "Someone is booking this" overlays from other users (BOOKING PRESENCE section)
+            lastGridLayout = { resId: res.id, activeWeekKey, columns, minH, slotElements };
+            renderPresenceHolds();
         });
     }
 
@@ -2009,6 +2016,9 @@ const firebaseConfig = {
         const duration = selectionState.currentDuration;
         const slotId = selectionState.startSlotId;
         const subIndex = selectionState.subIndex;
+        const selRes = selectionState.res;
+        const selWeekKey = selectionState.activeWeekKey;
+        const selDayIndex = selectionState.startDayIndex;
         
         selectionState = {
             active: false,
@@ -2031,7 +2041,7 @@ const firebaseConfig = {
             quarterOffset: 0
         };
         
-        openBookingModalWithDuration(slotId, subIndex, duration);
+        confirmFutureBooking(selRes, selWeekKey, selDayIndex, () => openBookingModalWithDuration(slotId, subIndex, duration));
     }
     
     function openBookingModalWithDuration(slotId, subIndex, presetDuration) {
@@ -2163,6 +2173,9 @@ const firebaseConfig = {
         
         modal.style.display = 'flex';
         document.getElementById('bookName').focus();
+
+        bookingModalIsNew = true;
+        if (canEdit) setPresenceHold(slotId);
     }
 
     function cancelMove() {
@@ -2750,6 +2763,184 @@ const firebaseConfig = {
         }
     }
 
+    // --- FUTURE-DATE CONFIRM ---
+    // Optional per-resource check (`confirmFutureBooking`): before the booking modal
+    // opens for a day after today, ask the user whether that date is intended.
+    let pendingFutureBookingAction = null;
+
+    function confirmFutureBooking(res, weekKey, dayIdx, proceed) {
+        const daysAhead = getDaysFromToday(weekKey, dayIdx);
+        if (!res || !res.confirmFutureBooking || daysAhead < 1) { proceed(); return; }
+
+        const target = new Date(weekKey + 'T00:00:00');
+        target.setDate(target.getDate() + parseInt(dayIdx));
+        document.getElementById('futureBookingDate').innerText =
+            target.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        document.getElementById('futureBookingAhead').innerText =
+            daysAhead === 1 ? 'tomorrow' : `${daysAhead} days from today`;
+
+        pendingFutureBookingAction = proceed;
+        document.getElementById('futureBookingModal').style.display = 'flex';
+        document.getElementById('btnConfirmFutureBooking').focus();
+    }
+
+    function proceedFutureBooking() {
+        const action = pendingFutureBookingAction;
+        closeModal('futureBookingModal'); // also clears the pending action
+        if (action) action();
+    }
+
+    // --- BOOKING PRESENCE ---
+    // Shows other users that someone has an empty slot open in the booking modal.
+    // Each browser tab owns one document in the `presence` collection (ID = a random
+    // per-tab session ID; logins are shared, so there is no per-person identity).
+    // The hold is written when the modal opens on an empty slot, refreshed by a
+    // heartbeat, and deleted when the modal closes. Firestore cannot detect a closed
+    // or crashed tab, so readers ignore holds whose heartbeat is older than
+    // PRESENCE_TTL_MS and delete ones older than PRESENCE_PURGE_MS. Holds are
+    // advisory only: they never block a click or a save. Every failure here is
+    // swallowed so booking keeps working if the presence rules are not deployed.
+    const PRESENCE_SESSION_ID = 's-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    const PRESENCE_HEARTBEAT_MS = 30 * 1000;
+    const PRESENCE_TTL_MS = 90 * 1000;
+    const PRESENCE_PURGE_MS = 10 * 60 * 1000;
+    const SLOT_TAKEN_MESSAGE = "Someone else just booked this time. Cancel and pick another slot.";
+    let presenceHolds = {};            // other tabs' holds for the current resource, keyed by session ID
+    let presenceListenerUnsub = null;
+    let presenceListenerResId = null;
+    let presenceHeartbeatId = null;
+    let presenceSweepId = null;
+    let myPresenceHold = null;         // this tab's active hold, or null
+    let lastGridLayout = null;         // set by renderGrid(): what the overlays need to position themselves
+    let bookingModalIsNew = false;     // true when the booking modal opened on an empty slot
+
+    function ensurePresenceListener(resId) {
+        if (presenceListenerUnsub && presenceListenerResId === resId) return;
+        if (presenceListenerUnsub) { presenceListenerUnsub(); presenceListenerUnsub = null; }
+        presenceListenerResId = resId;
+        presenceHolds = {};
+        presenceListenerUnsub = db.collection('presence').where('resId', '==', resId)
+            .onSnapshot((snapshot) => {
+                if (presenceListenerResId !== resId) return;
+                presenceHolds = {};
+                snapshot.forEach((doc) => {
+                    if (doc.id !== PRESENCE_SESSION_ID) presenceHolds[doc.id] = doc.data();
+                });
+                renderPresenceHolds();
+            }, (err) => {
+                console.warn("Booking presence unavailable:", err && err.message);
+            });
+        // Re-check freshness on a timer so an abandoned hold fades without a snapshot.
+        if (!presenceSweepId) presenceSweepId = setInterval(renderPresenceHolds, PRESENCE_HEARTBEAT_MS);
+    }
+
+    function setPresenceHold(slotId) {
+        const res = resources.find(r => r.id === currentResId);
+        const duration = parseFloat(document.getElementById('bookDuration').value);
+        if (!res || !slotId || isNaN(duration)) { clearPresenceHold(); return; }
+        const parsed = parseSlotId(slotId, res.id);
+        myPresenceHold = {
+            resId: res.id,
+            slotId: slotId,
+            weekKey: parsed.weekKey,
+            dayIndex: parsed.dayIndex,
+            start: parsed.startTime,
+            duration: duration,
+            subIndex: parsed.subRoomIndex
+        };
+        writePresenceHold();
+        if (!presenceHeartbeatId) presenceHeartbeatId = setInterval(writePresenceHold, PRESENCE_HEARTBEAT_MS);
+    }
+
+    function writePresenceHold() {
+        if (!myPresenceHold) return;
+        db.collection('presence').doc(PRESENCE_SESSION_ID)
+            .set(Object.assign({}, myPresenceHold, { updatedAt: firebase.firestore.FieldValue.serverTimestamp() }))
+            .catch(() => {});
+    }
+
+    function clearPresenceHold() {
+        if (presenceHeartbeatId) { clearInterval(presenceHeartbeatId); presenceHeartbeatId = null; }
+        if (!myPresenceHold) return;
+        myPresenceHold = null;
+        db.collection('presence').doc(PRESENCE_SESSION_ID).delete().catch(() => {});
+    }
+
+    // Container-relative rect for a block of `duration` hours starting at `start` in
+    // the given column. Same math as the booking overlays in renderGrid() (see
+    // "Booking Overlay Positioning" in CLAUDE.md), kept in one function so it can
+    // become the shared helper if those call sites are ever unified.
+    function computeGridBlockRect(container, layout, colIndex, start, duration) {
+        const rawStartSlotIndex = (start - layout.minH) * 2;
+        const startSlotIndex = Math.floor(rawStartSlotIndex);
+        const startOffsetFraction = rawStartSlotIndex - startSlotIndex;
+        const startSlot = layout.slotElements[`${colIndex}-${startSlotIndex}`];
+        if (!startSlot || !startSlot.isConnected) return null;
+
+        const startRect = startSlot.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const slotHeight = startRect.height;
+        let startPixelOffset = startOffsetFraction * slotHeight;
+        if (startOffsetFraction > 0) startPixelOffset -= 1;
+        const gap = 2;
+        return {
+            left: startRect.left - containerRect.left - container.clientLeft + container.scrollLeft + gap,
+            top: startRect.top - containerRect.top - container.clientTop + container.scrollTop + startPixelOffset + gap,
+            width: startRect.width - gap * 2 - 1,
+            height: Math.max((duration * 2 * slotHeight) - gap * 2, 10)
+        };
+    }
+
+    // Draws the holds without re-rendering the grid, so a presence change never
+    // interrupts a drag, resize, or selection in progress.
+    function renderPresenceHolds() {
+        const container = document.getElementById('gridContainer');
+        if (!container) return;
+        container.querySelectorAll('.presence-hold').forEach(el => el.remove());
+        const layout = lastGridLayout;
+        if (!layout || layout.resId !== currentResId) return;
+
+        const now = Date.now();
+        Object.keys(presenceHolds).forEach(sessionId => {
+            const hold = presenceHolds[sessionId];
+            const updatedMs = (hold.updatedAt && typeof hold.updatedAt.toMillis === 'function') ? hold.updatedAt.toMillis() : null;
+            if (!isPresenceHoldFresh(updatedMs, now, PRESENCE_TTL_MS)) {
+                // Long-abandoned (closed or crashed tab): clean it out of Firestore.
+                if (updatedMs !== null && now - updatedMs > PRESENCE_PURGE_MS) {
+                    db.collection('presence').doc(sessionId).delete().catch(() => {});
+                }
+                return;
+            }
+            if (hold.weekKey !== layout.activeWeekKey) return;
+            if (allBookings[hold.slotId]) return; // already saved; the real booking shows instead
+
+            const colIndex = layout.columns.findIndex(c =>
+                c.dayIndex === hold.dayIndex && normalizeSubIndex(c.subIndex) === normalizeSubIndex(hold.subIndex));
+            if (colIndex === -1) return;
+            const rect = computeGridBlockRect(container, layout, colIndex, hold.start, hold.duration);
+            if (!rect) return;
+
+            const el = document.createElement('div');
+            el.className = 'presence-hold';
+            el.style.left = rect.left + 'px';
+            el.style.top = rect.top + 'px';
+            el.style.width = rect.width + 'px';
+            el.style.height = rect.height + 'px';
+            const label = document.createElement('span');
+            label.className = 'presence-hold-label';
+            label.innerText = 'Being booked…';
+            el.appendChild(label);
+            container.appendChild(el);
+        });
+    }
+
+    // Keep the hold in step with the duration chosen in the modal.
+    document.getElementById('bookDuration').addEventListener('change', () => {
+        if (myPresenceHold) setPresenceHold(document.getElementById('slotId').value);
+    });
+    // Best-effort release when the tab closes; the TTL covers the cases this misses.
+    window.addEventListener('pagehide', clearPresenceHold);
+
     // --- MODAL & SAVE ---
     // Booking modal: form population, validation, saveBooking() for single bookings,
     // saveRecurringBooking() for repeating series, and recurring date pattern logic.
@@ -2924,6 +3115,13 @@ const firebaseConfig = {
         }
 
         modal.style.display = 'flex';
+
+        // Remember whether this modal opened on an empty slot (saveBooking refuses to
+        // overwrite a booking that lands there meanwhile), and tell other users
+        // viewing this resource that the slot is being booked.
+        bookingModalIsNew = !data;
+        if (!data && canEdit) setPresenceHold(slotId);
+        else clearPresenceHold();
     }
 
     async function saveBooking() {
@@ -2952,6 +3150,13 @@ const firebaseConfig = {
 
         if (isBookingLocked(weekKey, dayIdx, res)) {
             return showToast("Cannot edit a past booking.", "error");
+        }
+
+        // The modal opened on an empty slot, but a booking has landed there since
+        // (another user saved first). Without this, set() below would silently
+        // replace their booking, because the slot ID is the document ID.
+        if (bookingModalIsNew && allBookings[slotId]) {
+            return showToast(SLOT_TAKEN_MESSAGE, "error");
         }
 
         // Safety net: check advance booking limit (new bookings only)
@@ -2994,13 +3199,28 @@ const firebaseConfig = {
 
         showLoading(true);
         try { 
-            await db.collection('appointments').doc(slotId).set(data);
+            const bookingRef = db.collection('appointments').doc(slotId);
+            if (isNewBooking) {
+                // Create-only: the transaction re-reads the slot on the server, so two
+                // users saving the same empty slot at the same moment can't both win.
+                await db.runTransaction(async (tx) => {
+                    const existing = await tx.get(bookingRef);
+                    if (existing.exists) {
+                        const taken = new Error(SLOT_TAKEN_MESSAGE);
+                        taken.slotTaken = true;
+                        throw taken;
+                    }
+                    tx.set(bookingRef, data);
+                });
+            } else {
+                await bookingRef.set(data);
+            }
             updateStatsYearMeta(res.id, slotId); // Update stats metadata
             delete statsBookingsCache[`${res.id}_${new Date().getFullYear()}`];
             delete statsBookingsCache[`${res.id}_${new Date().getFullYear()}_${new Date().getMonth()}`];
             closeModal('bookingModal'); 
         } 
-        catch(e) { showToast("Error: " + e.message, "error"); }
+        catch(e) { showToast(e.slotTaken ? e.message : "Error: " + e.message, "error"); }
         showLoading(false);
     }
 
@@ -3299,6 +3519,7 @@ const firebaseConfig = {
         document.getElementById('editAdminOnly').checked = r.adminOnly || false;
         document.getElementById('editAnonymityBuffer').value = r.anonymityBufferMonths || 0;
         document.getElementById('editAllowRecurring').checked = r.allowRecurring || false;
+        document.getElementById('editConfirmFutureBooking').checked = r.confirmFutureBooking || false;
         document.getElementById('editUseQuarterHour').checked = r.useQuarterHour || false;
 
         // Load Sidebar Settings
@@ -3369,6 +3590,7 @@ const firebaseConfig = {
             adminOnly: document.getElementById('editAdminOnly').checked,
             anonymityBufferMonths: document.getElementById('editAnonymityBuffer').value,
             allowRecurring: document.getElementById('editAllowRecurring').checked,
+            confirmFutureBooking: document.getElementById('editConfirmFutureBooking').checked,
             useQuarterHour: document.getElementById('editUseQuarterHour').checked,
             enableSidebar: document.getElementById('editEnableSidebar').checked,
             sidebarText: document.getElementById('editSidebarText').value,
@@ -4470,6 +4692,7 @@ const firebaseConfig = {
                 advanceLimitDays: 1,
                 advanceLimitAdminBypass: false,
                 allowRecurring: false,
+                confirmFutureBooking: false,
                 anonymityBufferMonths: 0
             };
             
@@ -4526,6 +4749,7 @@ const firebaseConfig = {
                 advanceLimitDays: 1,
                 advanceLimitAdminBypass: false,
                 allowRecurring: false,
+                confirmFutureBooking: false,
                 anonymityBufferMonths: 0
             };
             try { 
@@ -4570,6 +4794,7 @@ const firebaseConfig = {
                     : [];
                 pendingNewResource.adminOnly = source.adminOnly || false;
                 pendingNewResource.allowRecurring = source.allowRecurring || false;
+                pendingNewResource.confirmFutureBooking = source.confirmFutureBooking || false;
                 pendingNewResource.anonymityBufferMonths = source.anonymityBufferMonths || 0;
                 pendingNewResource.colorPalette = source.colorPalette || 'default';
             }
@@ -4719,6 +4944,7 @@ const firebaseConfig = {
         target.adminOnly = document.getElementById('editAdminOnly').checked;
         target.anonymityBufferMonths = parseInt(document.getElementById('editAnonymityBuffer').value, 10) || 0;
         target.allowRecurring = document.getElementById('editAllowRecurring').checked;
+        target.confirmFutureBooking = document.getElementById('editConfirmFutureBooking').checked;
         target.useQuarterHour = document.getElementById('editUseQuarterHour').checked;
 
         // Save Sidebar Settings
@@ -4896,7 +5122,20 @@ const firebaseConfig = {
     
     function handleResourceChange() {
         hideBookingPopover();
+        const prevRes = resources.find(r => r.id === currentResId);
         currentResId = document.getElementById('resourceSelect').value;
+
+        // Coming from a week-view resource, the day-view date is whatever week was
+        // being browsed (its Sunday), not today. Land a day-view resource on today
+        // so nobody books a future day by accident. Day-to-day switches keep their
+        // date so the same day can be compared across resources.
+        const nextRes = resources.find(r => r.id === currentResId);
+        if (nextRes && nextRes.viewMode === 'day' && !(prevRes && prevRes.viewMode === 'day')) {
+            currentDayDate = new Date();
+            currentDayDate.setHours(0, 0, 0, 0);
+            currentWeekStart = new Date(currentDayDate);
+            currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+        }
 
         if (rescheduleMode.active && rescheduleMode.sourceResourceId !== currentResId) {
             cancelRescheduleMode();
@@ -5071,13 +5310,18 @@ const firebaseConfig = {
     // Shared helpers: modal management, DOM creation, time formatting,
     // date helpers, advance limit checking, recurring booking toggles.
 
-    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+        if (id === 'bookingModal') clearPresenceHold();
+        if (id === 'futureBookingModal') pendingFutureBookingAction = null;
+    }
 
     // Global Escape key handler: closes the topmost visible modal
     document.addEventListener('keydown', function(e) {
         if (e.key !== 'Escape') return;
         // Order matters: check child/confirmation modals first, then parent modals
         const modalPriority = [
+            'futureBookingModal',
             'seriesDeleteModal',
             'rescheduleConfirmModal',
             'moveModal',

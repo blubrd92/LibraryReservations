@@ -61,7 +61,7 @@ README.md                              - User-facing project summary
 - **Staff/Viewer role:** email `viewer@library.internal` (the `VIEWER_EMAIL` constant) - can edit non-admin-only resources, no admin panel access
 - Login uses a Firebase account password (set on the accounts in the Firebase console), not a value in the source. `doLogin()` tries the admin email first, then falls back to the viewer email.
 - The admin panel and delete-confirmation prompts are gated by the `ADMIN_PASS` constant in app.js — a **separate** client-side password from the login. This is a speed bump only: it ships in app.js and is readable in the browser.
-- **Real access control is enforced server-side by Firestore Security Rules** (`firestore.rules`), which require authentication for all access and block destructive writes to `system/resources` (an empty/missing list is rejected). Never rely on client-side checks alone for security.
+- **Real access control is enforced server-side by Firestore Security Rules** (`firestore.rules`), which require authentication for all access (including the `presence` collection) and block destructive writes to `system/resources` (an empty/missing list is rejected). Never rely on client-side checks alone for security.
 
 ### Firestore Data Model
 
@@ -90,6 +90,7 @@ The app uses two collections plus a handful of singleton documents under `system
       staffNames: string[],          // configured staff/volunteer names for this resource
       defaultShowNotes: boolean,
       allowRecurring: boolean,
+      confirmFutureBooking: boolean, // ask "is that the day you meant?" before booking tomorrow or later
       advanceLimitEnabled: boolean,
       advanceLimitDays: number,
       advanceLimitAdminBypass: boolean,
@@ -132,6 +133,17 @@ Document ID format: `{resId}_{weekKey}_{dayIndex}_{startTime}` or `{resId}_{week
 - **There is no `createdAt` field** — bookings are not timestamped. All position/time information is encoded in the document ID.
 - The janitor rewrites old bookings in place: it sets `name` to `"Anonymized Patron"`, clears `notes`, and adds `isScrubbed: true`.
 
+**`presence` collection** — short-lived "someone is booking this slot" markers. One document per browser tab, ID = a random per-tab session ID (logins are shared, so there is no per-person identity). Written while the booking modal is open on an empty slot, deleted when it closes.
+
+```
+{
+  resId: string, slotId: string,   // slotId = the would-be booking document ID
+  weekKey: string, dayIndex: number, start: number, duration: number,
+  subIndex: number | null,
+  updatedAt: timestamp             // heartbeat; readers ignore holds older than PRESENCE_TTL_MS
+}
+```
+
 **Other `system/` documents:**
 - `system/resourceBackups` — resource-config version history (`{ versions: [...] }`), newest first, capped at `RESOURCE_BACKUP_LIMIT` (20). Appended on every successful settings save; restorable from the admin "Version History" panel.
 - `system/janitor` — anonymization checkpoint (`{ lastRunMonth }`), so the janitor runs at most once per month per session load.
@@ -156,6 +168,8 @@ The file is organized into labeled sections. **Search for the marker text to nav
 | ~1737 | `// --- DRAG-TO-CREATE HANDLERS ---` | Creating new bookings by clicking and dragging on empty slots |
 | ~2129 | `// --- RESIZE HANDLERS ---` | Changing booking duration by dragging the bottom edge |
 | ~2445 | `// --- RESCHEDULE MODE ---` | Multi-step rescheduling: enter mode, navigate to target day/week, click to place |
+| ~2766 | `// --- FUTURE-DATE CONFIRM ---` | `confirmFutureBooking()` gate (per-resource setting) shown before the booking modal opens for a future day |
+| ~2793 | `// --- BOOKING PRESENCE ---` | "Being booked…" overlays for other users: `presence` listener, hold write/heartbeat/clear, `computeGridBlockRect()`, `renderPresenceHolds()` |
 | ~2705 | `// --- MODAL & SAVE ---` | Booking modal (`openBookingModal`), `saveBooking()`, `saveRecurringBooking()`, recurring pattern logic |
 | ~3227 | `// --- ADMIN PANEL ---` | Admin settings UI (`loadSettingsForEditor`), resource management, sub-room editing, staffing config |
 | ~3642 | `// --- CLOSURE DATE MANAGEMENT ---` | Add/remove closure dates, year-based storage, apply closures across resources |
@@ -193,7 +207,7 @@ Bookings are not grid cells — they are absolutely-positioned `.booking-float` 
 - **Height** = `duration * 2 * slotHeight - gap * 2`, with a small floor so a 15-minute block never exceeds its half-slot on compact rows.
 - The half-slot offset is aligned to the dashed midline drawn by `.quarter-hour-slot::before` (`50% - 0.5px` of the padding box, ≈ `slotHeight/2 - 1`), and `container.clientTop`/`clientLeft` are subtracted because absolute `top`/`left` resolve against the padding box while the measured rects are border-box.
 
-**Known duplication / candidate refactor:** this same math is copied — with small variations — into the drag-move highlight (DRAG-AND-DROP HANDLERS section), the drag-to-create overlay (DRAG-TO-CREATE HANDLERS), and the resize overlay (RESIZE HANDLERS). Only the `renderGrid()` copy currently carries the alignment corrections above, so the interactive previews can sit ~1px off from where the block finally lands. If you touch this geometry again, strongly consider extracting a single `computeBlockRect(...)`-style helper (ideally pure, in `utils.js`, so it can be unit-tested) and pointing all four call sites at it — the scattered copies are what made a past 15-minute-block alignment bug hard to find. The sites differ in inputs (a measured `positions[]` array vs. a `gridRowRect` vs. a raw `slotRect`) and coordinate space (the render is container-relative; the previews are body-appended / viewport-relative), so unifying them is a real refactor, not a copy-paste.
+**Known duplication / candidate refactor:** this same math is copied — with small variations — into `computeGridBlockRect()` (BOOKING PRESENCE section; a faithful container-relative copy of the `renderGrid()` math, and the natural starting point for a shared helper), the drag-move highlight (DRAG-AND-DROP HANDLERS section), the drag-to-create overlay (DRAG-TO-CREATE HANDLERS), and the resize overlay (RESIZE HANDLERS). Only the `renderGrid()` copy currently carries the alignment corrections above, so the interactive previews can sit ~1px off from where the block finally lands. If you touch this geometry again, strongly consider extracting a single `computeBlockRect(...)`-style helper (ideally pure, in `utils.js`, so it can be unit-tested) and pointing all four call sites at it — the scattered copies are what made a past 15-minute-block alignment bug hard to find. The sites differ in inputs (a measured `positions[]` array vs. a `gridRowRect` vs. a raw `slotRect`) and coordinate space (the render is container-relative; the previews are body-appended / viewport-relative), so unifying them is a real refactor, not a copy-paste.
 
 ### State Objects
 Three state objects track interactive operations:
@@ -208,6 +222,14 @@ Distinct from drag-to-move. Allows navigating to a different week before placing
 
 ### Settings Editor Working Copies
 The admin settings editor never mutates the live `resources` objects while editing. Sub-rooms (`editingSubRooms`), closure dates (`editingClosures`), and staff names (`editingStaffNames`) are per-resource working copies initialized by `loadSettingsForEditor()` and folded into the list only by `saveAllSettings()`. A snapshot taken at load time (`captureSettingsSnapshot`) backs the unsaved-changes guard: Cancel, Escape, and switching resources confirm before discarding, and the resources realtime listener skips refreshing a dirty editor. The "apply to other resources" flows are the deliberate exception — they write the *target* resources to Firestore immediately (sourced from the working copy), while the edited resource itself still waits for Save. If you add a new list-like setting to the editor, follow this pattern rather than mutating the live resource.
+
+### Future-Date Confirm
+When a resource has `confirmFutureBooking` on, both new-booking entry points (the slot `onclick` in `renderGrid()` and `endSelection()` for drag-to-create) route through `confirmFutureBooking(res, weekKey, dayIdx, proceed)`, which shows `#futureBookingModal` for any day after today (`getDaysFromToday` in utils.js) and only then opens the booking modal. Moves and reschedules are not gated; they have their own confirmation modals. Related: `handleResourceChange()` resets the view to today when switching from a week-view resource to a day-view one.
+
+### Booking Presence (advisory holds)
+While the booking modal is open on an empty slot, the tab writes a hold to `presence/{sessionId}` (`setPresenceHold`), refreshes it every `PRESENCE_HEARTBEAT_MS`, and deletes it in `closeModal('bookingModal')` (`clearPresenceHold`). `ensurePresenceListener(resId)` (called from `loadBookingsForCurrentView()`) subscribes to holds for the current resource only; `renderPresenceHolds()` draws them as `.presence-hold` overlays without calling `renderGrid()`, using the layout `renderGrid()` stashes in `lastGridLayout`. Firestore cannot detect a closed tab, so holds older than `PRESENCE_TTL_MS` are ignored (`isPresenceHoldFresh`) and ones older than `PRESENCE_PURGE_MS` are deleted by whoever sees them. Holds never block anything, and every presence failure is swallowed so booking works even if the `presence` rule is not deployed.
+
+The actual double-booking guard is in `saveBooking()`: a modal opened on an empty slot (`bookingModalIsNew`) refuses to save if a booking has since landed there, and new bookings are written in a create-only transaction. Overlapping bookings with *different* start times saved at the same instant are still only caught by the client-side `checkTimeConflict` check.
 
 ### Lazy Janitor (Anonymization)
 Two functions work together to scrub old patron names based on each resource's `anonymityBufferMonths` (0–3):
@@ -284,6 +306,7 @@ Tests cover the pure utility functions in `utils.js` (one `describe` group per e
 - Conflict detection (`checkTimeConflict`)
 - Staff name normalization (`normalizeStaffName`)
 - Resource-list persistence safeguards (`classifyResourceSnapshot`, `shouldPersistResourceList`)
+- Future-date and presence helpers (`getDaysFromToday`, `isPresenceHoldFresh`)
 
 ### Adding new tests
 

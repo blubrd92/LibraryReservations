@@ -666,6 +666,34 @@ textarea { resize: vertical; }
 .slot.selecting {
     background-color: rgba(39, 174, 96, 0.3) !important;
 }
+/* Another user has this empty slot open in the booking modal (advisory only) */
+.presence-hold {
+    position: absolute;
+    box-sizing: border-box;
+    border: 2px dashed #b26a00;
+    border-radius: 4px;
+    background: repeating-linear-gradient(45deg, rgba(255, 183, 77, 0.35), rgba(255, 183, 77, 0.35) 8px, rgba(255, 224, 178, 0.35) 8px, rgba(255, 224, 178, 0.35) 16px);
+    pointer-events: none;
+    z-index: 9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.presence-hold-label {
+    background: #fff3e0;
+    color: #6d4100;
+    font-size: 0.75em;
+    font-weight: 600;
+    line-height: 1.2;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
 .selection-overlay {
     position: fixed;
     background: rgba(39, 174, 96, 0.4);
@@ -1267,7 +1295,7 @@ textarea { resize: vertical; }
     #loginOverlay, #status-bar, #loading, #toast-container,
     .modal, #rescheduleBanner, .info-sidebar,
     .booking-popover, .drag-tooltip, .drag-slot-highlight,
-    .selection-overlay, .resize-overlay,
+    .selection-overlay, .resize-overlay, .presence-hold,
     .time-indicator-line, .time-indicator-dot { display: none !important; }
 
     /* Header: show title/range, hide controls */
@@ -1303,4 +1331,4 @@ textarea { resize: vertical; }
 
     /* Page break handling */
     .grid-container { page-break-inside: avoid; }
-}
+}

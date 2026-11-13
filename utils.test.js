@@ -24,7 +24,9 @@ const {
     getCurrentTimeFloat,
     normalizeStaffName,
     classifyResourceSnapshot,
-    shouldPersistResourceList
+    shouldPersistResourceList,
+    getDaysFromToday,
+    isPresenceHoldFresh
 } = require('./utils');
 
 // ============================================================
@@ -867,5 +869,80 @@ describe('shouldPersistResourceList', () => {
         expect(shouldPersistResourceList(undefined, false)).toBe(false);
         expect(shouldPersistResourceList(null, true)).toBe(false);
         expect(shouldPersistResourceList('oops', false)).toBe(false);
+    });
+});
+
+// ============================================================
+// getDaysFromToday
+// ============================================================
+describe('getDaysFromToday', () => {
+    // Friday, Nov 13 2026; its week starts Sunday Nov 8.
+    const now = new Date(2026, 10, 13, 15, 30);
+
+    test('returns 0 for today', () => {
+        expect(getDaysFromToday('2026-11-08', 5, now)).toBe(0);
+    });
+
+    test('returns 1 for tomorrow', () => {
+        expect(getDaysFromToday('2026-11-08', 6, now)).toBe(1);
+    });
+
+    test('returns negative numbers for past days', () => {
+        expect(getDaysFromToday('2026-11-08', 4, now)).toBe(-1);
+        expect(getDaysFromToday('2026-11-01', 5, now)).toBe(-7);
+    });
+
+    test('counts across week boundaries', () => {
+        expect(getDaysFromToday('2026-11-15', 0, now)).toBe(2);
+        expect(getDaysFromToday('2026-11-15', 5, now)).toBe(7);
+    });
+
+    test('ignores time of day', () => {
+        expect(getDaysFromToday('2026-11-08', 6, new Date(2026, 10, 13, 0, 0))).toBe(1);
+        expect(getDaysFromToday('2026-11-08', 6, new Date(2026, 10, 13, 23, 59))).toBe(1);
+    });
+
+    test('is exact across a daylight-saving change', () => {
+        // US clocks fall back Nov 1 2026 and spring forward Mar 14 2027.
+        expect(getDaysFromToday('2026-11-01', 1, new Date(2026, 9, 31, 12, 0))).toBe(2);
+        expect(getDaysFromToday('2027-03-14', 1, new Date(2027, 2, 13, 12, 0))).toBe(2);
+    });
+
+    test('counts across a year boundary', () => {
+        expect(getDaysFromToday('2026-12-27', 5, new Date(2026, 11, 31, 9, 0))).toBe(1);
+    });
+
+    test('accepts a string dayIndex', () => {
+        expect(getDaysFromToday('2026-11-08', '6', now)).toBe(1);
+    });
+});
+
+// ============================================================
+// isPresenceHoldFresh
+// ============================================================
+describe('isPresenceHoldFresh', () => {
+    const now = 1000000;
+    const ttl = 90000;
+
+    test('fresh when the heartbeat is recent', () => {
+        expect(isPresenceHoldFresh(now - 1000, now, ttl)).toBe(true);
+    });
+
+    test('fresh exactly at the ttl boundary', () => {
+        expect(isPresenceHoldFresh(now - ttl, now, ttl)).toBe(true);
+    });
+
+    test('stale once past the ttl', () => {
+        expect(isPresenceHoldFresh(now - ttl - 1, now, ttl)).toBe(false);
+    });
+
+    test('stale when there is no timestamp yet', () => {
+        expect(isPresenceHoldFresh(null, now, ttl)).toBe(false);
+        expect(isPresenceHoldFresh(undefined, now, ttl)).toBe(false);
+        expect(isPresenceHoldFresh(NaN, now, ttl)).toBe(false);
+    });
+
+    test('a heartbeat slightly ahead of the local clock still counts', () => {
+        expect(isPresenceHoldFresh(now + 5000, now, ttl)).toBe(true);
     });
 });

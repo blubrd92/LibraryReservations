@@ -503,6 +503,43 @@ function shouldPersistResourceList(list, everLoaded, allowEmpty = false) {
 }
 
 // ============================================================
+// FUTURE-DATE & PRESENCE HELPERS
+// ============================================================
+
+/**
+ * Whole calendar days between today and the date a slot falls on.
+ * 0 = today, 1 = tomorrow, negative = past. Compares local calendar dates
+ * (not elapsed hours), so it is safe across daylight-saving changes.
+ *
+ * @param {string} weekKey   - "YYYY-MM-DD" Sunday that starts the slot's week
+ * @param {number} dayIndex  - 0-6 (Sunday = 0)
+ * @param {Date} [now]       - Override "now" for testing
+ * @returns {number}
+ */
+function getDaysFromToday(weekKey, dayIndex, now) {
+    const [y, m, d] = weekKey.split('-').map(Number);
+    const target = new Date(y, m - 1, d + parseInt(dayIndex));
+    const ref = now ? new Date(now) : new Date();
+    const today = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+    return Math.round((target - today) / 86400000);
+}
+
+/**
+ * Is a "someone is booking this" hold still live? A hold counts as fresh when
+ * its last heartbeat is within ttlMs of now. Holds with no timestamp yet
+ * (a write still in flight) are treated as stale.
+ *
+ * @param {number|null} updatedAtMs - Last heartbeat, epoch ms
+ * @param {number} nowMs            - Current time, epoch ms
+ * @param {number} ttlMs            - Max age before the hold is ignored
+ * @returns {boolean}
+ */
+function isPresenceHoldFresh(updatedAtMs, nowMs, ttlMs) {
+    if (typeof updatedAtMs !== 'number' || isNaN(updatedAtMs)) return false;
+    return (nowMs - updatedAtMs) <= ttlMs;
+}
+
+// ============================================================
 // MODULE EXPORT (Node.js / Jest) — no-op in the browser
 // ============================================================
 
@@ -533,6 +570,8 @@ if (typeof module !== 'undefined' && module.exports) {
         getCurrentTimeFloat,
         normalizeStaffName,
         classifyResourceSnapshot,
-        shouldPersistResourceList
+        shouldPersistResourceList,
+        getDaysFromToday,
+        isPresenceHoldFresh
     };
 }

@@ -49,6 +49,12 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    // Booking presence — short-lived "someone is booking this slot" markers, one
+    // document per browser tab. Advisory only; they hold no patron data.
+    match /presence/{sessionId} {
+      allow read, write: if isSignedIn();
+    }
+
     // Everything else is denied by default (no matching rule = no access).
     //
     // NOTE: When you move to per-user accounts later, tighten the writes above to
