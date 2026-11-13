@@ -5150,8 +5150,9 @@ const firebaseConfig = {
 
         loadBookingsForCurrentView();
     }
-    // Keyboard shortcut: Alt+R switches to the next resource, Alt+Shift+R to the
-    // previous one (wrapping around). Matches on e.code because Option+R types a
+    // Keyboard shortcut: Alt+R switches to the next resource, wrapping around at
+    // the end. Alt+Shift+R is deliberately left unbound: Left Alt+Shift is the
+    // Windows keyboard-language hotkey. Matches on e.code because Option+R types a
     // symbol on a Mac. Ignored while any dialog is open, mid-drag, during a
     // reschedule (switching would cancel it), or while typing in a field.
     function cycleResource(step) {
@@ -5162,7 +5163,7 @@ const firebaseConfig = {
         handleResourceChange();
     }
     document.addEventListener('keydown', function(e) {
-        if (!e.altKey || e.ctrlKey || e.metaKey || e.code !== 'KeyR') return;
+        if (!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey || e.code !== 'KeyR') return;
         if (!currentUserRole) return; // not logged in
         const dialogOpen = Array.from(document.querySelectorAll('.modal, #settingsOverlay'))
             .some(el => el.style.display === 'flex');
@@ -5171,7 +5172,7 @@ const firebaseConfig = {
         const el = document.activeElement;
         if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
         e.preventDefault();
-        cycleResource(e.shiftKey ? -1 : 1);
+        cycleResource(1);
     });
 
     // --- BOOKING POPOVER & HIGHLIGHTS ---
