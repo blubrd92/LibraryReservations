@@ -245,6 +245,10 @@ Multi-layer caching for statistics performance:
 ### Stats Modal Presentation
 `renderStatsGrid()` does all the aggregation, fills the summary tiles (`setStatsTile(id, value, sub)` writes `#id` and `#idSub`), builds the year grid, stores everything in `statsData`, then calls `renderStatsChart()` for the dashboard. Both views sit in one scroll container (`.stats-body`), so the grid's sticky header/footer depend on no ancestor in between setting `overflow`. Hover details come from one delegated tooltip: any element with `data-tip-h` / `data-tip` attributes (build them with `statsTipAttrs(heading, detail)`, which escapes) gets it for free, so new marks should use that rather than `title`. Color: the grid and the day-by-hour heatmap share one single-hue scale (`.stats-heat-N` / `.dash-hm-lvl-N`, 0-8); the staff chart is the only categorical chart and uses `STATS_SERIES_COLORS` in fixed order, folding names past eight into "Other".
 
+### Keyboard Shortcuts
+- **Escape** closes the topmost open modal (priority list in the UTILITY FUNCTIONS section).
+- **Alt+R / Alt+Shift+R** switch to the next / previous resource (`cycleResource()`, defined just before the BOOKING POPOVER section). It goes through `handleResourceChange()`, so it behaves exactly like picking from the dropdown, and is ignored while a dialog is open, during a drag or reschedule, or while a text field has focus.
+
 ### Error Handling
 - Firestore operations are wrapped in try/catch with `showToast()` for error display.
 - A loading overlay (`showLoading(true/false)`) is shown during saves.
