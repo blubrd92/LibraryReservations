@@ -5858,7 +5858,10 @@ const firebaseConfig = {
             chartBtn.classList.remove('active');
             gridContainer.style.display = '';
             chartContainer.style.display = 'none';
+            fitStatsGrid();
         }
+        const statsBody = document.querySelector('#statsModal .stats-body');
+        if (statsBody) statsBody.scrollTop = 0;
     }
 
     // --- Stats presentation helpers ---
@@ -5900,6 +5903,24 @@ const firebaseConfig = {
         });
         modal.addEventListener('mouseleave', hideStatsTip);
     })();
+
+    // Size the year grid's rows so all 31 days fit the space under the pinned
+    // summary without scrolling. Rows stop shrinking at a readable floor; below
+    // that (short windows) the body scrolls and the header/totals stay stuck.
+    function fitStatsGrid() {
+        const body = document.querySelector('#statsModal .stats-body');
+        const table = document.getElementById('statsGrid');
+        const gridContainer = document.getElementById('statsGridContainer');
+        if (!body || !table || gridContainer.style.display === 'none' || body.clientHeight === 0) return;
+        const SPACING = 2, ROWS = 31, MIN_ROW = 15, MAX_ROW = 26;
+        const fixed = document.querySelector('.stats-grid-head').offsetHeight
+            + document.getElementById('statsGridHead').offsetHeight
+            + document.getElementById('statsGridFoot').offsetHeight
+            + SPACING * (ROWS + 3) + 2;
+        const rowH = Math.max(MIN_ROW, Math.min(MAX_ROW, Math.floor((body.clientHeight - fixed) / ROWS)));
+        table.style.setProperty('--sg-row-h', rowH + 'px');
+        table.classList.toggle('sg-tight', rowH < 19);
+    }
 
     function statsFmtHours(v) {
         return parseFloat((v || 0).toFixed(1)).toLocaleString('en-US');
@@ -5960,35 +5981,16 @@ const firebaseConfig = {
 
         let html = '';
 
-        // === ROW 1: Utilization + Booking Length + Rooms (conditional) ===
+        // === Panels: Booking Length, Rooms (conditional), Weekly, Monthly, Staff (conditional), Rhythm ===
         const hasSubRooms = res.viewMode === 'day' && Array.isArray(res.subRooms) && getActiveSubRooms(res).length > 1;
-        html += '<div class="dash-row' + (hasSubRooms ? ' dash-row-thirds' : '') + '">';
-
-        // Utilization ring
-        const utilVal = s.utilization !== null ? s.utilization : 0;
-        const activeLevel = statsUtilBand(utilVal);
-        html += '<div class="dash-panel">';
-        html += '<div class="dash-panel-title">Utilization</div>';
-        html += '<div class="dash-panel-sub">Share of open hours that were booked</div>';
-        html += '<div class="dash-ring-container">';
-        html += '  <div class="dash-ring" style="background: conic-gradient(#1976d2 0% ' + utilVal + '%, #e3f2fd ' + utilVal + '% 100%);"' +
-            statsTipAttrs('Utilization', statsFmtHours(statsData.ytdTotal) + 'h booked of ' + statsFmtHours(statsData.ytdAvailable) + 'h open') + '>';
-        html += '    <div class="dash-ring-inner">';
-        html += '      <span class="dash-ring-pct">' + (s.utilization !== null ? s.utilization + '%' : 'N/A') + '</span>';
-        html += '      <span class="dash-ring-sub">' + statsFmtHours(statsData.ytdTotal) + 'h of ' + (statsData.ytdAvailable ? statsFmtHours(statsData.ytdAvailable) : '?') + 'h</span>';
-        html += '    </div>';
-        html += '  </div>';
-        html += '  <div class="dash-bands">';
-        STATS_UTIL_BANDS.forEach((b, i) => {
-            const on = s.utilization !== null && i === activeLevel;
-            html += '<div class="dash-band' + (on ? ' dash-band-on' : '') + '"><span>' + b.label + '</span><span>' + b.range + '</span></div>';
-        });
-        html += '  </div>';
-        html += '</div>';
-        html += '</div>';
+        const staffCounts = statsData.monthlyStaffCounts || {};
+        const hasStaffChart = !!res.hasStaffField && Object.keys(staffCounts).some(n => staffCounts[n].some(c => c > 0));
+        // One 12-column grid; panel order and widths are set in CSS (.dash-p-*), so
+        // the build order below does not matter.
+        html += '<div class="dash-grid' + (hasSubRooms ? ' has-rooms' : '') + (hasStaffChart ? ' has-staff' : '') + '">';
 
         // Booking length
-        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel dash-p-length">';
         html += '<div class="dash-panel-title">Booking Length</div>';
         html += '<div class="dash-panel-sub">How long bookings run</div>';
         const durBuckets = statsData.durationBuckets || {};
@@ -6015,7 +6017,7 @@ const firebaseConfig = {
 
         // Rooms (conditional)
         if (hasSubRooms) {
-            html += '<div class="dash-panel">';
+            html += '<div class="dash-panel dash-p-rooms">';
             html += '<div class="dash-panel-title">Room Distribution</div>';
             html += '<div class="dash-panel-sub">Bookings by room</div>';
             const srCounts = statsData.subRoomCounts || {};
@@ -6042,13 +6044,9 @@ const firebaseConfig = {
             html += '</div>';
         }
 
-        html += '</div>'; // end row 1
-
-        // === ROW 2: By weekday + By month ===
-        html += '<div class="dash-row">';
 
         // Weekly usage (utilization per day of week, YTD)
-        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel dash-p-weekly">';
         html += '<div class="dash-panel-title">Weekly Usage</div>';
         html += '<div class="dash-panel-sub">Utilization by day of the week</div>';
         const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -6078,7 +6076,7 @@ const firebaseConfig = {
         html += '</div>';
 
         // Monthly usage
-        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel dash-p-monthly">';
         html += '<div class="dash-panel-title">Monthly Usage</div>';
         html += '<div class="dash-panel-sub">Utilization by month</div>';
         let peakMonthPct = 0;
@@ -6103,8 +6101,6 @@ const firebaseConfig = {
         html += '</div>';
         html += '</div>';
 
-        html += '</div>'; // end row 2
-
         // === STAFF ASSISTANCE (full width, conditional) ===
         if (res.hasStaffField) {
             const msc = statsData.monthlyStaffCounts || {};
@@ -6124,8 +6120,7 @@ const firebaseConfig = {
                 for (let i = 0; i < 12; i++) monthTotals.push(series.reduce((sum, sr) => sum + sr.counts[i], 0));
                 const maxMonthTotal = Math.max(...monthTotals);
 
-                html += '<div class="dash-row dash-row-full">';
-                html += '<div class="dash-panel">';
+                html += '<div class="dash-panel dash-p-staff">';
                 html += '<div class="dash-panel-title">Staff/Volunteer Assisted Sessions</div>';
                 html += '<div class="dash-panel-sub">Assisted bookings per month, by person</div>';
                 html += '<div class="dash-vbar-chart">';
@@ -6155,15 +6150,13 @@ const firebaseConfig = {
                 html += '</div>';
 
                 html += '</div>'; // end panel
-                html += '</div>'; // end row
             }
         }
 
         // === Weekly Rhythm (full width) ===
-        html += '<div class="dash-row dash-row-full">';
-        html += '<div class="dash-panel">';
+        html += '<div class="dash-panel dash-p-rhythm">';
         html += '<div class="dash-panel-title">Weekly Rhythm</div>';
-        html += '<div class="dash-panel-sub">Number of bookings that start in each hour, by day of the week</div>';
+        html += '<div class="dash-panel-sub">Bookings that start in each hour, by day of the week</div>';
         const heatmap = statsData.dayHourHeatmap || [];
         const activeHours = new Set();
         let heatMax = 0;
@@ -6224,8 +6217,8 @@ const firebaseConfig = {
         } else {
             html += '<div class="dash-empty">No data yet</div>';
         }
-        html += '</div>';
-        html += '</div>';
+        html += '</div>'; // end rhythm panel
+        html += '</div>'; // end dash-grid
 
         container.innerHTML = html;
     }
@@ -6425,12 +6418,13 @@ const firebaseConfig = {
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
+        fitStatsGrid();
 
         // Update summary
-        setStatsTile('statsTotalHours', statsFmtHours(ytdTotal), ytdAvailable > 0 ? `of ${statsFmtHours(ytdAvailable)} open hours` : 'hours');
+        setStatsTile('statsTotalHours', statsFmtHours(ytdTotal), ytdAvailable > 0 ? `of ${statsFmtHours(ytdAvailable)} open` : 'hours');
 
         // Booking count
-        setStatsTile('statsBookingCount', totalBookingCount.toLocaleString('en-US'), 'year to date');
+        setStatsTile('statsBookingCount', totalBookingCount.toLocaleString('en-US'), '');
 
         // Utilization (YTD)
         const utilPct = ytdAvailable > 0 ? ((ytdTotal / ytdAvailable) * 100).toFixed(1) : 0;
@@ -6445,14 +6439,14 @@ const firebaseConfig = {
             if (util > busiestMonthUtil) { busiestMonthUtil = util; busiestMonthIdx = i; }
         }
         if (busiestMonthIdx >= 0) {
-            setStatsTile('statsBusiestMonth', MONTHS[busiestMonthIdx], `${parseFloat(monthlyTotalsYtd[busiestMonthIdx].toFixed(2))}h · ${busiestMonthUtil.toFixed(1)}% utilization`);
+            setStatsTile('statsBusiestMonth', MONTHS[busiestMonthIdx], `${parseFloat(monthlyTotalsYtd[busiestMonthIdx].toFixed(2))}h · ${busiestMonthUtil.toFixed(1)}%`);
         } else {
             setStatsTile('statsBusiestMonth', '-', '');
         }
 
         // Average hours per open day (YTD)
         const avgHours = ytdDaysBookable > 0 ? (ytdTotal / ytdDaysBookable).toFixed(1) : 0;
-        setStatsTile('statsAvgHours', avgHours, `over ${ytdDaysBookable} open day${ytdDaysBookable === 1 ? '' : 's'}`);
+        setStatsTile('statsAvgHours', avgHours, `${ytdDaysBookable} open day${ytdDaysBookable === 1 ? '' : 's'}`);
 
         // Average duration per booking
         const avgDuration = totalBookingCount > 0 ? (totalDurationSum / totalBookingCount).toFixed(1) + 'h' : '-';
@@ -6472,7 +6466,7 @@ const firebaseConfig = {
             if (util < quietestDayUtil) { quietestDayUtil = util; quietestDayIdx = i; }
         }
         const dayTile = (id, idx) => {
-            if (idx >= 0) setStatsTile(id, DAY_NAMES[idx], `avg ${dayAvgs[idx].avgHrs.toFixed(1)}h · ${dayAvgs[idx].util.toFixed(1)}% utilization`);
+            if (idx >= 0) setStatsTile(id, DAY_NAMES[idx], `avg ${dayAvgs[idx].avgHrs.toFixed(1)}h · ${dayAvgs[idx].util.toFixed(1)}%`);
             else setStatsTile(id, '-', '');
         };
         dayTile('statsBusiestDay', busiestDayIdx);
@@ -6483,7 +6477,7 @@ const firebaseConfig = {
         Object.keys(hourSlotCounts).forEach(h => {
             if (hourSlotCounts[h] > peakCount) { peakCount = hourSlotCounts[h]; peakHour = parseInt(h); }
         });
-        if (peakHour >= 0) setStatsTile('statsPeakHour', formatTime(peakHour), `${peakCount} booking${peakCount === 1 ? '' : 's'} started`);
+        if (peakHour >= 0) setStatsTile('statsPeakHour', formatTime(peakHour), `${peakCount} booking${peakCount === 1 ? '' : 's'}`);
         else setStatsTile('statsPeakHour', '-', '');
 
         // Staff assisted (conditional)
@@ -6669,6 +6663,7 @@ const firebaseConfig = {
             if (currentResId) {
                 renderGrid();
             }
+            if (document.getElementById('statsModal').style.display === 'flex') fitStatsGrid();
             // Force sidebar scrollbar recalculation
             const sidebar = document.getElementById('infoSidebar');
             if (sidebar && !sidebar.classList.contains('hidden')) {
