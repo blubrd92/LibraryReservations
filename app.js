@@ -5957,6 +5957,14 @@ const firebaseConfig = {
         if (subEl) subEl.innerText = sub || '';
     }
 
+    // Top of the axis for a utilization bar chart. A full 0-100% axis whenever
+    // usage is high enough to read on it, so a 59% bar stops a little past
+    // halfway; quiet resources zoom to 0-50% or 0-25% so their bars are not
+    // slivers. The chosen top is always stated in the panel's subtitle.
+    function statsUtilScaleMax(peakPct) {
+        return peakPct > 50 ? 100 : peakPct > 25 ? 50 : 25;
+    }
+
     // One column of a vertical bar chart. `frac` is 0..1 of the plot height.
     function statsVbarCol(label, frac, valueLabel, tipH, tipB, opts) {
         opts = opts || {};
@@ -6015,7 +6023,10 @@ const firebaseConfig = {
                 const h = Math.floor(d), m = Math.round((d - h) * 60);
                 return h === 0 ? m + ' min' : (m === 0 ? h + (h === 1 ? ' hour' : ' hours') : h + 'h ' + m + 'm');
             };
-            const durShort = d => d < 1 ? Math.round(d * 60) + 'm' : d + 'h';
+            const durShort = d => {
+                const h = Math.floor(d), m = Math.round((d - h) * 60);
+                return h === 0 ? m + 'm' : (m === 0 ? h + 'h' : h + ':' + String(m).padStart(2, '0'));
+            };
             const durTotal = durKeys.reduce((sum, d) => sum + durBuckets[d.toString()], 0);
             let modeDur = durKeys[0], medianDur = null, cumulative = 0;
             durKeys.forEach(d => {
@@ -6063,16 +6074,18 @@ const firebaseConfig = {
             const srTotal = srKeys.reduce((sum, k) => sum + srCounts[k], 0);
             if (srTotal > 0) {
                 const srMax = srCounts[srKeys[0]];
-                html += '<div class="dash-hbar-chart wide-labels">';
+                html += '<div class="dash-rooms">';
                 srKeys.forEach((k, i) => {
                     const count = srCounts[k];
                     const pct = Math.round((count / srTotal) * 100);
                     const roomName = getSubRoomName(res, parseInt(k));
                     const hl = i === 0 ? ' dash-highlight' : '';
-                    html += '<div class="dash-hbar-row"' + statsTipAttrs(roomName, plural(count, 'booking') + ' · ' + pct + '% of all bookings') + '>';
-                    html += '  <div class="dash-hbar-label' + hl + '">' + escapeHtml(roomName) + '</div>';
-                    html += '  <div class="dash-hbar-track"><div class="dash-hbar-fill" style="width:' + (count / srMax) * 100 + '%;"></div></div>';
-                    html += '  <div class="dash-hbar-value' + hl + '">' + count + ' · ' + pct + '%</div>';
+                    html += '<div class="dash-room"' + statsTipAttrs(roomName, plural(count, 'booking') + ' · ' + pct + '% of all bookings') + '>';
+                    html += '  <div class="dash-room-name' + hl + '">' + escapeHtml(roomName) + '</div>';
+                    html += '  <div class="dash-hbar-row">';
+                    html += '    <div class="dash-hbar-track"><div class="dash-hbar-fill" style="width:' + (count / srMax) * 100 + '%;"></div></div>';
+                    html += '    <div class="dash-hbar-value' + hl + '">' + count + ' · ' + pct + '%</div>';
+                    html += '  </div>';
                     html += '</div>';
                 });
                 html += '</div>';
@@ -6086,7 +6099,7 @@ const firebaseConfig = {
         // Weekly usage (utilization per day of week, YTD)
         html += '<div class="dash-panel dash-p-weekly">';
         html += '<div class="dash-panel-title">Weekly Usage</div>';
-        html += '<div class="dash-panel-sub">Utilization by day of the week</div>';
+
         const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const DOW_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
         const dowMap = {};
@@ -6096,7 +6109,9 @@ const firebaseConfig = {
             const entry = dowMap[DOW_FULL[i]];
             if (res.hours[i * 2] !== res.hours[i * 2 + 1] && entry && entry.utilization > peakDowUtil) peakDowUtil = entry.utilization;
         }
-        html += '<div class="dash-vbar-chart">';
+        const dowScaleMax = statsUtilScaleMax(peakDowUtil);
+        html += '<div class="dash-panel-sub">Utilization by day of the week · scale 0 to ' + dowScaleMax + '%</div>';
+        html += '<div class="dash-vbar-chart has-cap">';
         for (let i = 0; i < 7; i++) {
             const entry = dowMap[DOW_FULL[i]];
             const isClosed = res.hours[i * 2] === res.hours[i * 2 + 1];
@@ -6107,7 +6122,7 @@ const firebaseConfig = {
             }
             const detail = Math.round(util) + '% utilization\n' + statsFmtHours(entry.totalHours) + 'h booked of ' + statsFmtHours(entry.availableHours) + 'h open\n' +
                 'avg ' + entry.avgHours + 'h a day over ' + plural(entry.openDayCount, 'open day');
-            html += statsVbarCol(DOW_LABELS[i], peakDowUtil > 0 ? util / peakDowUtil : 0, Math.round(util) + '%', DOW_FULL[i] + 's', detail,
+            html += statsVbarCol(DOW_LABELS[i], util / dowScaleMax, Math.round(util) + '%', DOW_FULL[i] + 's', detail,
                 { highlight: util > 0 && util === peakDowUtil });
         }
         html += '</div>';
@@ -6116,14 +6131,16 @@ const firebaseConfig = {
         // Monthly usage
         html += '<div class="dash-panel dash-p-monthly">';
         html += '<div class="dash-panel-title">Monthly Usage</div>';
-        html += '<div class="dash-panel-sub">Utilization by month</div>';
+
         let peakMonthPct = 0;
         for (let i = 0; i < 12; i++) {
             const avail = mAvail[i] || 0;
             const pct = avail > 0 ? Math.round((mTotals[i] / avail) * 100) : 0;
             if (pct > peakMonthPct) peakMonthPct = pct;
         }
-        html += '<div class="dash-vbar-chart">';
+        const monthScaleMax = statsUtilScaleMax(peakMonthPct);
+        html += '<div class="dash-panel-sub">Utilization by month · scale 0 to ' + monthScaleMax + '%</div>';
+        html += '<div class="dash-vbar-chart has-cap">';
         for (let i = 0; i < 12; i++) {
             const booked = mTotals[i] || 0;
             const avail = mAvail[i] || 0;
@@ -6132,7 +6149,7 @@ const firebaseConfig = {
                 continue;
             }
             const pct = Math.round((booked / avail) * 100);
-            html += statsVbarCol(MONTHS[i], peakMonthPct > 0 ? pct / peakMonthPct : 0, pct + '%', MONTHS_FULL[i],
+            html += statsVbarCol(MONTHS[i], pct / monthScaleMax, pct + '%', MONTHS_FULL[i],
                 pct + '% utilization\n' + statsFmtHours(booked) + 'h booked of ' + statsFmtHours(avail) + 'h open',
                 { highlight: pct > 0 && pct === peakMonthPct });
         }

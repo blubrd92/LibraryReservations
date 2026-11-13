@@ -964,14 +964,19 @@ textarea { resize: vertical; }
 .dash-p-weekly { order: 1; grid-column: span 4; }
 .dash-p-monthly { order: 2; grid-column: span 5; }
 .dash-p-length { order: 3; grid-column: span 3; }
-.dash-p-rooms { order: 4; grid-column: span 3; }
-.dash-grid.has-rooms .dash-p-weekly, .dash-grid.has-rooms .dash-p-monthly, .dash-grid.has-rooms .dash-p-length { grid-column: span 3; }
+.dash-p-rooms { order: 4; grid-column: span 2; min-height: 0; }
+.dash-grid.has-rooms .dash-p-weekly, .dash-grid.has-rooms .dash-p-length { grid-column: span 3; }
+.dash-grid.has-rooms .dash-p-monthly { grid-column: span 4; }
 .dash-p-rhythm { order: 5; grid-column: span 12; }
 .dash-p-staff { order: 6; grid-column: span 7; }
 .dash-grid.has-staff .dash-p-rhythm { grid-column: span 5; }
-/* Four panels across: the monthly chart is narrow, so label only its peak and shrink month names */
-.dash-grid.has-rooms .dash-p-monthly .dash-vbar-pct:not(.dash-highlight) { display: none; }
-.dash-grid.has-rooms .dash-p-monthly .dash-vbar-label { font-size: 0.62rem; letter-spacing: -0.02em; }
+/* Rooms: full name on its own line above each bar; scrolls inside the panel if there are many */
+.dash-rooms { display: flex; flex-direction: column; gap: 9px; flex: 1; min-height: 0; overflow-y: auto; }
+.dash-room-name { font-size: 0.8rem; font-weight: 600; color: var(--st-ink-2); line-height: 1.25; margin-bottom: 2px; overflow-wrap: anywhere; }
+.dash-rooms .dash-hbar-value { width: auto; }
+/* Dashed line marking the top of the stated utilization scale */
+.dash-vbar-chart.has-cap .dash-vbar-plot::before { content: ""; position: absolute; left: -1px; right: -1px; top: 14%; border-top: 1px dashed #cfd5dc; }
+
 .dash-panel-title { font-size: 0.9rem; font-weight: 700; color: var(--st-ink); }
 .dash-panel-sub { font-size: 0.74rem; color: var(--st-muted); margin: 1px 0 8px; }
 .dash-empty { text-align: center; color: var(--st-muted); padding: 24px 0; font-size: 0.85rem; }
