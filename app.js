@@ -903,6 +903,10 @@ const firebaseConfig = {
                     bookingEl.classList.add('reschedule-source');
                 }
                 bookingEl.dataset.bid = booking.id;
+                // Read by updateNowMarkers() (CURRENT TIME INDICATOR section)
+                bookingEl.dataset.nowDay = booking.dayIndex;
+                bookingEl.dataset.nowStart = booking.start;
+                bookingEl.dataset.nowEnd = booking.end;
                 
                 // Position relative to the container. Subtract clientTop/clientLeft:
                 // an absolutely-positioned child's top/left resolve against the
@@ -1115,7 +1119,7 @@ const firebaseConfig = {
         container.querySelectorAll('.time-indicator-line, .time-indicator-dot').forEach(el => el.remove());
 
         const nowFloat = getCurrentTimeFloat();
-        if (nowFloat < minH || nowFloat >= maxH) return;
+        if (nowFloat < minH || nowFloat >= maxH) { updateNowMarkers(container, nowFloat, null); return; }
 
         const rawSlotIndex = (nowFloat - minH) * 2;
         const slotIndex = Math.floor(rawSlotIndex);
@@ -1123,7 +1127,7 @@ const firebaseConfig = {
 
         // Measure position from the indicator's column at this row (column 0 in day view)
         const refSlot = slotElements[`${colIndex}-${slotIndex}`];
-        if (!refSlot) return;
+        if (!refSlot) { updateNowMarkers(container, nowFloat, null); return; }
 
         const slotRect = refSlot.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
@@ -1149,6 +1153,63 @@ const firebaseConfig = {
         }
         container.appendChild(line);
         container.appendChild(dot);
+
+        updateNowMarkers(container, nowFloat, topPos);
+    }
+
+    // The line sits beneath bookings so it never crosses a patron's name, which
+    // hides it exactly when the room is in use. So the booking in progress marks
+    // itself instead: a still "Now" pill (a dot on short or narrow blocks), plus
+    // small notches at its edges where the line runs underneath. When a booking
+    // *becomes* live while the page is open, it pulses once for NOW_PULSE_MS.
+    // Bookings already live on first sight (page load, new booking) don't pulse.
+    // Runs on every render and on the 60-second indicator tick.
+    const NOW_PULSE_MS = 3000;
+    const nowSeenLive = {};     // bookingId -> was live at the last check
+    const nowPulseStartedAt = {}; // bookingId -> ms timestamp of its start pulse
+
+    function updateNowMarkers(container, nowFloat, linePos) {
+        container.querySelectorAll('.now-notch').forEach(el => el.remove());
+        const todayIdx = new Date().getDay();
+        container.querySelectorAll('.booking-float').forEach(el => {
+            el.querySelectorAll('.now-pill').forEach(p => p.remove());
+            el.classList.remove('is-now', 'now-arrive');
+            el.style.animationDelay = '';
+
+            const id = el.dataset.bid;
+            const live = Number(el.dataset.nowDay) === todayIdx &&
+                nowFloat >= Number(el.dataset.nowStart) && nowFloat < Number(el.dataset.nowEnd);
+            if (id in nowSeenLive && live && !nowSeenLive[id]) nowPulseStartedAt[id] = Date.now();
+            nowSeenLive[id] = live;
+            if (!live) return;
+
+            el.classList.add('is-now');
+            const pill = document.createElement('span');
+            const compact = el.classList.contains('is-compact') || el.offsetWidth < 120;
+            pill.className = compact ? 'now-pill now-pill-dot' : 'now-pill';
+            if (!compact) pill.textContent = 'Now';
+            el.appendChild(pill);
+
+            // Pulse, resuming mid-animation if a re-render lands during it
+            const elapsed = Date.now() - (nowPulseStartedAt[id] || 0);
+            if (elapsed < NOW_PULSE_MS) {
+                el.classList.add('now-arrive');
+                el.style.animationDelay = (-elapsed) + 'ms';
+            }
+
+            // Notches where the line passes under this booking
+            if (linePos === null) return;
+            const left = parseFloat(el.style.left), width = parseFloat(el.style.width);
+            const top = parseFloat(el.style.top), height = parseFloat(el.style.height);
+            if (linePos < top || linePos > top + height) return;
+            [left, left + width - 6].forEach(x => {
+                const notch = document.createElement('div');
+                notch.className = 'now-notch';
+                notch.style.left = x + 'px';
+                notch.style.top = linePos + 'px';
+                container.appendChild(notch);
+            });
+        });
     }
 
     // --- JUMP TO NOW (Alt+N) ---
@@ -1216,7 +1277,8 @@ const firebaseConfig = {
         if (nowFlashNeedsScroll) {
             nowFlashNeedsScroll = false;
             const target = top - (container.clientHeight - height) / 2;
-            container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+            const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            container.scrollTo({ top: Math.max(0, target), behavior: reduceMotion ? 'auto' : 'smooth' });
         }
     }
 
