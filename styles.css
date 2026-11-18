@@ -179,7 +179,7 @@ body.is-dragging .slot::after {
 .slot.booked-body { display: none; }
 .print-booking-label { display: none; }
 
-/* Current Time Indicator (day view only) */
+/* Current Time Indicator (day view: full width; week view: today's column, set inline) */
 .time-indicator-line {
     position: absolute;
     left: 85px;  /* skip the time column */
@@ -199,6 +199,30 @@ body.is-dragging .slot::after {
     transform: translateY(-4px); /* center the dot on the line */
     z-index: 9;
     pointer-events: none;
+}
+
+/* Today's column header in week view: lighter, with a red underline matching the time line */
+.header-cell.header-today { background: #3e5468; box-shadow: inset 0 -3px 0 #e53935; }
+
+/* Alt+N "jump to now": the current hour glows briefly, above bookings so it is never hidden */
+.now-flash {
+    position: absolute;
+    z-index: 15; /* above booking-float (10), below sticky headers (20) */
+    pointer-events: none;
+    border-radius: 4px;
+    background: rgba(229, 57, 53, 0.06); /* light, so booking text underneath stays readable */
+    box-shadow: 0 0 0 2px #e53935, 0 0 14px rgba(229, 57, 53, 0.45);
+    animation-name: now-flash;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+}
+@keyframes now-flash {
+    0% { opacity: 0; }
+    10% { opacity: 1; }
+    25% { opacity: 0.55; }
+    40% { opacity: 1; }
+    75% { opacity: 1; }
+    100% { opacity: 0; }
 }
 
 /* Floating booking elements (absolutely positioned) */
@@ -1048,7 +1072,7 @@ textarea { resize: vertical; }
     .modal, #rescheduleBanner, .info-sidebar,
     .booking-popover, .drag-tooltip, .drag-slot-highlight,
     .selection-overlay, .resize-overlay, .presence-hold,
-    .time-indicator-line, .time-indicator-dot { display: none !important; }
+    .time-indicator-line, .time-indicator-dot, .now-flash { display: none !important; }
 
     /* Header: show title/range, hide controls */
     header { margin-bottom: 10px; }

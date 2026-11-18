@@ -163,7 +163,8 @@ The file is organized into labeled sections. **Search for the marker text to nav
 | ~229 | `// --- RESOURCE VERSION HISTORY ---` | `backupResourceList()`, backup modal, in-app restore from `system/resourceBackups` |
 | ~354 | `// --- CORE LOGIC ---` | `loadBookingsForCurrentView()`, `handleResourceUpdate()`, navigation, `loadVersion` stale-callback guard |
 | ~566 | `function renderGrid()` | Main grid rendering. Builds time slots, positions booking overlays, attaches event listeners |
-| ~1059 | `// --- CURRENT TIME INDICATOR ---` | Red time-indicator line for day view (`setupTimeIndicator`, `placeTimeIndicator`) |
+| ~1066 | `// --- CURRENT TIME INDICATOR ---` | Red time-indicator line for today: full width in day view, today's column only in week view (`setupTimeIndicator`, `placeTimeIndicator`, `findTodayColumnIndex`) |
+| ~1160 | `// --- JUMP TO NOW (Alt+N) ---` | `jumpToNow()` and `drawNowFlash()`: go to today, scroll the current hour into view, briefly highlight it |
 | ~1125 | `// --- DRAG-AND-DROP HANDLERS ---` | Moving existing bookings via drag. Validation, conflict checking, drop confirmation |
 | ~1790 | `// --- DRAG-TO-CREATE HANDLERS ---` | Creating new bookings by clicking and dragging on empty slots |
 | ~2188 | `// --- RESIZE HANDLERS ---` | Changing booking duration by dragging the bottom edge |
@@ -249,7 +250,12 @@ Multi-layer caching for statistics performance:
 
 ### Keyboard Shortcuts
 - **Escape** closes the topmost open modal (priority list in the UTILITY FUNCTIONS section).
+- **Alt+N** jumps to now (`jumpToNow()`, JUMP TO NOW section): it goes to today like the Today button, scrolls the grid so the current hour is in view, and highlights that hour for `NOW_FLASH_MS` with a `.now-flash` overlay, across every sub-room in day view and in today's column in week view. The flash is keyed to a start timestamp, not a DOM node, so when the bookings listener re-renders mid-animation `renderGrid()` redraws it via `drawNowFlash()` with a negative `animation-delay` and it carries on where it was. Outside the resource's hours it shows a toast instead. The Today button's tooltip names the shortcut. N was chosen to avoid the known Alt+letter keys on Windows (Chrome: Alt+F/E/D; Firefox menu-bar letters); confirm on a library machine by tapping Alt in Firefox and checking N is not underlined.
+- Both Alt shortcuts share one `keydown` listener and the `gridShortcutAllowed()` guard.
 - **Alt+R** switches to the next resource, wrapping around at the end (`cycleResource()`, defined just before the BOOKING POPOVER section). It goes through `handleResourceChange()`, so it behaves exactly like picking from the dropdown, and is ignored while a dialog is open, during a drag or reschedule, or while a text field has focus. R was chosen over S because Alt+S opens Firefox's History menu on Windows, and Firefox handles its menu keys before the page can intercept them. There is deliberately no Alt+Shift+R "previous" binding, since Left Alt+Shift is the Windows keyboard-language hotkey.
+
+### Today Marker
+In week view, today's column header gets `.header-today` (lighter, red underline) in `renderGrid()`, and the red time line is drawn across today's column only (positioned inline by `placeTimeIndicator()`). Day view keeps the full-width line. The line sits below booking overlays (z-index 9 vs 10), so a booking at the current time hides it apart from the dot; the Alt+N flash sits above bookings (z-index 15) for that reason.
 
 ### Error Handling
 - Firestore operations are wrapped in try/catch with `showToast()` for error display.

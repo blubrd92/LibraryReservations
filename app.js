@@ -598,8 +598,12 @@ const firebaseConfig = {
         }
 
         container.appendChild(createDiv('header-cell', 'Time'));
+        const todayMidnight = new Date();
+        todayMidnight.setHours(0, 0, 0, 0);
         columns.forEach(col => { 
             const headerDiv = createDiv('header-cell', col.header);
+            // Week view: tint today's column header (day view headers are sub-room names)
+            if (!isDayView && col.date.getTime() === todayMidnight.getTime()) headerDiv.classList.add('header-today');
             container.appendChild(headerDiv); 
         });
 
@@ -1047,8 +1051,11 @@ const firebaseConfig = {
                 });
             });
 
-            // Position current time indicator (day view, today only)
-            setupTimeIndicator(container, isDayView, minH, maxH, slotElements);
+            // Position current time indicator (today only: full width in day view, today's column in week view)
+            setupTimeIndicator(container, isDayView, minH, maxH, slotElements, columns);
+
+            // Alt+N "jump to now" highlight, redrawn if a re-render lands mid-animation
+            drawNowFlash(container, isDayView, minH, maxH, slotElements, columns);
 
             // "Someone is booking this" overlays from other users (BOOKING PRESENCE section)
             lastGridLayout = { resId: res.id, activeWeekKey, columns, minH, slotElements };
@@ -1056,7 +1063,7 @@ const firebaseConfig = {
         });
     }
 
-    // --- CURRENT TIME INDICATOR (day view) ---
+    // --- CURRENT TIME INDICATOR (today: full width in day view, today's column in week view) ---
     // A horizontal red line showing the current time, visible only when the
     // day view is displaying today's date.
 
@@ -1066,22 +1073,34 @@ const firebaseConfig = {
      * Set up the current time indicator after grid layout is complete.
      * Called from the requestAnimationFrame callback inside renderGrid().
      */
-    function setupTimeIndicator(container, isDayView, minH, maxH, slotElements) {
+    function setupTimeIndicator(container, isDayView, minH, maxH, slotElements, columns) {
         // Remove any existing indicator elements
         container.querySelectorAll('.time-indicator-line, .time-indicator-dot').forEach(el => el.remove());
         timeIndicatorCtx = null;
 
-        if (!isDayView) return;
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const viewDate = new Date(currentDayDate);
-        viewDate.setHours(0, 0, 0, 0);
-        if (viewDate.getTime() !== today.getTime()) return;
+        // Day view spans every sub-room column; week view draws in today's column only
+        const colIndex = findTodayColumnIndex(isDayView, columns);
+        if (colIndex === -1) return;
 
         // Store context so the interval can reposition the line
-        timeIndicatorCtx = { container, minH, maxH, slotElements };
+        timeIndicatorCtx = { container, isDayView, minH, maxH, slotElements, colIndex };
         placeTimeIndicator();
+    }
+
+    /** Index of today's column in the rendered grid, or -1 if today isn't shown. Day view returns 0. */
+    function findTodayColumnIndex(isDayView, columns) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (isDayView) {
+            const viewDate = new Date(currentDayDate);
+            viewDate.setHours(0, 0, 0, 0);
+            return viewDate.getTime() === today.getTime() ? 0 : -1;
+        }
+        return (columns || []).findIndex(c => {
+            const d = new Date(c.date);
+            d.setHours(0, 0, 0, 0);
+            return d.getTime() === today.getTime();
+        });
     }
 
     /**
@@ -1090,7 +1109,7 @@ const firebaseConfig = {
      */
     function placeTimeIndicator() {
         if (!timeIndicatorCtx) return;
-        const { container, minH, maxH, slotElements } = timeIndicatorCtx;
+        const { container, isDayView, minH, maxH, slotElements, colIndex } = timeIndicatorCtx;
 
         // Remove existing before re-placing
         container.querySelectorAll('.time-indicator-line, .time-indicator-dot').forEach(el => el.remove());
@@ -1102,8 +1121,8 @@ const firebaseConfig = {
         const slotIndex = Math.floor(rawSlotIndex);
         const offsetFraction = rawSlotIndex - slotIndex;
 
-        // Measure position from the first column's slot at this row
-        const refSlot = slotElements[`0-${slotIndex}`];
+        // Measure position from the indicator's column at this row (column 0 in day view)
+        const refSlot = slotElements[`${colIndex}-${slotIndex}`];
         if (!refSlot) return;
 
         const slotRect = refSlot.getBoundingClientRect();
@@ -1114,12 +1133,91 @@ const firebaseConfig = {
         const line = document.createElement('div');
         line.className = 'time-indicator-line';
         line.style.top = topPos + 'px';
-        container.appendChild(line);
 
         const dot = document.createElement('div');
         dot.className = 'time-indicator-dot';
         dot.style.top = topPos + 'px';
+
+        if (!isDayView) {
+            // Week view: confine the line to today's column, dot on its left edge.
+            // clientLeft: absolute left resolves against the padding box, rects are border-box.
+            const colLeft = slotRect.left - containerRect.left + container.scrollLeft - container.clientLeft;
+            line.style.left = colLeft + 'px';
+            line.style.width = slotRect.width + 'px';
+            line.style.right = 'auto';
+            dot.style.left = (colLeft - 5) + 'px';
+        }
+        container.appendChild(line);
         container.appendChild(dot);
+    }
+
+    // --- JUMP TO NOW (Alt+N) ---
+    // Alt+N goes to today (like the Today button), scrolls the current hour into
+    // view, and briefly highlights it: across every sub-room in day view, in
+    // today's column in week view. The highlight lives on a timestamp rather than
+    // a DOM node so that if the bookings listener re-renders the grid mid-animation,
+    // renderGrid() redraws it and the CSS animation resumes where it left off.
+    const NOW_FLASH_MS = 2200;
+    let nowFlashStartedAt = 0;
+    let nowFlashNeedsScroll = false;
+
+    function jumpToNow() {
+        nowFlashStartedAt = Date.now();
+        nowFlashNeedsScroll = true;
+        goToToday(); // re-renders, and renderGrid() calls drawNowFlash()
+    }
+
+    function drawNowFlash(container, isDayView, minH, maxH, slotElements, columns) {
+        container.querySelectorAll('.now-flash').forEach(el => el.remove());
+        const elapsed = Date.now() - nowFlashStartedAt;
+        if (!nowFlashStartedAt || elapsed >= NOW_FLASH_MS) return;
+
+        const colIndex = findTodayColumnIndex(isDayView, columns);
+        if (colIndex === -1) return; // not showing today (yet)
+
+        const nowFloat = getCurrentTimeFloat();
+        if (nowFloat < minH || nowFloat >= maxH) {
+            if (nowFlashNeedsScroll) showToast("It's outside this resource's hours right now.", "info");
+            nowFlashNeedsScroll = false;
+            nowFlashStartedAt = 0;
+            return;
+        }
+
+        // The current clock hour, clipped to the grid (an hour can start before opening)
+        const hourStart = Math.max(minH, Math.floor(nowFloat));
+        const hourEnd = Math.min(maxH, Math.floor(nowFloat) + 1);
+        const firstRow = Math.round((hourStart - minH) * 2);
+        const lastRow = Math.round((hourEnd - minH) * 2) - 1;
+        const firstCol = isDayView ? 0 : colIndex;
+        const lastCol = isDayView ? columns.length - 1 : colIndex;
+        const topSlot = slotElements[`${firstCol}-${firstRow}`];
+        const bottomSlot = slotElements[`${firstCol}-${lastRow}`];
+        const rightSlot = slotElements[`${lastCol}-${firstRow}`];
+        if (!topSlot || !bottomSlot || !rightSlot) return;
+
+        const cRect = container.getBoundingClientRect();
+        const tRect = topSlot.getBoundingClientRect();
+        const top = tRect.top - cRect.top + container.scrollTop - container.clientTop;
+        const left = tRect.left - cRect.left + container.scrollLeft - container.clientLeft;
+        const height = bottomSlot.getBoundingClientRect().bottom - tRect.top;
+        const width = rightSlot.getBoundingClientRect().right - tRect.left;
+
+        const flash = document.createElement('div');
+        flash.className = 'now-flash';
+        flash.style.top = top + 'px';
+        flash.style.left = left + 'px';
+        flash.style.width = width + 'px';
+        flash.style.height = height + 'px';
+        flash.style.animationDuration = NOW_FLASH_MS + 'ms';
+        flash.style.animationDelay = (-elapsed) + 'ms'; // resume mid-animation after a re-render
+        flash.addEventListener('animationend', () => flash.remove());
+        container.appendChild(flash);
+
+        if (nowFlashNeedsScroll) {
+            nowFlashNeedsScroll = false;
+            const target = top - (container.clientHeight - height) / 2;
+            container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+        }
     }
 
     // --- DRAG-AND-DROP HANDLERS ---
@@ -5168,17 +5266,25 @@ const firebaseConfig = {
         sel.selectedIndex = (sel.selectedIndex + step + count) % count;
         handleResourceChange();
     }
-    document.addEventListener('keydown', function(e) {
-        if (!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey || e.code !== 'KeyR') return;
-        if (!currentUserRole) return; // not logged in
+    // Shared guard for the Alt+letter shortcuts (Alt+R, Alt+N): false when not
+    // logged in, a dialog is open, mid-drag/reschedule, or typing in a field.
+    function gridShortcutAllowed() {
+        if (!currentUserRole) return false; // not logged in
         const dialogOpen = Array.from(document.querySelectorAll('.modal, #settingsOverlay'))
             .some(el => el.style.display === 'flex');
-        if (dialogOpen) return;
-        if (rescheduleMode.active || dragState.isDragging || selectionState.active || resizeState.active) return;
+        if (dialogOpen) return false;
+        if (rescheduleMode.active || dragState.isDragging || selectionState.active || resizeState.active) return false;
         const el = document.activeElement;
-        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return false;
+        return true;
+    }
+    document.addEventListener('keydown', function(e) {
+        if (!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey) return;
+        if (e.code !== 'KeyR' && e.code !== 'KeyN') return;
+        if (!gridShortcutAllowed()) return;
         e.preventDefault();
-        cycleResource(1);
+        if (e.code === 'KeyR') cycleResource(1);
+        else jumpToNow(); // JUMP TO NOW section
     });
 
     // --- BOOKING POPOVER & HIGHLIGHTS ---
