@@ -168,8 +168,10 @@
         
         <div style="display: flex; justify-content: space-between; margin-top: 20px;">
             <button id="btnSaveBooking" class="btn-success" onclick="saveBooking()">Save Booking</button>
-            <button id="btnDeleteBooking" class="btn-danger" onclick="deleteBooking()">Delete</button>
-            <button onclick="closeModal('bookingModal')">Cancel</button>
+            <div style="display: flex; gap: 8px; margin-left: auto;">
+                <button id="btnDeleteBooking" class="btn-danger" onclick="deleteBooking()">Delete</button>
+                <button onclick="closeModal('bookingModal')">Cancel</button>
+            </div>
         </div>
         <!-- Reschedule is for moves the grid can't show; drag covers the visible week/day -->
         <div id="rescheduleRow" class="reschedule-row hidden">
