@@ -168,9 +168,13 @@
         
         <div style="display: flex; justify-content: space-between; margin-top: 20px;">
             <button id="btnSaveBooking" class="btn-success" onclick="saveBooking()">Save Booking</button>
-            <button id="btnReschedule" class="btn-primary hidden" onclick="openRescheduleModal()">Reschedule</button>
             <button id="btnDeleteBooking" class="btn-danger" onclick="deleteBooking()">Delete</button>
             <button onclick="closeModal('bookingModal')">Cancel</button>
+        </div>
+        <!-- Reschedule is for moves the grid can't show; drag covers the visible week/day -->
+        <div id="rescheduleRow" class="reschedule-row hidden">
+            <span id="rescheduleHint" class="reschedule-hint">Moving it within this week? Just drag the booking on the grid.</span>
+            <button id="btnReschedule" class="btn-outline" onclick="openRescheduleModal()">Move to another week…</button>
         </div>
         <div id="readOnlyNotice" class="hidden" style="margin-top: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; text-align: center; color: #856404;">
             🔒 This resource is admin-only. View only.

@@ -2124,7 +2124,7 @@ const firebaseConfig = {
         const canEdit = canEditResource(res);
         document.getElementById('btnSaveBooking').style.display = canEdit ? '' : 'none';
         document.getElementById('btnDeleteBooking').style.display = 'none'; // New booking, no delete
-        document.getElementById('btnReschedule').classList.add('hidden'); // New booking, no reschedule
+        document.getElementById('rescheduleRow').classList.add('hidden'); // New booking, no reschedule
         document.getElementById('readOnlyNotice').style.display = canEdit ? 'none' : '';
         
         // Enable/disable form fields based on permissions
@@ -3055,11 +3055,17 @@ const firebaseConfig = {
         const canEdit = canEditResource(res);
         document.getElementById('btnSaveBooking').style.display = (canEdit && !locked) ? '' : 'none';
         document.getElementById('btnDeleteBooking').style.display = (canEdit && data && !locked) ? '' : 'none';
-        // Show reschedule button only for existing bookings that user can edit (not locked)
+        // Show the reschedule row only for existing bookings the user can edit (not locked).
+        // Same conditions as drag-to-move in renderGrid(), so the drag hint is always true here.
         if (canEdit && data && !locked) {
-            document.getElementById('btnReschedule').classList.remove('hidden');
+            const isDayView = res.viewMode === 'day';
+            document.getElementById('btnReschedule').textContent = isDayView ? 'Move to another day…' : 'Move to another week…';
+            document.getElementById('rescheduleHint').textContent = isDayView
+                ? 'Moving it within this day? Just drag the booking on the grid.'
+                : 'Moving it within this week? Just drag the booking on the grid.';
+            document.getElementById('rescheduleRow').classList.remove('hidden');
         } else {
-            document.getElementById('btnReschedule').classList.add('hidden');
+            document.getElementById('rescheduleRow').classList.add('hidden');
         }
         document.getElementById('readOnlyNotice').style.display = canEdit ? 'none' : '';
 
