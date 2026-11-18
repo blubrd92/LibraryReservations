@@ -6152,7 +6152,7 @@ const firebaseConfig = {
             if (valueLabel !== '') {
                 html += '<div class="dash-vbar-pct' + (opts.highlight ? ' dash-highlight' : '') + '" style="bottom:calc(' + hPct + '% + 4px);">' + valueLabel + '</div>';
             }
-            html += '<div class="dash-vbar-bar' + (opts.segments ? ' stacked' : '') + '" style="height:' + hPct + '%;' + (hPct > 0 ? 'min-height:2px;' : '') + '">' + (opts.segments || '') + '</div>';
+            html += '<div class="dash-vbar-bar' + (opts.segments ? ' stacked' : '') + (opts.barClass ? ' ' + opts.barClass : '') + '" style="height:' + hPct + '%;' + (hPct > 0 ? 'min-height:2px;' : '') + '">' + (opts.segments || '') + '</div>';
         }
         html += '</div>';
         html += '<div class="dash-vbar-label' + (opts.highlight ? ' dash-highlight' : '') + '">' + label + '</div>';
@@ -6210,7 +6210,16 @@ const firebaseConfig = {
                 cumulative += c;
                 if (medianDur === null && cumulative >= durTotal / 2) medianDur = d;
             });
-            html += '<div class="dash-panel-sub">Most common <strong>' + durLong(modeDur) + '</strong> · half are ' + durLong(medianDur) + ' or shorter</div>';
+            // When the most common length is the resource's maximum, the tall bar is
+            // the limit doing its work, so say that rather than quoting a median
+            // ("half are 2 hours or shorter" is true of every booking then).
+            const limitDur = res.maxDuration || 0;
+            const limitCount = durBuckets[limitDur.toString()] || 0;
+            if (limitDur > 0 && modeDur === limitDur) {
+                html += '<div class="dash-panel-sub"><strong>' + Math.round((limitCount / durTotal) * 100) + '%</strong> book the full ' + durLong(limitDur) + ', the most this room allows</div>';
+            } else {
+                html += '<div class="dash-panel-sub">Most common <strong>' + durLong(modeDur) + '</strong> · half are ' + durLong(medianDur) + ' or shorter' + (limitDur > 0 ? ' · limit ' + durLong(limitDur) : '') + '</div>';
+            }
 
             // Even steps when every length sits on the 15/30-minute grid (the normal
             // case); otherwise fall back to one column per length actually used.
@@ -6223,15 +6232,24 @@ const firebaseConfig = {
                 for (let i = 1; i * step <= maxDur + 1e-9; i++) steps.push(i * step);
             }
             const labelAll = steps.length <= 8;
+            // Every bar gets its % when they fit; on long axes only the peak and the limit
+            const pctAll = steps.length <= 12;
             const maxDurCount = durBuckets[modeDur.toString()];
+            // The maximum allowed length is drawn dark and tagged LIMIT, the rest soft,
+            // so a bar that towers because of the cap explains itself
+            const hasLimitBar = limitDur > 0 && steps.some(d => Math.abs(d - limitDur) < 1e-9);
             html += '<div class="dash-vbar-chart dash-hist">';
             steps.forEach((d, i) => {
                 const count = durBuckets[d.toString()] || 0;
                 const pct = Math.round((count / durTotal) * 100);
                 const isPeak = d === modeDur;
-                const axisLabel = (labelAll || i === 0 || Number.isInteger(d)) ? durShort(d) : '&nbsp;';
-                html += statsVbarCol(axisLabel, count / maxDurCount, isPeak ? pct + '%' : '', durLong(d) + ' bookings',
-                    plural(count, 'booking') + ' · ' + pct + '% of all bookings', { highlight: isPeak });
+                const isLimit = hasLimitBar && Math.abs(d - limitDur) < 1e-9;
+                let axisLabel = (labelAll || i === 0 || Number.isInteger(d) || isLimit) ? durShort(d) : '&nbsp;';
+                if (isLimit) axisLabel += '<span class="dash-limit-tag">Limit</span>';
+                const showPct = count > 0 && (pctAll || isPeak || isLimit);
+                html += statsVbarCol(axisLabel, count / maxDurCount, showPct ? pct + '%' : '', durLong(d) + ' bookings' + (isLimit ? ' (the limit)' : ''),
+                    plural(count, 'booking') + ' · ' + pct + '% of all bookings',
+                    { highlight: isPeak || isLimit, barClass: hasLimitBar ? (isLimit ? 'is-limit' : 'is-soft') : '' });
             });
             html += '</div>';
         } else {
@@ -6460,13 +6478,6 @@ const firebaseConfig = {
         const activeSubRooms = getActiveSubRooms(res);
         const roomMultiplier = activeSubRooms.length > 0 ? activeSubRooms.length : 1;
         
-        // Find max hours for heat map scaling
-        let maxHours = 0;
-        Object.values(dailyStats).forEach(d => {
-            if (d.hours > maxHours) maxHours = d.hours;
-        });
-        if (maxHours === 0) maxHours = 1;
-        
         // Build header
         const nowForGrid = new Date();
         const currentMonthIdx = year === nowForGrid.getFullYear() ? nowForGrid.getMonth() : -1;
@@ -6593,7 +6604,7 @@ const firebaseConfig = {
                         // Regular weekly closed days stay quiet (hatch only); named closures show their reason.
                         const namedReason = stat.reason && stat.reason !== 'Closed' ? stat.reason : '';
                         const shortReason = namedReason.length > 9 ? namedReason.substring(0, 8) + '\u2026' : namedReason;
-                        const closedDetail = (stat.reason || 'Closed') + (hours > 0 ? ` · ${parseFloat(hours.toFixed(2))}h booked` : '');
+                        const closedDetail = (stat.reason || 'Closed') + (hours > 0 ? ` · ${formatHoursFraction(hours)}h booked` : '');
                         rowHtml += `<td class="sg-cell sg-closed${todayClass}"${statsTipAttrs(dateTooltip, closedDetail)}>${dowTag}<span class="sg-val">${escapeHtml(shortReason)}</span></td>`;
                     } else {
                         // Calculate available hours for this open day
@@ -6617,14 +6628,16 @@ const firebaseConfig = {
                             monthlyAvailableYtd[month] += dayAvailable;
                         }
                         
-                        // Calculate heat map level (0-8)
+                        // Color by how full the day was, not raw hours: ordinary days stay
+                        // plain, only full (blue) and quiet (amber) days stand out.
+                        // Thresholds live in utils.js (classifyDayFullness).
                         const isPast = date <= today;
-                        const heatLevel = hours === 0 ? (isPast ? 1 : 0) : Math.min(8, Math.ceil((hours / maxHours) * 8));
-                        const displayHours = hours > 0 ? parseFloat(hours.toFixed(2)) : (isPast ? '0' : '');
+                        const fullness = classifyDayFullness(hours, dayAvailable, date < today);
+                        const displayHours = hours > 0 ? formatHoursFraction(hours) : (isPast ? '0' : '');
                         const dayUtil = dayAvailable > 0 ? ((hours / dayAvailable) * 100).toFixed(1) : '0.0';
                         const bc = stat.bookingCount;
-                        const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'} · ${bc} booking${bc === 1 ? '' : 's'}\n${dayUtil}% of ${parseFloat(dayAvailable.toFixed(2))} open hours` : (isPast ? 'No bookings' : 'Nothing booked yet');
-                        rowHtml += `<td class="sg-cell stats-heat-${heatLevel}${todayClass}"${statsTipAttrs(dateTooltip, hoursText)}>${dowTag}<span class="sg-val">${displayHours}</span></td>`;
+                        const hoursText = hours > 0 ? `${displayHours} hour${hours === 1 ? '' : 's'} · ${bc} booking${bc === 1 ? '' : 's'}\n${dayUtil}% of ${formatHoursFraction(dayAvailable)} open hours` : (isPast ? 'No bookings' : 'Nothing booked yet');
+                        rowHtml += `<td class="sg-cell sg-${fullness}${todayClass}"${statsTipAttrs(dateTooltip, hoursText)}>${dowTag}<span class="sg-val">${displayHours}</span></td>`;
                     }
                 }
             }
@@ -6638,10 +6651,10 @@ const firebaseConfig = {
         // Build footer (monthly totals with month names, hours, and booking counts)
         let footHtml = '<tr><td>Total</td>';
         monthlyTotals.forEach((t, i) => {
-            const displayTotal = t > 0 ? parseFloat(t.toFixed(2)) + 'h' : '-';
+            const displayTotal = t > 0 ? formatHoursFraction(t) + 'h' : '-';
             const bc = monthlyBookingCounts[i];
             const countLabel = bc > 0 ? `<span class="sg-total-b">${bc} booking${bc === 1 ? '' : 's'}</span>` : '';
-            footHtml += `<td${statsTipAttrs(MONTHS[i] + ' ' + year + ' total', (t > 0 ? parseFloat(t.toFixed(2)) + ' hours' : 'No hours') + ' · ' + bc + ' booking' + (bc === 1 ? '' : 's'))}><span class="sg-total-h">${displayTotal}</span>${countLabel}</td>`;
+            footHtml += `<td${statsTipAttrs(MONTHS[i] + ' ' + year + ' total', (t > 0 ? formatHoursFraction(t) + ' hours' : 'No hours') + ' · ' + bc + ' booking' + (bc === 1 ? '' : 's'))}><span class="sg-total-h">${displayTotal}</span>${countLabel}</td>`;
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;
@@ -6666,7 +6679,7 @@ const firebaseConfig = {
             if (util > busiestMonthUtil) { busiestMonthUtil = util; busiestMonthIdx = i; }
         }
         if (busiestMonthIdx >= 0) {
-            setStatsTile('statsBusiestMonth', MONTHS[busiestMonthIdx], `${parseFloat(monthlyTotalsYtd[busiestMonthIdx].toFixed(2))}h · ${busiestMonthUtil.toFixed(1)}%`);
+            setStatsTile('statsBusiestMonth', MONTHS[busiestMonthIdx], `${Math.round(busiestMonthUtil)}% full · ${formatHoursFraction(monthlyTotalsYtd[busiestMonthIdx])}h`);
         } else {
             setStatsTile('statsBusiestMonth', '-', '');
         }
@@ -6679,7 +6692,9 @@ const firebaseConfig = {
         const avgDuration = totalBookingCount > 0 ? (totalDurationSum / totalBookingCount).toFixed(1) + 'h' : '-';
         setStatsTile('statsAvgDuration', avgDuration, 'per booking');
 
-        // Busiest and quietest day of week (normalized avg hours per occurrence)
+        // Fullest and quietest day of week, ranked by utilization (share of open
+        // hours booked), so the sub-line leads with that and shows hours as
+        // "x of y open": a short Sunday can be the fullest day with the fewest hours.
         const DAY_NAMES = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
         let busiestDayIdx = -1, busiestDayUtil = -1;
         let quietestDayIdx = -1, quietestDayUtil = Infinity;
@@ -6687,13 +6702,14 @@ const firebaseConfig = {
         for (let i = 0; i < 7; i++) {
             if (dayOfWeekCount[i] === 0) { dayAvgs.push(null); continue; }
             const avgHrs = dayOfWeekHours[i] / dayOfWeekCount[i];
+            const avgOpen = dayOfWeekAvailable[i] / dayOfWeekCount[i];
             const util = dayOfWeekAvailable[i] > 0 ? (dayOfWeekHours[i] / dayOfWeekAvailable[i]) * 100 : 0;
-            dayAvgs.push({ avgHrs, util });
+            dayAvgs.push({ avgHrs, avgOpen, util });
             if (util > busiestDayUtil) { busiestDayUtil = util; busiestDayIdx = i; }
             if (util < quietestDayUtil) { quietestDayUtil = util; quietestDayIdx = i; }
         }
         const dayTile = (id, idx) => {
-            if (idx >= 0) setStatsTile(id, DAY_NAMES[idx], `avg ${dayAvgs[idx].avgHrs.toFixed(1)}h · ${dayAvgs[idx].util.toFixed(1)}%`);
+            if (idx >= 0) setStatsTile(id, DAY_NAMES[idx], `${Math.round(dayAvgs[idx].util)}% full · avg ${dayAvgs[idx].avgHrs.toFixed(1)} of ${parseFloat(dayAvgs[idx].avgOpen.toFixed(1))}h`);
             else setStatsTile(id, '-', '');
         };
         dayTile('statsBusiestDay', busiestDayIdx);

@@ -26,7 +26,11 @@ const {
     classifyResourceSnapshot,
     shouldPersistResourceList,
     getDaysFromToday,
-    isPresenceHoldFresh
+    isPresenceHoldFresh,
+    STATS_FULL_DAY_PCT,
+    STATS_QUIET_DAY_PCT,
+    formatHoursFraction,
+    classifyDayFullness
 } = require('./utils');
 
 // ============================================================
@@ -944,5 +948,64 @@ describe('isPresenceHoldFresh', () => {
 
     test('a heartbeat slightly ahead of the local clock still counts', () => {
         expect(isPresenceHoldFresh(now + 5000, now, ttl)).toBe(true);
+    });
+});
+
+describe('formatHoursFraction', () => {
+    test('whole hours stay plain', () => {
+        expect(formatHoursFraction(3)).toBe('3');
+        expect(formatHoursFraction(0)).toBe('0');
+    });
+    test('quarter hours become fractions', () => {
+        expect(formatHoursFraction(5.75)).toBe('5\u00BE');
+        expect(formatHoursFraction(1.25)).toBe('1\u00BC');
+        expect(formatHoursFraction(8.5)).toBe('8\u00BD');
+    });
+    test('under an hour shows the fraction alone', () => {
+        expect(formatHoursFraction(0.5)).toBe('\u00BD');
+        expect(formatHoursFraction(0.25)).toBe('\u00BC');
+    });
+    test('large totals keep the fraction', () => {
+        expect(formatHoursFraction(150.75)).toBe('150\u00BE');
+    });
+    test('float noise from summing quarters still reads as a quarter', () => {
+        expect(formatHoursFraction(0.1 + 0.2 + 0.2 + 0.25)).toBe('\u00BE');
+    });
+    test('non-quarter values fall back to two decimals', () => {
+        expect(formatHoursFraction(3.6)).toBe('3.6');
+        expect(formatHoursFraction(2.333333)).toBe('2.33');
+    });
+    test('non-numbers give an empty string', () => {
+        expect(formatHoursFraction(NaN)).toBe('');
+        expect(formatHoursFraction(undefined)).toBe('');
+        expect(formatHoursFraction('5')).toBe('');
+    });
+});
+
+describe('classifyDayFullness', () => {
+    test('thresholds are 75% full and 30% quiet', () => {
+        expect(STATS_FULL_DAY_PCT).toBe(75);
+        expect(STATS_QUIET_DAY_PCT).toBe(30);
+    });
+    test('at or above the full threshold is full', () => {
+        expect(classifyDayFullness(7.5, 10, true)).toBe('full');
+        expect(classifyDayFullness(10, 10, true)).toBe('full');
+        expect(classifyDayFullness(4.5, 5, true)).toBe('full'); // a short Sunday can be full
+    });
+    test('just under the full threshold is normal', () => {
+        expect(classifyDayFullness(7.25, 10, true)).toBe('normal');
+    });
+    test('at or below the quiet threshold is quiet once the day is over', () => {
+        expect(classifyDayFullness(3, 10, true)).toBe('quiet');
+        expect(classifyDayFullness(0, 10, true)).toBe('quiet');
+    });
+    test('today and future days are never quiet, but can be full', () => {
+        expect(classifyDayFullness(0, 10, false)).toBe('normal');
+        expect(classifyDayFullness(2, 10, false)).toBe('normal');
+        expect(classifyDayFullness(8, 10, false)).toBe('full');
+    });
+    test('no open hours is normal', () => {
+        expect(classifyDayFullness(2, 0, true)).toBe('normal');
+        expect(classifyDayFullness(0, undefined, true)).toBe('normal');
     });
 });

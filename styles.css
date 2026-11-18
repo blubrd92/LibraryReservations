@@ -1020,6 +1020,17 @@ textarea { resize: vertical; }
 .sg-total-b { display: block; font-size: 0.66rem; color: var(--st-muted); }
 
 /* One-hue sequential scale, shared by the year grid and the day-by-hour heatmap */
+/* Year grid: colored by fullness (classifyDayFullness in utils.js). Ordinary
+   days stay plain; only full (blue) and quiet (amber) days stand out. */
+.stats-table .sg-cell.sg-normal { background: #f7f9fb; color: var(--st-ink-2); font-weight: 500; }
+.stats-table .sg-cell.sg-full, .sg-swatch.sg-full { background: #1e6fc8; }
+.stats-table .sg-cell.sg-full { color: #fff; font-weight: 700; }
+.stats-table .sg-cell.sg-quiet, .sg-swatch.sg-quiet { background: #fdecc8; }
+.stats-table .sg-cell.sg-quiet { color: #7a4b00; font-weight: 500; }
+.stats-table .sg-cell .sg-dow { opacity: 0.4; }
+.stats-table .sg-cell.sg-full .sg-dow { opacity: 0.7; }
+
+/* Single-hue scale for the dashboard day-by-hour map */
 .stats-heat-0, .dash-hm-lvl-0 { background: #f6f8fa; }
 .stats-heat-1, .dash-hm-lvl-1 { background: #e3f2fd; }
 .stats-heat-2, .dash-hm-lvl-2 { background: #bbdefb; }
@@ -1029,8 +1040,7 @@ textarea { resize: vertical; }
 .stats-heat-6, .dash-hm-lvl-6 { background: #2196f3; }
 .stats-heat-7, .dash-hm-lvl-7 { background: #1e88e5; }
 .stats-heat-8, .dash-hm-lvl-8 { background: #1565c0; }
-.stats-table .stats-heat-7, .stats-table .stats-heat-8, .dash-hm-cell.dash-hm-lvl-7, .dash-hm-cell.dash-hm-lvl-8 { color: #fff; }
-.stats-table .stats-heat-0 { color: var(--st-muted); }
+.dash-hm-cell.dash-hm-lvl-7, .dash-hm-cell.dash-hm-lvl-8 { color: #fff; }
 
 /* Hover tooltip for every mark in the stats modal */
 .stats-tip {
@@ -1089,6 +1099,10 @@ textarea { resize: vertical; }
 .dash-hist { gap: 1px; }
 .dash-hist .dash-vbar-bar { width: 84%; border-radius: 3px 3px 0 0; }
 .dash-hist .dash-vbar-label { font-size: 0.68rem; white-space: nowrap; overflow: visible; }
+/* Booking Length: the maximum allowed length dark and tagged, the others soft */
+.dash-vbar-bar.is-soft { background: #90b9e3; }
+.dash-vbar-bar.is-limit { background: #0d47a1; }
+.dash-limit-tag { display: block; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #0d47a1; line-height: 1.1; }
 
 /* Staff chart: stacked bars, one segment per person */
 .dash-staff-chart { gap: 4px; }

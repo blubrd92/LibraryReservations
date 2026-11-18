@@ -540,6 +540,51 @@ function isPresenceHoldFresh(updatedAtMs, nowMs, ttlMs) {
 }
 
 // ============================================================
+// STATS DISPLAY HELPERS
+// ============================================================
+
+/** Stats grid: a day at or above this % of its open hours counts as full. */
+const STATS_FULL_DAY_PCT = 75;
+/** Stats grid: a finished day at or below this % of its open hours counts as quiet. */
+const STATS_QUIET_DAY_PCT = 30;
+
+/**
+ * Format hours with quarter-hour fractions: 5.75 -> "5¾", 0.5 -> "½", 3 -> "3".
+ * Values that are not whole quarters fall back to at most two decimals.
+ *
+ * @param {number} hours
+ * @returns {string}
+ */
+function formatHoursFraction(hours) {
+    if (typeof hours !== 'number' || !isFinite(hours)) return '';
+    const quarters = Math.round(hours * 4);
+    if (Math.abs(quarters - hours * 4) > 1e-6) return String(parseFloat(hours.toFixed(2)));
+    const whole = Math.floor(quarters / 4);
+    const frac = ['', '\u00BC', '\u00BD', '\u00BE'][quarters % 4];
+    if (whole === 0) return frac || '0';
+    return whole + frac;
+}
+
+/**
+ * Classify a day for the stats grid by how full it was: 'full' at or above
+ * STATS_FULL_DAY_PCT of its open hours, 'quiet' at or below STATS_QUIET_DAY_PCT,
+ * otherwise 'normal'. A day that isn't over yet (today or later) is never
+ * 'quiet', since more bookings may still land on it.
+ *
+ * @param {number} hours - Hours booked that day.
+ * @param {number} availableHours - Open hours that day (times rooms, for multi-room resources).
+ * @param {boolean} dayIsOver - True for days before today.
+ * @returns {'full'|'quiet'|'normal'}
+ */
+function classifyDayFullness(hours, availableHours, dayIsOver) {
+    if (!(availableHours > 0)) return 'normal';
+    const pct = (hours / availableHours) * 100;
+    if (pct >= STATS_FULL_DAY_PCT) return 'full';
+    if (dayIsOver && pct <= STATS_QUIET_DAY_PCT) return 'quiet';
+    return 'normal';
+}
+
+// ============================================================
 // MODULE EXPORT (Node.js / Jest) — no-op in the browser
 // ============================================================
 
@@ -572,6 +617,10 @@ if (typeof module !== 'undefined' && module.exports) {
         classifyResourceSnapshot,
         shouldPersistResourceList,
         getDaysFromToday,
-        isPresenceHoldFresh
+        isPresenceHoldFresh,
+        STATS_FULL_DAY_PCT,
+        STATS_QUIET_DAY_PCT,
+        formatHoursFraction,
+        classifyDayFullness
     };
 }
