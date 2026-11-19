@@ -1,0 +1,14 @@
+{
+  "name": "library-reservations-explainer",
+  "private": true,
+  "description": "Source for the staff explainer video. Films the real app against local Firebase emulators, then composites and scores it. See README.md.",
+  "scripts": {
+    "film": "mkdir -p .cache && cp ../firestore.rules .cache/ && firebase emulators:exec --only firestore,auth --project demo-library-reservations \"node film/film.js\"",
+    "emulators": "mkdir -p .cache && cp ../firestore.rules .cache/ && firebase emulators:start --only firestore,auth --project demo-library-reservations"
+  },
+  "devDependencies": {
+    "firebase": "8.10.1",
+    "firebase-tools": "15.37.0",
+    "marked": "18.2.1"
+  }
+}

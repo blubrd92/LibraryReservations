@@ -1,0 +1,4 @@
+/* Caption fonts, served locally so headless Chromium loads them deterministically.
+   Both are SIL Open Font License, from Google Fonts (latin subset, variable weight). */
+@font-face { font-family: 'Literata'; font-weight: 400 600; font-style: normal; font-display: block; src: url('Literata-var.woff2') format('woff2'); }
+@font-face { font-family: 'Inter Caption'; font-weight: 400 600; font-style: normal; font-display: block; src: url('Inter-var.woff2') format('woff2'); }
