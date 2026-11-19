@@ -100,6 +100,24 @@ async function take(page, name, mouse, fn) {
     await r.hold(6.0);
   });
 
+  // 3b. A quick look: hover a booking for its popover, then click for the full details.
+  mouse = await take(page, 'hover', mouse, async (r) => {
+    await r.hold(1.0);
+    const bk = await center(page, block('Samira Haddad'));
+    await r.moveTo(bk.x + 20, bk.b.y + 26, 1.4);
+    await r.hold(4.2);
+    await r.click();
+    await page.waitForSelector('#bookingModal', { state: 'visible' });
+    const nt = await center(page, '#bookNotes');
+    await r.moveTo(nt.x + 120, nt.y + 40, 1.0);   // rest beside the note, not on it
+    await r.hold(4.5);
+    const cancel = await center(page, '#bookingModal .modal-content button:not([class])');
+    await r.moveTo(cancel.x, cancel.y, 0.9); await r.hold(0.3); await r.click();
+    await page.waitForSelector('#bookingModal', { state: 'hidden' });
+    await r.moveTo(1180, 118, 1.2);
+    await r.hold(2.5);
+  });
+
   // 4. Plans change: drag the booking from Table 2 at 2pm to Table 3 at 3pm, confirm.
   mouse = await take(page, 'move', mouse, async (r) => {
     await r.hold(1.5);
@@ -118,6 +136,26 @@ async function take(page, name, mouse, fn) {
     await page.waitForSelector('#moveModal', { state: 'hidden' });
     await r.moveTo(1180, 118, 1.2);
     await r.hold(4.0);
+  });
+
+  // 4b. More time: drag the bottom edge of Benjamin Adler's booking from 12:00 to 12:30.
+  mouse = await take(page, 'resize', mouse, async (r) => {
+    await r.hold(1.5);
+    const h = await center(page, `${block('Benjamin Adler')} .resize-handle`);
+    const nextSlot = await center(page, slot(3, 12, 2));
+    await r.moveTo(h.x, h.y, 1.5); await r.hold(0.6);
+    await r.down();
+    await r.moveTo(h.x, h.y + nextSlot.b.height, 1.8);
+    await r.hold(0.8);
+    await r.up();
+    await page.waitForSelector('#resizeModal', { state: 'visible' });
+    await r.hold(3.0);
+    const up = await center(page, '#resizeModal .btn-success');
+    await r.moveTo(up.x, up.y, 1.0); await r.hold(0.3); await r.click();
+    r.mark('saved');
+    await page.waitForSelector('#resizeModal', { state: 'hidden' });
+    await r.moveTo(1180, 118, 1.2);
+    await r.hold(3.5);
   });
 
   // 5. Open a booking: "Move to another day…" for dates not on screen.

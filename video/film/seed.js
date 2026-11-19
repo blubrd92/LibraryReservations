@@ -27,7 +27,8 @@ const base = {
 
 // Study Tables comes first, so it is what the app opens on after sign-in.
 const resources = [
-  { ...base, id: 'res-tables', name: 'Study Tables', viewMode: 'day',
+  // Repeat bookings are off for Study Tables, matching the library's own setting.
+  { ...base, id: 'res-tables', name: 'Study Tables', viewMode: 'day', allowRecurring: false,
     subRooms: [
       { id: 'table-1', name: 'Table 1', active: true, displayOrder: 0 },
       { id: 'table-2', name: 'Table 2', active: true, displayOrder: 1 },

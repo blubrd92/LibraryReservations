@@ -13,6 +13,7 @@ const AT = {
   tables23: { cx: 1200, cy: 560 },
   table3: { cx: 1400, cy: 560 },
   table2Late: { cx: 1012, cy: 600 },
+  benjamin: { cx: 1500, cy: 420 },
   modal: { cx: 960, cy: 545 },
   centre: { cx: 960, cy: 540 },
 };
@@ -31,16 +32,16 @@ const SCRIPT = {
     [0, 250, 150, 190, '#5c6bc0'], [170, 360, 150, 80, '#e5b829'],
   ],
   scenes: [
-    { id: 'title', type: 'title', dur: 4.5,
+    { id: 'title', type: 'title', dur: 5.0,
       eyebrow: 'For library staff',
       title: 'Library Reservations',
       sub: 'One shared schedule for the rooms, equipment and appointments patrons book with us.' },
 
-    { id: 'login', type: 'footage', clip: 'login', clipFrom: 1.0, dur: 10.0, xfade: 0.8, step: 1,
+    { id: 'login', type: 'footage', clip: 'login', clipFrom: 1.0, dur: 9.5, xfade: 0.8, step: 1,
       camera: [cam(0, 1.18, AT.centre), cam(4.6, 1.18, AT.centre), cam(5.8, 1, AT.centre)],
       captions: [
         { from: 0.4, to: 5.3, text: 'Open Library Reservations and enter the <mark>shared access code</mark>.' },
-        { from: 5.8, to: 9.8, text: 'The schedule opens on <mark>today</mark>.' },
+        { from: 5.7, to: 9.3, text: 'The schedule opens on <mark>today</mark>.' },
       ] },
 
     { id: 'read', type: 'footage', clip: 'read', clipFrom: 0.0, dur: 13.5, xfade: 0.6, step: 2,
@@ -53,17 +54,23 @@ const SCRIPT = {
         { from: 9.1, to: 13.3, text: 'The <mark>red line</mark> marks the time right now; bookings in progress say Now.' },
       ] },
 
-    { id: 'book', type: 'footage', clip: 'book', clipFrom: 1.0, dur: 31.5, xfade: 0.6, step: 3,
+    { id: 'book', type: 'footage', clip: 'book', clipFrom: 1.0, dur: 33.0, xfade: 0.6, step: 3,
       camera: [cam(0, 1, AT.centre), cam(3.8, 1, AT.centre), cam(4.8, 1.12, AT.header), cam(6.9, 1.12, AT.header),
-               cam(8.1, 1.3, AT.table2), cam(14.2, 1.3, AT.table2), cam(15.2, 1.45, AT.modal),
-               cam(26.4, 1.45, AT.modal), cam(27.6, 1.3, AT.table2)],
-      rings: [{ from: 4.4, to: 5.3, src: 'nextDay' }],
+               cam(8.1, 1.3, AT.table2), cam(14.4, 1.3, AT.table2), cam(15.4, 1.45, AT.modal),
+               cam(26.8, 1.45, AT.modal), cam(28.0, 1.3, AT.table2)],
+      rings: [{ from: 4.4, to: 5.2, src: 'nextDay' }],
       captions: [
         { from: 0.3, to: 3.9, text: 'A patron asks for a study table tomorrow, from 2 to 4.' },
-        { from: 4.2, to: 8.9, text: 'Use the <mark>arrows</mark> or the date box to change the day.' },
-        { from: 9.2, to: 14.5, text: '<mark>Drag</mark> down the empty slots to cover their time.' },
-        { from: 14.9, to: 23.2, text: 'Type the <mark>patron or event name</mark>. A note is optional.' },
-        { from: 23.6, to: 31.3, text: 'Click <mark>Save Booking</mark>. Everyone with the schedule open sees it right away.' },
+        { from: 4.2, to: 9.0, text: 'Use the <mark>arrows</mark> or the date box to change the day.' },
+        { from: 9.3, to: 14.6, text: '<mark>Drag</mark> down the empty slots to cover their time.' },
+        { from: 15.0, to: 24.0, text: 'Type the <mark>patron or event name</mark>. A note is optional.' },
+        { from: 24.4, to: 32.8, text: 'Click <mark>Save Booking</mark>. Everyone with the schedule open sees it right away.' },
+      ] },
+
+    { id: 'hover', type: 'footage', clip: 'hover', clipFrom: 0.5, dur: 12.5, xfade: 0.6, step: 3,
+      camera: [cam(0, 1.3, AT.table2), cam(6.4, 1.3, AT.table2), cam(7.4, 1.45, AT.modal)],
+      captions: [
+        { from: 0.3, to: 12.3, text: 'Hover over a booking for a quick look. <mark>Click</mark> it for the full details and notes.' },
       ] },
 
     { id: 'move', type: 'footage', clip: 'move', clipFrom: 1.0, dur: 13.5, xfade: 0.6, step: 4,
@@ -74,11 +81,19 @@ const SCRIPT = {
         { from: 6.5, to: 13.3, text: 'Check the details, then click <mark>Move Booking</mark>.' },
       ] },
 
-    { id: 'details', type: 'footage', clip: 'details', clipFrom: 1.5, dur: 9.5, xfade: 0.6, step: 4,
-      camera: [cam(0, 1.25, AT.tables23), cam(1.3, 1.25, AT.tables23), cam(2.3, 1.45, AT.modal)],
-      rings: [{ from: 2.4, to: 9.2, src: 'moveDay' }],
+    { id: 'resize', type: 'footage', clip: 'resize', clipFrom: 1.0, dur: 13.5, xfade: 0.6, step: 4,
+      camera: [cam(0, 1.3, AT.benjamin), cam(6.4, 1.3, AT.benjamin), cam(7.4, 1.4, AT.modal),
+               cam(11.0, 1.4, AT.modal), cam(12.0, 1.3, AT.benjamin)],
       captions: [
-        { from: 0.3, to: 9.3, text: 'For another day, open the booking and use <mark>Move to another day…</mark>' },
+        { from: 0.3, to: 6.3, text: 'Patron needs more time? Drag the booking’s <mark>bottom edge</mark>.' },
+        { from: 6.6, to: 13.3, text: 'Check the new length, then click <mark>Update Duration</mark>.' },
+      ] },
+
+    { id: 'details', type: 'footage', clip: 'details', clipFrom: 1.5, dur: 9.0, xfade: 0.6, step: 4,
+      camera: [cam(0, 1.25, AT.tables23), cam(1.3, 1.25, AT.tables23), cam(2.3, 1.45, AT.modal)],
+      rings: [{ from: 2.4, to: 8.7, src: 'moveDay' }],
+      captions: [
+        { from: 0.3, to: 8.8, text: 'For another day, open the booking and use <mark>Move to another day…</mark>' },
       ] },
 
     { id: 'delete', type: 'footage', clip: 'delete', clipFrom: 1.0, dur: 13.0, xfade: 0.6, step: 4,
@@ -90,17 +105,17 @@ const SCRIPT = {
         { from: 7.4, to: 12.8, text: 'Your browser asks <mark>“Delete booking?”</mark> Click OK, and it’s gone.' },
       ] },
 
-    { id: 'altn', type: 'footage', clip: 'altn', clipFrom: 0.4, dur: 6.0, xfade: 0.8, step: 5,
+    { id: 'altn', type: 'footage', clip: 'altn', clipFrom: 0.4, dur: 6.5, xfade: 0.8, step: 5,
       camera: [cam(0, 1.25, AT.nowTopLeft)],
-      tips: [{ from: 0.8, to: 5.8, text: '<kbd>Alt</kbd> + <kbd>N</kbd> jumps to <mark>now</mark> and highlights the next hour.' }] },
+      tips: [{ from: 0.8, to: 6.3, text: '<kbd>Alt</kbd> + <kbd>N</kbd> brings you back to <mark>today</mark> and highlights the next hour.' }] },
 
-    { id: 'week', type: 'footage', clip: 'week', clipFrom: 0, dur: 9.0, xfade: 0.8, step: 5,
+    { id: 'week', type: 'footage', clip: 'week', clipFrom: 0, dur: 10.5, xfade: 0.8, step: 5,
       tips: [
-        { from: 0.5, to: 4.4, text: 'Some resources show a whole <mark>week</mark> at a time.' },
-        { from: 4.7, to: 8.8, text: 'Some double-check the date when you book a <mark>later day</mark>.' },
+        { from: 0.5, to: 5.1, text: 'Some resources show a whole <mark>week</mark> at a time.' },
+        { from: 5.4, to: 10.3, text: 'Some double-check the date when you book a <mark>later day</mark>.' },
       ] },
 
-    { id: 'desk', type: 'desk', clip: 'delete', clipAt: 16.5, dur: 9.5, xfade: 1.0, cardFrom: 0.9,
+    { id: 'desk', type: 'desk', clip: 'delete', clipAt: 16.5, dur: 10.5, xfade: 1.0, cardFrom: 0.9,
       card: `<div class="k">Try it</div>
              <div class="url">blubrd92.github.io/LibraryReservations</div>
              <div class="t">Sign in with the shared access code. Bookings are real, so everyone sees what you add.</div>` },

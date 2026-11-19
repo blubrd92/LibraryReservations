@@ -7,7 +7,11 @@ set -euo pipefail
 cd "$(dirname "$0")/out"
 
 CAP_MB=${CAP_MB:-30}
-VBIT=${VBIT:-1700k}           # video bitrate; ~1.7 Mbps + 128 kbps audio = ~27 MB for 2:00
+TARGET_MB=${TARGET_MB:-28}    # aim under the cap, leaving room for container overhead
+DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 picture.mp4)
+# video kbps = total budget - 128 kbps audio - ~2% mp4 overhead
+VBIT=${VBIT:-$(python3 -c "print(int($TARGET_MB*8000/$DUR*0.98 - 128))")k}
+echo "duration ${DUR}s -> video bitrate $VBIT"
 
 # Loudness: measure, then apply with the measured values (linear normalization).
 M=$(ffmpeg -hide_banner -nostats -i mix.wav -af loudnorm=I=-20:TP=-2:LRA=11:print_format=json -f null - 2>&1 | sed -n '/^{/,/^}/p')

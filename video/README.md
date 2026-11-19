@@ -34,8 +34,8 @@ files go to `video/out/`, which is git-ignored; only the source lives in the rep
 cd video
 npm install
 npm run film                          # fresh emulators, seed, film every take
-node compose/render.js --stills 9,52,117   # optional spot-check frames
-node compose/render.js                # out/picture.mp4, exactly 120 s at 30 fps
+node compose/render.js --stills 9,64,145   # optional spot-check frames
+node compose/render.js                # out/picture.mp4, exactly 150 s at 30 fps
 node compose/export_timeline.js       # out/timeline.json: actions on the final timeline
 python3 audio/score.py                # out/mix.wav, sounds placed on those actions
 ./master.sh                           # out/library-reservations-explainer.mp4 (< 30 MB)

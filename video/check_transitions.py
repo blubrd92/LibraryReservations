@@ -20,15 +20,32 @@ TL = json.loads((OUT / "timeline.json").read_text())
 FPS = TL["fps"]
 W, H = 384, 216
 
-raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(VIDEO), "-vf", f"scale={W}:{H}", "-f", "rawvideo",
-                      "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
-frames = np.frombuffer(raw, np.uint8).reshape(-1, H, W, 3)
-n = len(frames)
-print(f"decoded {n} frames ({n / FPS:.3f}s)")
+boundaries = [s["start"] for s in TL["scenes"][1:]]
+keep = set()
+for b in boundaries:
+    keep.update(range(int(round((b - 0.5) * FPS)), int(round((b + 1.2) * FPS))))
 
-f32 = frames.astype(np.float32)
-diff = np.concatenate([[0], np.abs(f32[1:] - f32[:-1]).mean(axis=(1, 2, 3))])
-std = f32.std(axis=(1, 2, 3))
+# Stream frames one at a time so memory stays flat however long the video is.
+proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", str(VIDEO), "-vf", f"scale={W}:{H}", "-f", "rawvideo",
+                         "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+size = W * H * 3
+diffs, stds, kept = [], [], {}
+prev = None
+while True:
+    buf = proc.stdout.read(size)
+    if len(buf) < size:
+        break
+    cur = np.frombuffer(buf, np.uint8).reshape(H, W, 3)
+    f = cur.astype(np.float32)
+    diffs.append(0.0 if prev is None else float(np.abs(f - prev).mean()))
+    stds.append(float(f.std()))
+    if len(diffs) - 1 in keep:
+        kept[len(diffs) - 1] = cur.copy()
+    prev = f
+proc.wait()
+diff, std = np.array(diffs), np.array(stds)
+n = len(diff)
+print(f"decoded {n} frames ({n / FPS:.3f}s)")
 
 # 1. spikes: a frame-to-frame change well above its local neighborhood
 problems = []
@@ -43,7 +60,6 @@ for i in range(n):
     if 0.8 < t < TL["total"] - 1.6 and std[i] < 4:
         problems.append((i, f"near-blank (std {std[i]:.1f})"))
 
-boundaries = [s["start"] for s in TL["scenes"][1:]]
 names = [f'{a["id"]}->{b["id"]}' for a, b in zip(TL["scenes"], TL["scenes"][1:])]
 
 (OUT / "transitions").mkdir(exist_ok=True)
@@ -57,7 +73,7 @@ for b, name in zip(boundaries, names):
     d = ImageDraw.Draw(strip)
     for k, i in enumerate(idx):
         x, y = (k % cols) * tw, (k // cols) * (th + 14)
-        strip.paste(Image.fromarray(frames[i]).resize((tw, th)), (x, y + 14))
+        strip.paste(Image.fromarray(kept[i]).resize((tw, th)), (x, y + 14))
         d.text((x + 2, y), f"{i} {i / FPS:.2f}s d={diff[i]:.1f}", fill="black")
     strip.save(OUT / "transitions" / f"{name}.png")
     curve = " ".join(f"{diff[i]:.1f}" for i in idx)
