@@ -6238,14 +6238,18 @@ const firebaseConfig = {
             // The maximum allowed length is drawn dark and tagged LIMIT, the rest soft,
             // so a bar that towers because of the cap explains itself
             const hasLimitBar = limitDur > 0 && steps.some(d => Math.abs(d - limitDur) < 1e-9);
-            // When the limit bar towers over the rest, cut it short (with a break mark)
-            // and scale the others to the next-tallest bar, so their shape is readable.
-            // Its % label still states the real value.
-            const BREAK_OTHERS_FRAC = 0.67, BREAK_LIMIT_FRAC = 0.93;
+            // When the limit bar towers over the rest (at least BREAK_MIN_RATIO times the
+            // next-tallest), cut it short with a break mark and scale the others to the
+            // next-tallest bar, so their shape is readable. Its % label still states the
+            // real value, and a note above the chart says what the slash means.
+            const BREAK_OTHERS_FRAC = 0.67, BREAK_LIMIT_FRAC = 0.93, BREAK_MIN_RATIO = 2;
             const nextTallest = Math.max(0, ...steps.filter(d => !(hasLimitBar && Math.abs(d - limitDur) < 1e-9))
                 .map(d => durBuckets[d.toString()] || 0));
             const breakLimit = hasLimitBar && nextTallest > 0 && modeDur === limitDur &&
-                (limitCount / nextTallest) * BREAK_OTHERS_FRAC > BREAK_LIMIT_FRAC;
+                limitCount / nextTallest >= BREAK_MIN_RATIO;
+            if (breakLimit) {
+                html += '<div class="dash-break-note"><span class="dash-break-key" aria-hidden="true"></span>Slashed bar is cut to fit; its % is exact.</div>';
+            }
             html += '<div class="dash-vbar-chart dash-hist' + (hasLimitBar ? ' has-limit' : '') + '">';
             steps.forEach((d, i) => {
                 const count = durBuckets[d.toString()] || 0;
