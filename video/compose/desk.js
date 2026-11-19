@@ -50,8 +50,8 @@ function deskHTML(screenSrc) {
     <circle cx="1890" cy="440" r="9" fill="#d9c27a"/>
     <g transform="translate(1756,26)">
       <rect width="148" height="64" rx="7" fill="#2c3e50"/>
-      <text x="14" y="27" font-family="Inter Caption" font-weight="600" font-size="17" fill="#fff">Group Study</text>
-      <text x="14" y="50" font-family="Inter Caption" font-weight="600" font-size="17" fill="#fff">Room →</text>
+      <text x="14" y="27" font-family="Inter Caption" font-weight="600" font-size="17" fill="#fff">Study Tables</text>
+      <text x="14" y="50" font-family="Inter Caption" font-weight="600" font-size="17" fill="#fff">this way →</text>
     </g>
 
     <!-- monitor -->

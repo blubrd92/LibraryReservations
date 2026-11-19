@@ -25,15 +25,15 @@ const base = {
   cosmeticCloseMinutes: 0, anonymityBufferMonths: 1, enableSidebar: false, sidebarText: '',
 };
 
+// Study Tables comes first, so it is what the app opens on after sign-in.
 const resources = [
-  { ...base, id: 'res-study', name: 'Group Study Room', viewMode: 'week' },
-  { ...base, id: 'res-pods', name: 'Quiet Study Pods', viewMode: 'day', colorPalette: 'ocean',
+  { ...base, id: 'res-tables', name: 'Study Tables', viewMode: 'day',
     subRooms: [
-      { id: 'pod-1', name: 'Pod 1', active: true, displayOrder: 0 },
-      { id: 'pod-2', name: 'Pod 2', active: true, displayOrder: 1 },
-      { id: 'pod-3', name: 'Pod 3', active: true, displayOrder: 2 },
-      { id: 'pod-4', name: 'Pod 4', active: true, displayOrder: 3 },
+      { id: 'table-1', name: 'Table 1', active: true, displayOrder: 0 },
+      { id: 'table-2', name: 'Table 2', active: true, displayOrder: 1 },
+      { id: 'table-3', name: 'Table 3', active: true, displayOrder: 2 },
     ] },
+  { ...base, id: 'res-study', name: 'Group Study Room', viewMode: 'week' },
   { ...base, id: 'res-tech', name: 'Tech Help Appointments', viewMode: 'week', colorPalette: 'slate',
     useQuarterHour: true, maxDuration: 1, hasStaffField: true,
     staffNames: ['Dana R.', 'Marcus L.', 'Priya S.', 'Tomás G.'] },
@@ -41,30 +41,44 @@ const resources = [
 ];
 
 // [resId, dayIndex, start, duration, name, notes, showNotes, subIndex?, staff?]
+// Roughly 70% patrons, 30% library programs on every schedule that appears on screen.
 const bookings = [
+  // Study Tables, Tuesday Dec 1 (today): 7 patrons, 3 programs.
+  ['res-tables', 2, 10, 2, 'Mei Chen', '', false, 0],
+  ['res-tables', 2, 13, 2, 'Jamal Wright', '', false, 0],
+  ['res-tables', 2, 16, 2, 'Teen Homework Help', '', false, 0],
+  ['res-tables', 2, 18, 2, 'Chess Club', '', false, 0],
+  ['res-tables', 2, 10.5, 1.5, 'Priya Natarajan', '', false, 1],
+  ['res-tables', 2, 12.5, 2, 'Oscar Lindgren', '', false, 1],
+  ['res-tables', 2, 17, 2, 'Rosa Delgado', '', false, 1],
+  ['res-tables', 2, 11, 2, 'ESL Conversation Practice', '', false, 2],
+  ['res-tables', 2, 14, 2, 'Hyun-woo Park', '', false, 2],
+  ['res-tables', 2, 18, 2, 'Fatima Bello', '', false, 2],
+  // Study Tables, Wednesday Dec 2 (the day the patron books): 6 patrons, 2 programs.
+  ['res-tables', 3, 10, 2, 'Ahmed Siddiqui', '', false, 0],
+  ['res-tables', 3, 12.5, 1.5, 'Grace Kim', '', false, 0],
+  ['res-tables', 3, 15.5, 2, 'Knitting Circle', '', false, 0],
+  ['res-tables', 3, 10, 1.5, 'Tomasz Nowak', '', false, 1],
+  ['res-tables', 3, 11.5, 2, 'Lucía Herrera', '', false, 1],
+  ['res-tables', 3, 16.5, 1.5, 'Carmen Ruiz', '', false, 1],
+  ['res-tables', 3, 10.5, 1.5, 'Benjamin Adler', '', false, 2],
+  ['res-tables', 3, 13, 2, 'Citizenship Study Group', '', false, 2],
+  // Group Study Room (week view, shown in a tip): 11 patrons, 4 programs.
   ['res-study', 1, 10, 2, 'Amara Okafor', '', false],
-  ['res-study', 1, 13, 1.5, 'Nursing Exam Study Group', '', false],
+  ['res-study', 1, 13, 1.5, 'Esperanza Ruiz', '', false],
   ['res-study', 1, 16, 2, 'Diego Fuentes', '', false],
-  ['res-study', 2, 10, 1, 'Mei Chen', '', false],
+  ['res-study', 2, 10, 1, 'Wen Li', '', false],
   ['res-study', 2, 12, 2, 'ESL Conversation Circle', 'Volunteer brings flashcards', true],
   ['res-study', 2, 15.5, 1.5, 'Ravi Menon', '', false],
   ['res-study', 2, 18, 2, 'Teen Board Game Night', '', false],
-  ['res-study', 3, 11, 2, 'Grace Kim', '', false],
-  ['res-study', 3, 14, 1, 'Tomasz Nowak', '', false],
+  ['res-study', 3, 11, 2, 'Noor Al-Sayed', '', false],
+  ['res-study', 3, 14, 1, 'Kofi Mensah', '', false],
   ['res-study', 4, 10.5, 1.5, 'Small Business Office Hours', '', false],
-  ['res-study', 4, 13, 2, 'Lucía Herrera', '', false],
+  ['res-study', 4, 13, 2, 'Elena Petrova', '', false],
   ['res-study', 5, 10, 2, 'Citizenship Test Prep', '', false],
   ['res-study', 5, 14, 2, 'Jonah Whitfield', '', false],
-  ['res-study', 6, 11, 2, 'Family History Club', '', false],
+  ['res-study', 6, 11, 2, 'Thomas Byrne', '', false],
   ['res-study', 6, 14, 1, 'Keiko Tanaka', '', false],
-  // Quiet Study Pods (day view): Tuesday, one column per pod.
-  ['res-pods', 2, 10, 2, 'Noor Al-Sayed', '', false, 0],
-  ['res-pods', 2, 14, 2, 'Isabel Duarte', '', false, 0],
-  ['res-pods', 2, 10.5, 1.5, 'Chris Park', '', false, 1],
-  ['res-pods', 2, 15, 2, 'Aiyana Tsosie', '', false, 1],
-  ['res-pods', 2, 11, 2, 'Elena Petrova', '', false, 2],
-  ['res-pods', 2, 13, 1, 'Kofi Mensah', '', false, 3],
-  ['res-pods', 2, 16, 2, 'Marisol Vega', '', false, 3],
 ];
 
 function fsValue(v) {
