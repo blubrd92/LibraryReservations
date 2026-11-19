@@ -4,7 +4,8 @@
 // function of t, so render.js can step through frames at any speed.
 
 const SRC_W = 1920, SRC_H = 1080;          // recorded frame size (1440x810 CSS px at 4/3)
-const CSS_TO_SRC = 4 / 3;
+// Each take records its own CSS-px -> frame-px scale (clip.cssToSrc).
+const scaleOf = (clip) => clip.cssToSrc || 4 / 3;
 const CARD = { x: 48, y: 48, w: 1536, h: 864 };
 const FIT = CARD.w / SRC_W;                 // 0.8
 
@@ -72,7 +73,37 @@ function camTransform(cam) {
 }
 
 // ---- drawing ----
-const CURSOR_SVG = '<svg viewBox="0 0 24 24" width="32" height="32"><path d="M4 2.5 L4 19.5 L8.6 15.4 L11.6 22 L14.6 20.7 L11.7 14.2 L17.8 14.2 Z" fill="#fff" stroke="#1d252e" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+// Cursor shapes, chosen from the cursor the browser computed under the pointer
+// during filming (logged by harness.js). hx/hy is the hotspot in pixels at 32px size.
+const svg = (d, extra = '') => `<svg viewBox="0 0 24 24" width="32" height="32"><path d="${d}" fill="#fff" stroke="#1d252e" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/>${extra}</svg>`;
+const CURSORS = {
+  arrow: { svg: svg('M4 2.5 L4 19.5 L8.6 15.4 L11.6 22 L14.6 20.7 L11.7 14.2 L17.8 14.2 Z'), hx: 5.3, hy: 3.3 },
+  pointer: { svg: svg('M9 2.5c-.9 0-1.6.7-1.6 1.6v8.6l-1.3-1.3c-.7-.7-1.8-.7-2.4 0-.6.6-.6 1.6 0 2.3l4.6 5.6c.9 1.1 2.2 1.7 3.6 1.7h3.6c2.5 0 4.5-2 4.5-4.5v-4.7c0-.8-.7-1.5-1.5-1.5s-1.5.7-1.5 1.5v-.6c0-.8-.7-1.5-1.5-1.5s-1.5.7-1.5 1.5v-.6c0-.8-.7-1.5-1.5-1.5s-1.4.6-1.5 1.3V4.1C10.6 3.2 9.9 2.5 9 2.5z'), hx: 12, hy: 3.3 },
+  grab: { svg: svg('M6.6 12.2V7.4c0-.8.6-1.4 1.4-1.4s1.4.6 1.4 1.4v3.4V5.2c0-.8.6-1.4 1.4-1.4s1.4.6 1.4 1.4v5.6V5.8c0-.8.6-1.4 1.4-1.4s1.4.6 1.4 1.4v5.4V8c0-.8.6-1.4 1.4-1.4s1.4.6 1.4 1.4v6.4c0 3.4-2.6 6.1-6 6.1h-1c-2 0-3.8-1.1-4.7-2.8l-2.4-4.3c-.4-.7-.1-1.5.6-1.9.6-.3 1.4-.1 1.8.5z'), hx: 16, hy: 16 },
+  grabbing: { svg: svg('M6.4 13.4v-2.2c0-.8.6-1.4 1.4-1.4s1.4.6 1.4 1.4v-.8c0-.8.6-1.4 1.4-1.4s1.4.6 1.4 1.4v.4c0-.8.6-1.4 1.4-1.4s1.4.6 1.4 1.4v.6c0-.8.6-1.4 1.4-1.4s1.4.6 1.4 1.4v3.8c0 3.4-2.6 6.1-6 6.1h-1.4c-2.6 0-4.6-2.1-4.6-4.7z', '<path d="M9.2 11.4v2M12 10.8v2.4M14.8 11v2.2" stroke="#1d252e" stroke-width="1.1" stroke-linecap="round"/>'), hx: 16, hy: 16 },
+  text: { svg: svg('M8.5 3h2.6c.7 0 1.2.3 1.6.8.4-.5.9-.8 1.6-.8h2.6v1.6h-2.3c-.6 0-1 .4-1 1V11h1.5v1.6h-1.5v5.8c0 .6.4 1 1 1h2.3V21h-2.6c-.7 0-1.2-.3-1.6-.8-.4.5-.9.8-1.6.8H8.5v-1.6h2.3c.6 0 1-.4 1-1v-5.8h-1.5V11h1.5V5.6c0-.6-.4-1-1-1H8.5z'), hx: 16.9, hy: 16 },
+  ns: { svg: svg('M12 1.8l5 5.6h-3.4v9.2H17l-5 5.6-5-5.6h3.4V7.4H7z'), hx: 16, hy: 16 },
+};
+
+function cursorAt(clip, ct) {
+  let last = null;
+  for (const e of clip.events) {
+    if (e.t > ct) break;
+    if (e.type === 'cursor') last = e;
+  }
+  return last;
+}
+
+function cursorShape(c) {
+  if (!c) return CURSORS.arrow;
+  const v = c.c;
+  if (v === 'pointer') return CURSORS.pointer;
+  if (v === 'grab') return CURSORS.grab;
+  if (v === 'grabbing') return CURSORS.grabbing;
+  if (v === 'ns-resize' || v === 'row-resize') return CURSORS.ns;
+  if (v === 'text' || (v === 'auto' && /^(INPUT:(text|password|search|email|number|date)|TEXTAREA)/.test(c.tag))) return CURSORS.text;
+  return CURSORS.arrow;
+}
 
 function stepsHTML(active) {
   if (!active) return '';
@@ -110,7 +141,7 @@ function ringsHTML(list, st, clip) {
     if (o <= 0) return '';
     const ev = clip.events.find((e) => e.type === 'rect' && e.name === r.src);
     if (!ev) throw new Error('no logged box for ring ' + r.src);
-    const [x, y, w, h] = ev.box.map((v) => v * CSS_TO_SRC);
+    const [x, y, w, h] = ev.box.map((v) => v * scaleOf(clip));
     return `<div class="ring" style="left:${x - 8}px;top:${y - 8}px;width:${w + 16}px;height:${h + 16}px;opacity:${o.toFixed(3)}"></div>`;
   }).join('');
 }
@@ -130,8 +161,9 @@ function ghostHTML(scene, clip, ct) {
   if (!m || ct <= down.t || ct >= up.t) return { html: '', images: [] };
   // Chrome starts a drag only once the pointer has moved a few pixels.
   if (Math.hypot(m.x - down.x, m.y - down.y) < 4) return { html: '', images: [] };
-  const [bx, by, bw, bh] = box.box.map((v) => v * CSS_TO_SRC);
-  const gx = (m.x - down.x) * CSS_TO_SRC + bx, gy = (m.y - down.y) * CSS_TO_SRC + by;
+  const K = scaleOf(clip);
+  const [bx, by, bw, bh] = box.box.map((v) => v * K);
+  const gx = (m.x - down.x) * K + bx, gy = (m.y - down.y) * K + by;
   const src = clip.dir + frameFor(clip, box.t).name;
   return {
     html: `<div style="position:absolute;left:${gx.toFixed(2)}px;top:${gy.toFixed(2)}px;width:${bw}px;height:${bh}px;overflow:hidden;opacity:.6">
@@ -148,12 +180,16 @@ async function footageLayer(scene, st) {
   let cursor = '';
   const m = scene.cursor === false ? null : mouseAt(clip, ct);
   if (m) {
-    const x = m.x * CSS_TO_SRC, y = m.y * CSS_TO_SRC;
+    const K = scaleOf(clip);
+    const x = m.x * K, y = m.y * K;
     const ripples = clicksNear(clip, ct).map((e) => {
       const k = (ct - e.t) / 0.6, r = 10 + 34 * ease(k);
-      return `<div class="ripple" style="left:${e.x * CSS_TO_SRC - r}px;top:${e.y * CSS_TO_SRC - r}px;width:${2 * r}px;height:${2 * r}px;opacity:${(1 - k).toFixed(3)}"></div>`;
+      return `<div class="ripple" style="left:${e.x * K - r}px;top:${e.y * K - r}px;width:${2 * r}px;height:${2 * r}px;opacity:${(1 - k).toFixed(3)}"></div>`;
     }).join('');
-    cursor = ripples + `<div class="cursor" style="transform:translate(${(x - 5).toFixed(2)}px,${(y - 3).toFixed(2)}px)">${CURSOR_SVG}</div>`;
+    const shape = cursorShape(cursorAt(clip, ct));
+    // Where the cursor lands on the 1920x1080 stage (read by spot-check scripts).
+    window.__cursorStage = { x: CARD.x + cam.tx + x * cam.s, y: CARD.y + cam.ty + y * cam.s, kind: (cursorAt(clip, ct) || {}).c || 'none' };
+    cursor = ripples + `<div class="cursor" style="transform:translate(${(x - shape.hx).toFixed(2)}px,${(y - shape.hy).toFixed(2)}px)">${shape.svg}</div>`;
   }
   const src = clip.dir + fr.name;
   const ghost = ghostHTML(scene, clip, ct);

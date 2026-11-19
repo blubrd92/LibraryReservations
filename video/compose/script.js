@@ -6,17 +6,16 @@
 // Recorded-frame coordinates for things the camera visits (from the takes' logged boxes).
 // Zooms keep the column headers (and, at the left edge, the time column) in frame.
 const AT = {
-  menu: { cx: 890, cy: 86 },
-  header: { cx: 857, cy: 300 },     // whole header: the controls wrap to a second row on longer dates
+  menu: { cx: 956, cy: 81 },
+  header: { cx: 857, cy: 300 },     // left-anchored so the resource name isn't clipped
   nowTopLeft: { cx: 640, cy: 360 },
-  table2: { cx: 1012, cy: 540 },
-  tables23: { cx: 1200, cy: 560 },
-  table3: { cx: 1400, cy: 560 },
-  table2Late: { cx: 1012, cy: 600 },
-  benjamin: { cx: 1500, cy: 420 },
+  table2: { cx: 1013, cy: 530 },
+  tables23: { cx: 1300, cy: 547 },
+  table2Late: { cx: 1013, cy: 547 },
+  benjamin: { cx: 1600, cy: 530 },
   modal: { cx: 960, cy: 545 },
   centre: { cx: 960, cy: 540 },
-};
+}
 const cam = (t, z, at) => ({ t, z, ...at });
 
 const SCRIPT = {

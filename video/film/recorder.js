@@ -31,6 +31,11 @@ class Recorder {
     // No maxWidth/maxHeight: frames come at the forced device scale (see harness.js).
     await this.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 95, everyNthFrame: 1 });
     this.mouse = { x: vp.width / 2, y: vp.height / 2 };
+    // Align the page's performance clock with ours, for the cursor log.
+    const n0 = Date.now();
+    this.perf0 = await this.page.evaluate(() => performance.now());
+    this.perfAt = ((n0 + Date.now()) / 2 - this.t0) / 1000;
+    this.cssToSrc = null;
   }
 
   mark(type, extra = {}) { this.events.push({ t: this.now(), type, ...extra }); }
@@ -72,7 +77,20 @@ class Recorder {
   async stop() {
     await this.cdp.send('Page.stopScreencast');
     await this.page.waitForTimeout(300);
-    fs.writeFileSync(path.join(this.dir, 'timeline.json'), JSON.stringify({ frames: this.frames, events: this.events, duration: this.now() }));
+    // Cursor shapes for this take, mapped onto the take's clock. The shape in force
+    // when the take starts is carried in at t=0.
+    const log = await this.page.evaluate(() => window.__cursorLog || []);
+    const toT = (pt) => this.perfAt + (pt - this.perf0) / 1000;
+    let carried = null;
+    for (const c of log) {
+      const t = toT(c.t);
+      if (t < 0) { carried = c; continue; }
+      this.events.push({ t, type: 'cursor', c: c.c, tag: c.tag });
+    }
+    if (carried) this.events.push({ t: 0, type: 'cursor', c: carried.c, tag: carried.tag });
+    this.events.sort((a, b) => a.t - b.t);
+    const vp = this.page.viewportSize();
+    fs.writeFileSync(path.join(this.dir, 'timeline.json'), JSON.stringify({ frames: this.frames, events: this.events, duration: this.now(), cssToSrc: 1920 / vp.width }));
   }
 }
 

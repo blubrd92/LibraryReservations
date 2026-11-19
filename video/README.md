@@ -5,7 +5,9 @@ files go to `video/out/`, which is git-ignored; only the source lives in the rep
 
 ## How it is made
 
-1. **Film** (`film/`). `film.js` opens the real app (the repo's own `index.html`, `app.js`,
+1. **Film** (`film/`). The browser window is 1536x864 CSS px at 1.25x: wide enough that the
+   app's header stays on one row for every date (a narrower window wraps it on long dates and
+   the toolbar jumps), and exactly 1920x1080 in the frames. `film.js` opens the real app (the repo's own `index.html`, `app.js`,
    `utils.js`, `styles.css`) in headless Chromium and drives it with real mouse and keyboard
    input, recording each take with the DevTools screencast. It runs against **local Firebase
    emulators** seeded with invented sample data (`seed.js`), never the production project:
@@ -50,7 +52,8 @@ endpoint leaves stale document versions that make the app's create-only booking 
 
 Every screen of the app is real footage of real clicks. Drawn: the title card's blocks,
 the step tracker, captions, tip cards, the cursor (headless Chromium has no visible pointer,
-so it is drawn from the logged mouse path), the drag image that follows the pointer while a
+so it is drawn from the logged mouse path, in the shape the browser computed under it: arrow,
+pointing hand, open or closed hand, text cursor or resize arrows), the drag image that follows the pointer while a
 booking is dragged (the browser paints that outside the page, so headless Chromium never does;
 it is rebuilt from the booking's own pixels in a frame taken just before the drag, see
 `ghostHTML()` in `compose/stage.js`) and the closing service-desk illustration, whose

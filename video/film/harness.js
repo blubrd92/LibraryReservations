@@ -50,7 +50,10 @@ function shimAppJs(src) {
       ' auth.useEmulator("http://127.0.0.1:9099", { disableWarnings: true });');
 }
 
-async function launch({ width = 1440, height = 810, scale = 4 / 3, now = FILM_NOW } = {}) {
+// 1536x864 CSS px is wide enough that the header stays on one row for every date
+// (a 1440-wide window wraps it on long dates like "Wednesday, December 30, 2026",
+// which makes the toolbar jump). At 1.25x the frames are exactly 1920x1080.
+async function launch({ width = 1536, height = 864, scale = 1.25, now = FILM_NOW } = {}) {
   // The page is fulfilled in-process, so Chromium treats it as public and would
   // block its calls to the loopback emulators. That check is irrelevant here.
   const browser = await chromium.launch({ env: fontEnv(), args: [
@@ -80,6 +83,24 @@ async function launch({ width = 1440, height = 810, scale = 4 / 3, now = FILM_NO
     }
     if (url.startsWith('http://127.0.0.1:8080') || url.startsWith('http://127.0.0.1:9099')) return route.continue();
     return route.abort();
+  });
+  // Log the cursor the browser computes under the pointer, so the compositor can draw
+  // the right shape (headless Chromium paints no pointer). During a native drag the
+  // page gets no mousemove, so the closed hand is held from pick-up to drop.
+  await context.addInitScript(() => {
+    window.__cursorLog = [];
+    let last = '', dragging = false, dx = 0, dy = 0;
+    const rec = (c, tag) => { const k = c + '|' + tag; if (k !== last) { last = k; window.__cursorLog.push({ t: performance.now(), c, tag }); } };
+    const at = (el) => rec(getComputedStyle(el).cursor, el.tagName + (el.type ? ':' + el.type : ''));
+    document.addEventListener('mousemove', (e) => { if (!dragging) at(e.target); }, true);
+    document.addEventListener('mousedown', (e) => at(e.target), true);
+    document.addEventListener('dragstart', () => { dragging = true; rec('grabbing', ''); }, true);
+    document.addEventListener('dragover', (e) => { dx = e.clientX; dy = e.clientY; }, true);
+    document.addEventListener('dragend', () => {
+      dragging = false;
+      const el = document.elementFromPoint(dx, dy);
+      if (el) at(el);
+    }, true);
   });
   const page = await context.newPage();
   await page.clock.install({ time: new Date(now) });
