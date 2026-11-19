@@ -33,9 +33,23 @@ files go to `video/out/`, which is git-ignored; only the source lives in the rep
 ```bash
 cd video
 npm install
-npm run film                       # fresh emulators, seed, film all takes
-node compose/render.js --stills 8.5,46,107.5   # spot-check frames
-node compose/render.js             # out/picture.mp4
+npm run film                          # fresh emulators, seed, film every take
+node compose/render.js --stills 9,52,117   # optional spot-check frames
+node compose/render.js                # out/picture.mp4, exactly 120 s at 30 fps
+node compose/export_timeline.js       # out/timeline.json: actions on the final timeline
+python3 audio/score.py                # out/mix.wav, sounds placed on those actions
+./master.sh                           # out/library-reservations-explainer.mp4 (< 30 MB)
+python3 check_transitions.py          # every-frame check of the encoded file
 ```
 
-Requires Java (for the Firestore emulator), ffmpeg, and Playwright's Chromium.
+Requires Java (for the Firestore emulator), ffmpeg, Python 3 with numpy and Pillow, and
+Playwright's Chromium. `npm run film` must start fresh emulators: the emulator's clear-data
+endpoint leaves stale document versions that make the app's create-only booking save fail.
+
+## What is real and what is drawn
+
+Every screen of the app is real footage of real clicks. Drawn: the title card's blocks,
+the step tracker, captions, tip cards, the cursor (headless Chromium has no visible pointer,
+so it is drawn from the logged mouse path) and the closing service-desk illustration, whose
+monitor shows the last real frame. The browser's own "Delete booking?" confirm is drawn
+outside the page and cannot be filmed; the footage holds while it is open and a caption says so.
