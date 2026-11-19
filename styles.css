@@ -1107,9 +1107,8 @@ textarea { resize: vertical; }
 .dash-vbar-bar.is-limit { background: #0d47a1; }
 /* A limit bar too tall for the scale is cut short; the white slash says so */
 .dash-vbar-break { position: absolute; left: 0; right: 0; top: 26%; height: 7px; background: #fff; transform: skewY(-14deg); }
-/* The note above the chart explaining the slash, with a tiny slashed bar as its key */
-.dash-break-note { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; color: var(--st-muted); margin: -4px 0 6px; }
-.dash-break-key { position: relative; flex-shrink: 0; width: 8px; height: 14px; border-radius: 2px 2px 0 0; background: #0d47a1; overflow: hidden; }
+/* The tiny slashed bar that keys the subtitle's note about the slash */
+.dash-break-key { position: relative; display: inline-block; vertical-align: -2px; width: 7px; height: 12px; margin: 0 4px 0 2px; border-radius: 2px 2px 0 0; background: #0d47a1; overflow: hidden; }
 .dash-break-key::after { content: ''; position: absolute; left: 0; right: 0; top: 30%; height: 2px; background: #fff; transform: skewY(-14deg); }
 /* Every label in a chart with a Limit tag gets the tag's two-line height, so all bars share one baseline */
 .dash-hist.has-limit .dash-vbar-label { height: 2.3em; box-sizing: border-box; }

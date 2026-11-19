@@ -6215,11 +6215,10 @@ const firebaseConfig = {
             // ("half are 2 hours or shorter" is true of every booking then).
             const limitDur = res.maxDuration || 0;
             const limitCount = durBuckets[limitDur.toString()] || 0;
-            if (limitDur > 0 && modeDur === limitDur) {
-                html += '<div class="dash-panel-sub"><strong>' + Math.round((limitCount / durTotal) * 100) + '%</strong> book the full ' + durLong(limitDur) + ', the most this room allows</div>';
-            } else {
-                html += '<div class="dash-panel-sub">Most common <strong>' + durLong(modeDur) + '</strong> · half are ' + durLong(medianDur) + ' or shorter' + (limitDur > 0 ? ' · limit ' + durLong(limitDur) : '') + '</div>';
-            }
+            // (Written out below, once we know whether the limit bar gets cut.)
+            const durSub = (limitDur > 0 && modeDur === limitDur)
+                ? '<strong>' + Math.round((limitCount / durTotal) * 100) + '%</strong> book the full ' + durLong(limitDur) + ', the most this room allows'
+                : 'Most common <strong>' + durLong(modeDur) + '</strong> · half are ' + durLong(medianDur) + ' or shorter' + (limitDur > 0 ? ' · limit ' + durLong(limitDur) : '');
 
             // Even steps when every length sits on the 15/30-minute grid (the normal
             // case); otherwise fall back to one column per length actually used.
@@ -6241,15 +6240,15 @@ const firebaseConfig = {
             // When the limit bar towers over the rest (at least BREAK_MIN_RATIO times the
             // next-tallest), cut it short with a break mark and scale the others to the
             // next-tallest bar, so their shape is readable. Its % label still states the
-            // real value, and a note above the chart says what the slash means.
+            // real value, and the subtitle ends with a note saying what the slash means.
             const BREAK_OTHERS_FRAC = 0.67, BREAK_LIMIT_FRAC = 0.93, BREAK_MIN_RATIO = 2;
             const nextTallest = Math.max(0, ...steps.filter(d => !(hasLimitBar && Math.abs(d - limitDur) < 1e-9))
                 .map(d => durBuckets[d.toString()] || 0));
             const breakLimit = hasLimitBar && nextTallest > 0 && modeDur === limitDur &&
                 limitCount / nextTallest >= BREAK_MIN_RATIO;
-            if (breakLimit) {
-                html += '<div class="dash-break-note"><span class="dash-break-key" aria-hidden="true"></span>Slashed bar is cut to fit; its % is exact.</div>';
-            }
+            html += '<div class="dash-panel-sub">' + durSub + (breakLimit
+                ? '. <span class="dash-break-key" aria-hidden="true"></span>Slashed bar is cut to fit; its % is exact.'
+                : '') + '</div>';
             html += '<div class="dash-vbar-chart dash-hist' + (hasLimitBar ? ' has-limit' : '') + '">';
             steps.forEach((d, i) => {
                 const count = durBuckets[d.toString()] || 0;
