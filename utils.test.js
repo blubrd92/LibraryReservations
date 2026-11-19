@@ -30,7 +30,9 @@ const {
     STATS_FULL_DAY_PCT,
     STATS_QUIET_DAY_PCT,
     formatHoursFraction,
-    classifyDayFullness
+    classifyDayFullness,
+    NOW_FLASH_WINDOW_HOURS,
+    getNowFlashWindow
 } = require('./utils');
 
 // ============================================================
@@ -1007,5 +1009,30 @@ describe('classifyDayFullness', () => {
     test('no open hours is normal', () => {
         expect(classifyDayFullness(2, 0, true)).toBe('normal');
         expect(classifyDayFullness(0, undefined, true)).toBe('normal');
+    });
+});
+
+describe('getNowFlashWindow', () => {
+    test('window is one hour', () => {
+        expect(NOW_FLASH_WINDOW_HOURS).toBe(1);
+    });
+    test('quarter-hour rooms snap back to the current 15-minute slot', () => {
+        expect(getNowFlashWindow(14 + 50 / 60, 10, 20, true)).toEqual({ start: 14.75, end: 15.75 });
+        expect(getNowFlashWindow(14.25, 10, 20, true)).toEqual({ start: 14.25, end: 15.25 });
+    });
+    test('half-hour rooms snap back to the current 30-minute slot', () => {
+        expect(getNowFlashWindow(14 + 50 / 60, 10, 20, false)).toEqual({ start: 14.5, end: 15.5 });
+        expect(getNowFlashWindow(14 + 10 / 60, 10, 20, false)).toEqual({ start: 14, end: 15 });
+    });
+    test('clipped to closing time', () => {
+        expect(getNowFlashWindow(19.6, 10, 20, false)).toEqual({ start: 19.5, end: 20 });
+    });
+    test('clipped to opening time when the grid starts off-slot', () => {
+        expect(getNowFlashWindow(10.3, 10.25, 18, false)).toEqual({ start: 10.25, end: 11 });
+    });
+    test('outside opening hours gives null', () => {
+        expect(getNowFlashWindow(9.5, 10, 20, true)).toBeNull();
+        expect(getNowFlashWindow(20, 10, 20, true)).toBeNull();
+        expect(getNowFlashWindow(NaN, 10, 20, true)).toBeNull();
     });
 });

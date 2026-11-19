@@ -585,6 +585,34 @@ function classifyDayFullness(hours, availableHours, dayIsOver) {
 }
 
 // ============================================================
+// ALT+N "JUMP TO NOW" WINDOW
+// ============================================================
+
+/** How far ahead the Alt+N highlight reaches, in hours. */
+const NOW_FLASH_WINDOW_HOURS = 1;
+
+/**
+ * The span the Alt+N highlight covers: from the start of the booking slot that
+ * contains `now` (15 or 30 minutes, the resource's grain) to one hour after
+ * that, clipped to opening hours. Forward-looking on purpose: after pressing
+ * Alt+N the question is usually "is it free now, and for how long?".
+ *
+ * @param {number} now - Current time as float hours (e.g. 14.833 for 2:50pm).
+ * @param {number} minH - Grid start (float hours).
+ * @param {number} maxH - Grid end (float hours).
+ * @param {boolean} useQuarterHour - True for 15-minute slots, else 30.
+ * @returns {{start: number, end: number} | null} null when `now` is outside [minH, maxH).
+ */
+function getNowFlashWindow(now, minH, maxH, useQuarterHour) {
+    if (!(now >= minH && now < maxH)) return null;
+    const grain = useQuarterHour ? 0.25 : 0.5;
+    const slotStart = Math.floor(now / grain + 1e-9) * grain;
+    const start = Math.max(minH, slotStart);
+    const end = Math.min(maxH, slotStart + NOW_FLASH_WINDOW_HOURS);
+    return { start, end };
+}
+
+// ============================================================
 // MODULE EXPORT (Node.js / Jest) — no-op in the browser
 // ============================================================
 
@@ -621,6 +649,8 @@ if (typeof module !== 'undefined' && module.exports) {
         STATS_FULL_DAY_PCT,
         STATS_QUIET_DAY_PCT,
         formatHoursFraction,
-        classifyDayFullness
+        classifyDayFullness,
+        NOW_FLASH_WINDOW_HOURS,
+        getNowFlashWindow
     };
 }

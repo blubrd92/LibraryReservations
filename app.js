@@ -1059,7 +1059,7 @@ const firebaseConfig = {
             setupTimeIndicator(container, isDayView, minH, maxH, slotElements, columns);
 
             // Alt+N "jump to now" highlight, redrawn if a re-render lands mid-animation
-            drawNowFlash(container, isDayView, minH, maxH, slotElements, columns);
+            drawNowFlash(container, isDayView, minH, maxH, slotElements, columns, res);
 
             // "Someone is booking this" overlays from other users (BOOKING PRESENCE section)
             lastGridLayout = { resId: res.id, activeWeekKey, columns, minH, slotElements };
@@ -1213,9 +1213,10 @@ const firebaseConfig = {
     }
 
     // --- JUMP TO NOW (Alt+N) ---
-    // Alt+N goes to today (like the Today button), scrolls the current hour into
-    // view, and briefly highlights it: across every sub-room in day view, in
-    // today's column in week view. The highlight lives on a timestamp rather than
+    // Alt+N goes to today (like the Today button), scrolls "now" into view, and
+    // briefly highlights a forward-looking window: from the start of the current
+    // booking slot (15 or 30 minutes) to an hour later (getNowFlashWindow in
+    // utils.js), across every sub-room in day view, in today's column in week view. The highlight lives on a timestamp rather than
     // a DOM node so that if the bookings listener re-renders the grid mid-animation,
     // renderGrid() redraws it and the CSS animation resumes where it left off.
     const NOW_FLASH_MS = 2200;
@@ -1228,7 +1229,7 @@ const firebaseConfig = {
         goToToday(); // re-renders, and renderGrid() calls drawNowFlash()
     }
 
-    function drawNowFlash(container, isDayView, minH, maxH, slotElements, columns) {
+    function drawNowFlash(container, isDayView, minH, maxH, slotElements, columns, res) {
         container.querySelectorAll('.now-flash').forEach(el => el.remove());
         const elapsed = Date.now() - nowFlashStartedAt;
         if (!nowFlashStartedAt || elapsed >= NOW_FLASH_MS) return;
@@ -1236,32 +1237,39 @@ const firebaseConfig = {
         const colIndex = findTodayColumnIndex(isDayView, columns);
         if (colIndex === -1) return; // not showing today (yet)
 
-        const nowFloat = getCurrentTimeFloat();
-        if (nowFloat < minH || nowFloat >= maxH) {
+        const win = getNowFlashWindow(getCurrentTimeFloat(), minH, maxH, !!(res && res.useQuarterHour));
+        if (!win) {
             if (nowFlashNeedsScroll) showToast("It's outside this resource's hours right now.", "info");
             nowFlashNeedsScroll = false;
             nowFlashStartedAt = 0;
             return;
         }
 
-        // The current clock hour, clipped to the grid (an hour can start before opening)
-        const hourStart = Math.max(minH, Math.floor(nowFloat));
-        const hourEnd = Math.min(maxH, Math.floor(nowFloat) + 1);
-        const firstRow = Math.round((hourStart - minH) * 2);
-        const lastRow = Math.round((hourEnd - minH) * 2) - 1;
+        // The DOM only has 30-minute rows, so a :15/:45 edge falls mid-row:
+        // measure the row it lands in and add the fraction.
         const firstCol = isDayView ? 0 : colIndex;
         const lastCol = isDayView ? columns.length - 1 : colIndex;
-        const topSlot = slotElements[`${firstCol}-${firstRow}`];
-        const bottomSlot = slotElements[`${firstCol}-${lastRow}`];
-        const rightSlot = slotElements[`${lastCol}-${firstRow}`];
-        if (!topSlot || !bottomSlot || !rightSlot) return;
+        const rowCount = Math.round((maxH - minH) * 2);
+        const yAt = (t) => {
+            const x = (t - minH) * 2;
+            let row = Math.floor(x + 1e-9), frac = x - row;
+            if (row >= rowCount) { row = rowCount - 1; frac = 1; }
+            const slot = slotElements[`${firstCol}-${row}`];
+            if (!slot) return null;
+            const r = slot.getBoundingClientRect();
+            return r.top + frac * r.height;
+        };
+        const leftSlot = slotElements[`${firstCol}-0`];
+        const rightSlot = slotElements[`${lastCol}-0`];
+        const yTop = yAt(win.start), yBottom = yAt(win.end);
+        if (!leftSlot || !rightSlot || yTop === null || yBottom === null) return;
 
         const cRect = container.getBoundingClientRect();
-        const tRect = topSlot.getBoundingClientRect();
-        const top = tRect.top - cRect.top + container.scrollTop - container.clientTop;
-        const left = tRect.left - cRect.left + container.scrollLeft - container.clientLeft;
-        const height = bottomSlot.getBoundingClientRect().bottom - tRect.top;
-        const width = rightSlot.getBoundingClientRect().right - tRect.left;
+        const lRect = leftSlot.getBoundingClientRect();
+        const top = yTop - cRect.top + container.scrollTop - container.clientTop;
+        const left = lRect.left - cRect.left + container.scrollLeft - container.clientLeft;
+        const height = yBottom - yTop;
+        const width = rightSlot.getBoundingClientRect().right - lRect.left;
 
         const flash = document.createElement('div');
         flash.className = 'now-flash';
