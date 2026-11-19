@@ -6152,7 +6152,7 @@ const firebaseConfig = {
             if (valueLabel !== '') {
                 html += '<div class="dash-vbar-pct' + (opts.highlight ? ' dash-highlight' : '') + '" style="bottom:calc(' + hPct + '% + 4px);">' + valueLabel + '</div>';
             }
-            html += '<div class="dash-vbar-bar' + (opts.segments ? ' stacked' : '') + (opts.barClass ? ' ' + opts.barClass : '') + '" style="height:' + hPct + '%;' + (hPct > 0 ? 'min-height:2px;' : '') + '">' + (opts.segments || '') + '</div>';
+            html += '<div class="dash-vbar-bar' + (opts.segments ? ' stacked' : '') + (opts.barClass ? ' ' + opts.barClass : '') + '" style="height:' + hPct + '%;' + (hPct > 0 ? 'min-height:2px;' : '') + '">' + (opts.segments || '') + (opts.broken ? '<div class="dash-vbar-break"></div>' : '') + '</div>';
         }
         html += '</div>';
         html += '<div class="dash-vbar-label' + (opts.highlight ? ' dash-highlight' : '') + '">' + label + '</div>';
@@ -6238,7 +6238,15 @@ const firebaseConfig = {
             // The maximum allowed length is drawn dark and tagged LIMIT, the rest soft,
             // so a bar that towers because of the cap explains itself
             const hasLimitBar = limitDur > 0 && steps.some(d => Math.abs(d - limitDur) < 1e-9);
-            html += '<div class="dash-vbar-chart dash-hist">';
+            // When the limit bar towers over the rest, cut it short (with a break mark)
+            // and scale the others to the next-tallest bar, so their shape is readable.
+            // Its % label still states the real value.
+            const BREAK_OTHERS_FRAC = 0.67, BREAK_LIMIT_FRAC = 0.93;
+            const nextTallest = Math.max(0, ...steps.filter(d => !(hasLimitBar && Math.abs(d - limitDur) < 1e-9))
+                .map(d => durBuckets[d.toString()] || 0));
+            const breakLimit = hasLimitBar && nextTallest > 0 && modeDur === limitDur &&
+                (limitCount / nextTallest) * BREAK_OTHERS_FRAC > BREAK_LIMIT_FRAC;
+            html += '<div class="dash-vbar-chart dash-hist' + (hasLimitBar ? ' has-limit' : '') + '">';
             steps.forEach((d, i) => {
                 const count = durBuckets[d.toString()] || 0;
                 const pct = Math.round((count / durTotal) * 100);
@@ -6247,9 +6255,11 @@ const firebaseConfig = {
                 let axisLabel = (labelAll || i === 0 || Number.isInteger(d) || isLimit) ? durShort(d) : '&nbsp;';
                 if (isLimit) axisLabel += '<span class="dash-limit-tag">Limit</span>';
                 const showPct = count > 0 && (pctAll || isPeak || isLimit);
-                html += statsVbarCol(axisLabel, count / maxDurCount, showPct ? pct + '%' : '', durLong(d) + ' bookings' + (isLimit ? ' (the limit)' : ''),
-                    plural(count, 'booking') + ' · ' + pct + '% of all bookings',
-                    { highlight: isPeak || isLimit, barClass: hasLimitBar ? (isLimit ? 'is-limit' : 'is-soft') : '' });
+                const frac = !breakLimit ? count / maxDurCount
+                    : (isLimit ? BREAK_LIMIT_FRAC : (count / nextTallest) * BREAK_OTHERS_FRAC);
+                html += statsVbarCol(axisLabel, frac, showPct ? pct + '%' : '', durLong(d) + ' bookings' + (isLimit ? ' (the limit)' : ''),
+                    plural(count, 'booking') + ' · ' + pct + '% of all bookings' + (isLimit && breakLimit ? '\nBar shortened to fit' : ''),
+                    { highlight: isPeak || isLimit, barClass: hasLimitBar ? (isLimit ? 'is-limit' : 'is-soft') : '', broken: isLimit && breakLimit });
             });
             html += '</div>';
         } else {
@@ -6654,7 +6664,7 @@ const firebaseConfig = {
             const displayTotal = t > 0 ? formatHoursFraction(t) + 'h' : '-';
             const bc = monthlyBookingCounts[i];
             const countLabel = bc > 0 ? `<span class="sg-total-b">${bc} booking${bc === 1 ? '' : 's'}</span>` : '';
-            footHtml += `<td${statsTipAttrs(MONTHS[i] + ' ' + year + ' total', (t > 0 ? formatHoursFraction(t) + ' hours' : 'No hours') + ' · ' + bc + ' booking' + (bc === 1 ? '' : 's'))}><span class="sg-total-h">${displayTotal}</span>${countLabel}</td>`;
+            footHtml += `<td${statsTipAttrs(MONTHS[i] + ' ' + year + ' total', (t > 0 ? formatHoursFraction(t) + ' hours' : 'No hours') + ' · ' + bc + ' booking' + (bc === 1 ? '' : 's'))}><span class="sg-total-h${t > 0 ? '' : ' sg-total-empty'}">${displayTotal}</span>${countLabel}</td>`;
         });
         footHtml += '</tr>';
         tfoot.innerHTML = footHtml;

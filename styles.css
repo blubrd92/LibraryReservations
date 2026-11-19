@@ -1013,11 +1013,12 @@ textarea { resize: vertical; }
 .stats-table .sg-void { background: transparent; }
 .stats-table tfoot td {
     position: sticky; bottom: 0; z-index: 2; background: #fff; box-shadow: 0 0 0 2px #fff;
-    border-top: 2px solid var(--st-line); padding: 3px 0 6px; vertical-align: top; line-height: 1.25;
+    border-top: 2px solid var(--st-line); padding: 7px 0; vertical-align: middle; line-height: 1.25;
 }
-.stats-table tfoot td:first-child { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--st-muted); padding-top: 5px; }
+.stats-table tfoot td:first-child { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--st-muted); }
 .sg-total-h { display: block; font-weight: 700; color: var(--st-ink); font-variant-numeric: tabular-nums; }
 .sg-total-b { display: block; font-size: 0.66rem; color: var(--st-muted); }
+.sg-total-h.sg-total-empty { color: var(--st-muted); font-weight: 500; }
 
 /* One-hue sequential scale, shared by the year grid and the day-by-hour heatmap */
 /* Year grid: colored by fullness (classifyDayFullness in utils.js). Ordinary
@@ -1027,8 +1028,10 @@ textarea { resize: vertical; }
 .stats-table .sg-cell.sg-full { color: #fff; font-weight: 700; }
 .stats-table .sg-cell.sg-quiet, .sg-swatch.sg-quiet { background: #fdecc8; }
 .stats-table .sg-cell.sg-quiet { color: #7a4b00; font-weight: 500; }
-.stats-table .sg-cell .sg-dow { opacity: 0.4; }
-.stats-table .sg-cell.sg-full .sg-dow { opacity: 0.7; }
+.stats-table .sg-cell .sg-dow { opacity: 0.8; font-size: 0.66rem; color: var(--st-ink-2); }
+.stats-table .sg-cell.sg-full .sg-dow { color: #fff; opacity: 0.85; }
+.stats-table .sg-cell.sg-quiet .sg-dow { color: #7a4b00; opacity: 0.85; }
+.stats-table.sg-tight .sg-cell .sg-dow { font-size: 0.6rem; }
 
 /* Single-hue scale for the dashboard day-by-hour map */
 .stats-heat-0, .dash-hm-lvl-0 { background: #f6f8fa; }
@@ -1102,6 +1105,10 @@ textarea { resize: vertical; }
 /* Booking Length: the maximum allowed length dark and tagged, the others soft */
 .dash-vbar-bar.is-soft { background: #90b9e3; }
 .dash-vbar-bar.is-limit { background: #0d47a1; }
+/* A limit bar too tall for the scale is cut short; the white slash says so */
+.dash-vbar-break { position: absolute; left: 0; right: 0; top: 26%; height: 7px; background: #fff; transform: skewY(-14deg); }
+/* Every label in a chart with a Limit tag gets the tag's two-line height, so all bars share one baseline */
+.dash-hist.has-limit .dash-vbar-label { height: 2.3em; box-sizing: border-box; }
 .dash-limit-tag { display: block; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #0d47a1; line-height: 1.1; }
 
 /* Staff chart: stacked bars, one segment per person */
