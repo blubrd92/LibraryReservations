@@ -341,6 +341,8 @@ DOM-dependent code in `app.js` (grid rendering, drag handlers, modal logic, Fire
 
 ## Deployment
 
-Static file hosting. No build step required. Just serve `index.html`, `utils.js`, `app.js`, and `styles.css`. The `node_modules/`, `package.json`, and test files are dev-only.
+**The live site is hosted on GitHub Pages, served from the `main` branch.** Pushing to `main` *is* the deploy: there is no manual upload step and no build. After a push, Pages republishes on its own; staff may need a hard refresh (Ctrl+F5) to drop cached copies of `app.js` / `utils.js` / `styles.css`. Feature work happens on a branch and reaches the live site only when it is merged or pushed to `main`, so treat a push to `main` as a release.
+
+The site needs only `index.html`, `utils.js`, `app.js`, and `styles.css` (no build step). Pages also serves the rest of the repository as-is; the `node_modules/`, `package.json`, and test files are dev-only and unused by the app. Since the app files load each other, a change that adds a function to `utils.js` and calls it from `app.js` must land on `main` together.
 
 Firestore Security Rules live in `firestore.rules` and are the real access-control boundary. Deploy them with `firebase deploy --only firestore:rules` (or paste into Firebase Console → Firestore Database → Rules).

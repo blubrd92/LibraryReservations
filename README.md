@@ -89,7 +89,7 @@ npm run test:verbose # show individual test names
 
 ## Deployment
 
-Static file hosting. No build step required. Serve `index.html`, `utils.js`, `app.js`, and `styles.css`. The `node_modules/`, `package.json`, and test files are dev-only and should not be deployed.
+Hosted on **GitHub Pages from the `main` branch**: pushing to `main` publishes the site, with no build or upload step. If staff still see the old version after a push, a hard refresh (Ctrl+F5) clears the browser's cached files. The app itself is just `index.html`, `utils.js`, `app.js`, and `styles.css`; `node_modules/`, `package.json`, and the test files are dev-only.
 
 ## Documentation
 
