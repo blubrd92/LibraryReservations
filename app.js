@@ -1539,7 +1539,7 @@ const firebaseConfig = {
 
         // Get grid slot positions to align highlight with actual grid (like empty slots)
         const container = document.getElementById('gridContainer');
-        const minH = Math.min(...res.hours.filter((_, i) => i % 2 === 0).filter(h => h < 24));
+        const minH = getGridStartHour(res.hours); // skips closed days, like renderGrid()
         const gridSlotIndex = Math.floor((targetTime - minH) * 2); // Grid uses 30-min slots
         const quarterOffset = useQuarter ? ((targetTime - minH) * 2) % 1 : 0; // 0 or 0.5 for quarter offset
 

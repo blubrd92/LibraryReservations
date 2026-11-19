@@ -73,7 +73,7 @@ const SCRIPT = {
         { from: 0.3, to: 12.3, text: 'Hover over a booking for a quick look. <mark>Click</mark> it for the full details and notes.' },
       ] },
 
-    { id: 'move', type: 'footage', clip: 'move', clipFrom: 1.0, dur: 13.5, xfade: 0.6, step: 4,
+    { id: 'move', type: 'footage', clip: 'move', clipFrom: 1.0, dur: 13.5, xfade: 0.6, step: 4, ghost: 'dragSource',
       camera: [cam(0, 1.25, AT.tables23), cam(6.0, 1.25, AT.tables23), cam(7.0, 1.4, AT.modal),
                cam(11.1, 1.4, AT.modal), cam(12.2, 1.25, AT.tables23)],
       captions: [
@@ -98,11 +98,11 @@ const SCRIPT = {
 
     { id: 'delete', type: 'footage', clip: 'delete', clipFrom: 1.0, dur: 13.0, xfade: 0.6, step: 4,
       camera: [cam(0, 1.25, AT.table2Late), cam(1.5, 1.25, AT.table2Late), cam(2.5, 1.45, AT.modal),
-               cam(8.4, 1.45, AT.modal), cam(9.3, 1.25, AT.table2Late)],
+               cam(9.5, 1.45, AT.modal), cam(10.4, 1.25, AT.table2Late)],
       rings: [{ from: 3.2, to: 6.4, src: 'delete' }],
       captions: [
-        { from: 0.3, to: 7.1, text: 'A patron cancels? Open their booking and click <mark>Delete</mark>.' },
-        { from: 7.4, to: 12.8, text: 'Your browser asks <mark>“Delete booking?”</mark> Click OK, and it’s gone.' },
+        { from: 0.3, to: 7.4, text: 'A patron cancels? Open their booking and click <mark>Delete</mark>.' },
+        { from: 7.7, to: 12.8, text: 'Your browser asks <mark>“Delete booking?”</mark> Click OK, and it’s gone.' },
       ] },
 
     { id: 'altn', type: 'footage', clip: 'altn', clipFrom: 0.4, dur: 6.5, xfade: 0.8, step: 5,

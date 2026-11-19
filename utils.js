@@ -414,6 +414,31 @@ function getCurrentTimeFloat(now) {
 }
 
 // ============================================================
+// GRID START HOUR
+// ============================================================
+
+/**
+ * The hour the schedule grid's first row starts at: the earliest opening hour
+ * among the days that are open. A day whose start equals its end is closed
+ * (the admin "Closed" checkbox saves it as 0-0), so it must not count, or a
+ * closed Sunday would make the grid appear to start at midnight. Falls back to
+ * 9 when every day is closed, matching renderGrid().
+ *
+ * @param {number[]} hours - [Sun_start, Sun_end, Mon_start, Mon_end, ...]
+ * @returns {number}
+ */
+function getGridStartHour(hours) {
+    let minH = 24, maxH = 0;
+    for (let i = 0; i < 14; i += 2) {
+        if (hours[i] !== hours[i + 1]) {
+            if (hours[i] < minH) minH = hours[i];
+            if (hours[i + 1] > maxH) maxH = hours[i + 1];
+        }
+    }
+    return minH > maxH ? 9 : minH;
+}
+
+// ============================================================
 // COSMETIC CLOSING TIME
 // ============================================================
 
@@ -651,6 +676,7 @@ if (typeof module !== 'undefined' && module.exports) {
         formatHoursFraction,
         classifyDayFullness,
         NOW_FLASH_WINDOW_HOURS,
-        getNowFlashWindow
+        getNowFlashWindow,
+        getGridStartHour
     };
 }

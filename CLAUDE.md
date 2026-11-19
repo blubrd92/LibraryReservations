@@ -208,6 +208,8 @@ Bookings are not grid cells — they are absolutely-positioned `.booking-float` 
 - **Height** = `duration * 2 * slotHeight - gap * 2`, with a small floor so a 15-minute block never exceeds its half-slot on compact rows.
 - The half-slot offset is aligned to the dashed midline drawn by `.quarter-hour-slot::before` (`50% - 0.5px` of the padding box, ≈ `slotHeight/2 - 1`), and `container.clientTop`/`clientLeft` are subtracted because absolute `top`/`left` resolve against the padding box while the measured rects are border-box.
 
+The grid's first row is the earliest opening hour among *open* days. A closed day is saved as start = end (the admin "Closed" checkbox writes 0-0), so it must be skipped: `renderGrid()` does this inline and the drag handler uses `getGridStartHour()` (utils.js). A past version of `handleBookedSlotDragOver()` included closed days, so on any resource with a closed weekday the drag target box jumped to the top of the column while the pointer was over a booking.
+
 **Known duplication / candidate refactor:** this same math is copied — with small variations — into `computeGridBlockRect()` (BOOKING PRESENCE section; a faithful container-relative copy of the `renderGrid()` math, and the natural starting point for a shared helper), the drag-move highlight (DRAG-AND-DROP HANDLERS section), the drag-to-create overlay (DRAG-TO-CREATE HANDLERS), and the resize overlay (RESIZE HANDLERS). Only the `renderGrid()` copy currently carries the alignment corrections above, so the interactive previews can sit ~1px off from where the block finally lands. If you touch this geometry again, strongly consider extracting a single `computeBlockRect(...)`-style helper (ideally pure, in `utils.js`, so it can be unit-tested) and pointing all four call sites at it — the scattered copies are what made a past 15-minute-block alignment bug hard to find. The sites differ in inputs (a measured `positions[]` array vs. a `gridRowRect` vs. a raw `slotRect`) and coordinate space (the render is container-relative; the previews are body-appended / viewport-relative), so unifying them is a real refactor, not a copy-paste.
 
 ### State Objects
@@ -325,6 +327,7 @@ Tests cover the pure utility functions in `utils.js` (one `describe` group per e
 - Resource-list persistence safeguards (`classifyResourceSnapshot`, `shouldPersistResourceList`)
 - Future-date and presence helpers (`getDaysFromToday`, `isPresenceHoldFresh`)
 - Alt+N highlight window (`getNowFlashWindow`)
+- Grid start hour, skipping closed days (`getGridStartHour`)
 - Stats display helpers (`formatHoursFraction`, `classifyDayFullness`)
 
 ### Adding new tests

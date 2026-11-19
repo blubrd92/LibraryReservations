@@ -1,4 +1,5 @@
 const {
+    getGridStartHour,
     formatTime,
     formatDateISO,
     formatDateShort,
@@ -1034,5 +1035,20 @@ describe('getNowFlashWindow', () => {
         expect(getNowFlashWindow(9.5, 10, 20, true)).toBeNull();
         expect(getNowFlashWindow(20, 10, 20, true)).toBeNull();
         expect(getNowFlashWindow(NaN, 10, 20, true)).toBeNull();
+    });
+});
+
+describe('getGridStartHour', () => {
+    test('ignores a closed day saved as 0-0 (the drag-highlight bug)', () => {
+        expect(getGridStartHour([0,0, 10,18, 10,20, 10,18, 10,18, 10,17, 10,17])).toBe(10);
+    });
+    test('uses the earliest opening hour among open days', () => {
+        expect(getGridStartHour([12,17, 10,18, 9,20, 10,18, 10,18, 10,17, 10,17])).toBe(9);
+    });
+    test('ignores closed days whatever value they were saved with', () => {
+        expect(getGridStartHour([8,8, 10,18, 10,18, 10,18, 10,18, 10,18, 11,11])).toBe(10);
+    });
+    test('falls back to 9 when every day is closed, like renderGrid()', () => {
+        expect(getGridStartHour([0,0, 0,0, 0,0, 0,0, 0,0, 0,0, 0,0])).toBe(9);
     });
 });

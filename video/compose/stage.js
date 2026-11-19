@@ -115,6 +115,31 @@ function ringsHTML(list, st, clip) {
   }).join('');
 }
 
+// The browser's drag image. Headless Chromium never paints it (it is drawn outside
+// the page), so it is rebuilt here from real pixels: the dragged booking cut from a
+// frame taken before the drag (scene.ghost names the box the recorder logged),
+// semi-transparent, held at the exact point the pointer grabbed it, following the
+// logged pointer from the moment the drag moves until the drop.
+function ghostHTML(scene, clip, ct) {
+  if (!scene.ghost) return { html: '', images: [] };
+  const box = clip.events.find((e) => e.type === 'rect' && e.name === scene.ghost);
+  if (!box) throw new Error('no logged box for drag image ' + scene.ghost);
+  const down = clip.events.find((e) => e.type === 'down' && e.t > box.t);
+  const up = clip.events.find((e) => e.type === 'up' && e.t > down.t);
+  const m = mouseAt(clip, ct);
+  if (!m || ct <= down.t || ct >= up.t) return { html: '', images: [] };
+  // Chrome starts a drag only once the pointer has moved a few pixels.
+  if (Math.hypot(m.x - down.x, m.y - down.y) < 4) return { html: '', images: [] };
+  const [bx, by, bw, bh] = box.box.map((v) => v * CSS_TO_SRC);
+  const gx = (m.x - down.x) * CSS_TO_SRC + bx, gy = (m.y - down.y) * CSS_TO_SRC + by;
+  const src = clip.dir + frameFor(clip, box.t).name;
+  return {
+    html: `<div style="position:absolute;left:${gx.toFixed(2)}px;top:${gy.toFixed(2)}px;width:${bw}px;height:${bh}px;overflow:hidden;opacity:.6">
+      <img src="${src}" style="position:absolute;left:${-bx}px;top:${-by}px;width:${SRC_W}px;height:${SRC_H}px"></div>`,
+    images: [src],
+  };
+}
+
 async function footageLayer(scene, st) {
   const clip = CLIPS[scene.clip];
   const ct = (scene.clipFrom || 0) + st;
@@ -131,14 +156,15 @@ async function footageLayer(scene, st) {
     cursor = ripples + `<div class="cursor" style="transform:translate(${(x - 5).toFixed(2)}px,${(y - 3).toFixed(2)}px)">${CURSOR_SVG}</div>`;
   }
   const src = clip.dir + fr.name;
+  const ghost = ghostHTML(scene, clip, ct);
   return {
     html: `<div class="paper"></div>
       <div class="card"><div class="cam" style="transform:translate(${cam.tx.toFixed(2)}px,${cam.ty.toFixed(2)}px) scale(${cam.s.toFixed(5)})">
-        <img class="frame" src="${src}">${ringsHTML(scene.rings, st, clip)}${cursor}</div></div>
+        <img class="frame" src="${src}">${ringsHTML(scene.rings, st, clip)}${ghost.html}${cursor}</div></div>
       ${stepsHTML(scene.step)}
       <div class="caption">${captionsHTML(scene.captions, st)}</div>
       ${tipsHTML(scene.tips, st)}`,
-    images: [src],
+    images: [src, ...ghost.images],
   };
 }
 

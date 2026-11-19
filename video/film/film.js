@@ -120,6 +120,9 @@ async function take(page, name, mouse, fn) {
 
   // 4. Plans change: drag the booking from Table 2 at 2pm to Table 3 at 3pm, confirm.
   mouse = await take(page, 'move', mouse, async (r) => {
+    // Logged before the pointer arrives, so the compositor can rebuild the browser's
+    // drag image from a clean frame (headless Chromium never paints that image).
+    await r.rect('dragSource', page.locator(block('Samira Haddad')));
     await r.hold(1.5);
     const bk = await center(page, block('Samira Haddad'));
     const tgt = await center(page, slot(3, 15, 2));

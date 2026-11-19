@@ -50,6 +50,9 @@ endpoint leaves stale document versions that make the app's create-only booking 
 
 Every screen of the app is real footage of real clicks. Drawn: the title card's blocks,
 the step tracker, captions, tip cards, the cursor (headless Chromium has no visible pointer,
-so it is drawn from the logged mouse path) and the closing service-desk illustration, whose
+so it is drawn from the logged mouse path), the drag image that follows the pointer while a
+booking is dragged (the browser paints that outside the page, so headless Chromium never does;
+it is rebuilt from the booking's own pixels in a frame taken just before the drag, see
+`ghostHTML()` in `compose/stage.js`) and the closing service-desk illustration, whose
 monitor shows the last real frame. The browser's own "Delete booking?" confirm is drawn
 outside the page and cannot be filmed; the footage holds while it is open and a caption says so.
