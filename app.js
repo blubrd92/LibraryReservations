@@ -5345,14 +5345,23 @@ const firebaseConfig = {
         if (dialogOpen) return false;
         if (rescheduleMode.active || dragState.isDragging || selectionState.active || resizeState.active) return false;
         const el = document.activeElement;
+        // The header's date box keeps focus after a date is picked, but Alt+letter
+        // never types into a date, so it must not block the shortcuts (it used to
+        // leave Alt+R / Alt+N dead until the user clicked elsewhere).
+        if (isDateBox(el)) return true;
         if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return false;
         return true;
+    }
+    function isDateBox(el) {
+        return !!el && el.tagName === 'INPUT' && el.type === 'date';
     }
     document.addEventListener('keydown', function(e) {
         if (!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey) return;
         if (e.code !== 'KeyR' && e.code !== 'KeyN') return;
         if (!gridShortcutAllowed()) return;
         e.preventDefault();
+        // Hand focus back to the page so the next shortcut press isn't caught by the date box.
+        if (isDateBox(document.activeElement)) document.activeElement.blur();
         if (e.code === 'KeyR') cycleResource(1);
         else jumpToNow(); // JUMP TO NOW section
     });
